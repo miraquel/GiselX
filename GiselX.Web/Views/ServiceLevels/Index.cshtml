@@ -1,0 +1,416 @@
+﻿@using GiselX.Common.Constants
+@model GiselX.Service.Dto.ServiceLevelDto
+
+@{
+    ViewBag.Title = "Service Level";
+}
+
+@section styles
+{
+    <link href="/lib/datatables-bs5/datatables.boostrap5.css" rel="stylesheet" type="text/css" />
+    <link href="/lib/datatables-responsive-bs5/responsive.bootstrap5.css" rel="stylesheet" type="text/css" />
+    <link href="/lib/datatables-buttons-bs5/buttons.boostrap5.css" rel="stylesheet" type="text/css" />
+    <link href="/lib/datatables-rowgroup-bs5/rowgroup.bootstrap5.css" rel="stylesheet" type="text/css" />
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <link href="/lib/select2-bootstrap-5-theme/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
+}
+
+@Html.AntiForgeryToken()
+
+<div class="card">
+    <div class="card-header">
+        <h4 class="card-title">Service Level</h4>
+        
+        <!-- Display TempData messages -->
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                @TempData["SuccessMessage"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                @TempData["ErrorMessage"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        }
+        <div class="card-tools">
+            @if (User.HasClaim("permission", PermissionConstants.ServiceLevels.Upload))
+            {
+                <form asp-controller="ServiceLevels" asp-action="Upload" method="post" enctype="multipart/form-data">
+                    <div class="input-group">
+                        <input type="file" id="fileInput" name="file" class="form-control" aria-describedby="fileInputAddon" aria-label="Upload" accept="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
+                        <button type="submit" class="btn btn-outline-success material-shadow-none" id="fileInputAddon">
+                            <span class="ri-upload-2-fill me-1"></span>
+                            Upload
+                        </button>
+                    </div>
+                </form>
+            }
+        </div>
+        <div class="row mt-4">
+            <div class="col-md-6">
+                <select id="yearSelect" name="year" class="form-control"></select>
+            </div>
+            <div class="col-md-6">
+                <select id="monthSelect" name="month" class="form-control"></select>
+            </div>
+        </div>
+    </div>
+    <div class="card-datatable text-nowrap">
+        <table id="servicelevel-table" class="datatables-basic table table-bordered" style="width: 100%;">
+            <thead>
+            <tr>
+                <th>@Html.DisplayNameFor(m => m.SoId)</th>
+                <th>@Html.DisplayNameFor(m => m.SoCreateDate)</th>
+                <th>@Html.DisplayNameFor(m => m.LeadTimeDlv)</th>
+                <th>@Html.DisplayNameFor(m => m.LeadTimeRct)</th>
+                <th>@Html.DisplayNameFor(m => m.ItemId)</th>
+                <th>@Html.DisplayNameFor(m => m.ItemName)</th>
+                <th>@Html.DisplayNameFor(m => m.SoQty)</th>
+                <th>@Html.DisplayNameFor(m => m.Unit)</th>
+                <th>@Html.DisplayNameFor(m => m.KgPerUnit)</th>
+                <th>@Html.DisplayNameFor(m => m.DlvDateRequest)</th>
+                <th>@Html.DisplayNameFor(m => m.RctDateRequest)</th>
+                <th>@Html.DisplayNameFor(m => m.DoQty)</th>
+                <th>@Html.DisplayNameFor(m => m.DoDate)</th>
+                <th>@Html.DisplayNameFor(m => m.ReceiptDate)</th>
+            </tr>
+            </thead>
+            <tfoot>
+                <th>@Html.DisplayNameFor(m => m.SoId)</th>
+                <th>@Html.DisplayNameFor(m => m.SoCreateDate)</th>
+                <th>@Html.DisplayNameFor(m => m.LeadTimeDlv)</th>
+                <th>@Html.DisplayNameFor(m => m.LeadTimeRct)</th>
+                <th>@Html.DisplayNameFor(m => m.ItemId)</th>
+                <th>@Html.DisplayNameFor(m => m.ItemName)</th>
+                <th>@Html.DisplayNameFor(m => m.SoQty)</th>
+                <th>@Html.DisplayNameFor(m => m.Unit)</th>
+                <th>@Html.DisplayNameFor(m => m.KgPerUnit)</th>
+                <th>@Html.DisplayNameFor(m => m.DlvDateRequest)</th>
+                <th>@Html.DisplayNameFor(m => m.RctDateRequest)</th>
+                <th>@Html.DisplayNameFor(m => m.DoQty)</th>
+                <th>@Html.DisplayNameFor(m => m.DoDate)</th>
+                <th>@Html.DisplayNameFor(m => m.ReceiptDate)</th>
+            </tfoot>
+        </table>
+    </div>
+</div>
+
+@section scripts
+{
+    <script src="/lib/jquery/dist/jquery.min.js"></script>
+    <script src="/lib/datatables-bs5/datatables.bootstrap5.js"></script>
+    @* <script src="/lib/datatables/dist/js/datatables.min.js"></script> *@
+    <script src="/lib/moment/moment.js"></script>
+    <script src="/js/helper.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script>
+        // get AntiForgeryToken using jquery
+        const token = $('input[name="_+-_RequestVerificationToken"]').val();
+
+        $(document).ready(function() {
+            const yearSelect = $('#yearSelect');
+            const monthSelect = $('#monthSelect');
+            let table;
+
+            // Disable month select by default
+            monthSelect.prop('disabled', true);
+
+            // Populate year select
+            yearSelect.select2({
+                placeholder: "Select Year",
+                theme: "bootstrap-5",
+                allowClear: true,
+                ajax: {
+                    url: '/api/ServiceLevels/SelectPeriods',
+                    type: 'GET',
+                    dataType: 'json',
+                    delay: 500,
+                    headers: {
+                        'RequestVerificationToken': token
+                    },
+                    processResults: function (data) {
+                        // distinct years from the data
+                        const years = [...new Set(data.data.map(item => item.year))];
+                        return {
+                            results: years.map(year => ({
+                                id: year,
+                                text: year.toString()
+                            }))
+                        };
+                    }
+                }
+            });
+            yearSelect.val(null).trigger('change'); // Ensure no preselection
+
+            // Populate month select (filtered by year)
+            monthSelect.select2({
+                placeholder: "Select Month",
+                theme: "bootstrap-5",
+                allowClear: true,
+                ajax: {
+                    url: '/api/serviceLevels/SelectPeriods',
+                    type: 'GET',
+                    dataType: 'json',
+                    delay: 500,
+                    headers: {
+                        'RequestVerificationToken': token
+                    },
+                    processResults: function (data) {
+                        // Only months for the selected year
+                        let months = [];
+                        let year = yearSelect.val();
+                        if (yearSelect.val()) {
+                            months = data.data
+                                .filter(item => item.year === parseInt(year))
+                                .map(item => item.month);
+                        }
+                        months = [...new Set(months)];
+                        return {
+                            results: months.map(month => ({
+                                id: month,
+                                text: moment().month(month - 1).format('MMMM')
+                            }))
+                        };
+                    }
+                }
+            });
+            monthSelect.val(null).trigger('change'); // Ensure no preselection
+
+            function canLoadTable() {
+                return yearSelect.val() && monthSelect.val();
+            }
+
+            // Add a refresh button handler
+            function getRefreshButton() {
+                return {
+                    text: '<i class="ri-refresh-line"></i> Refresh',
+                    className: 'btn btn-outline-primary',
+                    action: function (e, dt, node, config) {
+                        dt.ajax.reload();
+                    },
+                    titleAttr: 'Refresh Table'
+                };
+            }
+
+            function loadTable() {
+                if (table) {
+                    table.ajax.reload();
+                    return;
+                }
+                table = $('#servicelevel-table').DataTable({
+                    searchDelay: 1000,
+                    destroy: true,
+                    layout: {
+                        topStart: {
+                            rowClass: "row m-3 mx-2 my-0 justify-content-between",
+                            features: [{
+                                pageLength: {
+                                    menu: [10, 25, 50, 100],
+                                    text: "Show_MENU_entries"
+                                }
+                            }]
+                        },
+                        topEnd: {
+                            buttons: [
+                                getRefreshButton()
+                            ],
+                        },
+                        bottomStart: {
+                            rowClass: "row mx-3 justify-content-between",
+                            features: ["info"]
+                        },
+                        bottomEnd: "paging"
+                    },
+                    order: [[0, 'asc']],
+                    processing: true,
+                    paging: true,
+                    serverSide: true,
+                    searching: true,
+                    ordering: true,
+                    autoWidth: false,
+                    scrollX: true,
+                    ajax: {
+                        url: `/api/ServiceLevels/Select`,
+                        data: function(d) {
+                            const query = {
+                                pageNumber: (d.start / d.length) + 1,
+                                pageSize: d.length,
+                            };
+                            if (d.search && d.search.value) {
+                                query.Search = d.search.value;
+                            }
+                            if (d.order && d.order.length) {
+                                query.SortBy = d.columns[d.order[0].column].data;
+                                query.IsSortAscending = d.order[0].dir === 'asc';
+                            }
+    
+                            d.columns.forEach((column, _) => {
+                                if (column.search && column.search.value) {
+                                    query[`Filters.${column.data.charAt(0).toUpperCase() + column.data.slice(1)}`] = column.search.value;
+                                }
+                            });
+                        
+                            query['Filters.Year'] = yearSelect.val();
+                            query['Filters.Month'] = monthSelect.val();
+        
+                            return query;
+                        },
+                        beforeSend: function(xhr) {
+                            xhr.setRequestHeader("RequestVerificationToken", token);
+                        },
+                        dataSrc: function(json) {
+                            if (!canLoadTable()) {
+                                return [];
+                            }
+                            if (json.data && Array.isArray(json.data.items)) {
+                                json.recordsTotal = json.data.totalCount;
+                                json.recordsFiltered = json.data.totalCount;
+                                return json.data.items;
+                            }
+                            return json;
+                        },
+                        error: function(err){
+                            alert(err.responseJSON?.errorMessage || "An error occurred while fetching data");
+                        }
+                    },
+                    columns: [
+                        { data: 'soId', width: '100px' },
+                        {
+                            data: 'soCreateDate',
+                            width: '120px',
+                            render: function(data, type, row) {
+                                return data ? moment(data).format('DD MMM YYYY') : '';
+                            }
+                        },
+                        { data: 'leadTimeDlv', width: '80px' },
+                        { data: 'leadTimeRct', width: '80px' },
+                        { data: 'itemId', width: '100px' },
+                        { data: 'itemName' },
+                        {
+                            data: 'soQty',
+                            width: '100px',
+                            render: function(data, type, row) {
+                                return data ? numberFormat2Decimals.format(data) : '';
+                            }
+                        },
+                        { data: 'unit', width: '80px' },
+                        {
+                            data: 'kgPerUnit',
+                            width: '100px',
+                            render: function(data, type, row) {
+                                return data ? numberFormat2Decimals.format(data) : '';
+                            }
+                        },
+                        {
+                            data: 'dlvDateRequest',
+                            width: '120px',
+                            render: function(data, type, row) {
+                                return data ? moment(data).format('DD MMM YYYY') : '';
+                            }
+                        },
+                        {
+                            data: 'rctDateRequest',
+                            width: '120px',
+                            render: function(data, type, row) {
+                                return data ? moment(data).format('DD MMM YYYY') : '';
+                            }
+                        },
+                        {
+                            data: 'doQty',
+                            width: '100px',
+                            render: function(data, type, row) {
+                                return data ? numberFormat2Decimals.format(data) : '';
+                            }
+                        },
+                        {
+                            data: 'doDate',
+                            width: '120px',
+                            render: function(data, type, row) {
+                                return data ? moment(data).format('DD MMM YYYY') : '';
+                            }
+                        },
+                        {
+                            data: 'receiptDate',
+                            width: '120px',
+                            render: function(data, type, row) {
+                                return data ? moment(data).format('DD MMM YYYY') : '';
+                            }
+                        }
+                    ],
+                    columnDefs: [
+                        {
+                            targets: [0, 1, 4, 7, 9, 10, 12],
+                            className: 'text-center'
+                        }
+                    ],
+                    initComplete: function () {
+                        $('.dt-layout-table').removeClass('mt-2');
+                        $(".card-header").after('<hr class="my-0">');
+                        // Remove btn-secondary class from all children of .dt-buttons
+                        $(".dt-buttons").children().removeClass("btn-secondary");
+                        this.api()
+                            .columns()
+                            .every(function () {
+                                let column = this;
+                                let title = column.footer().textContent;
+
+                                let input = document.createElement('input');
+                                input.placeholder = title;
+                                input.className = "form-control";
+                                input.style.width = '100%';
+                                column.footer().replaceChildren(input);
+
+                                input.addEventListener('keyup', debounce(() => {
+                                    if (column.search() !== input.value) {
+                                        column.search(input.value).draw();
+                                    }
+                                }, 1000));
+                            });
+                    }
+                });
+            }
+
+            function showOrHideTable() {
+                if (canLoadTable()) {
+                    $('.card-datatable').show();
+                } else {
+                    $('.card-datatable').hide();
+                }
+            }
+            // Only load table if both year and month are selected
+            yearSelect.on('change', function() {
+                // Enable month select if year is selected, otherwise disable and clear
+                if (yearSelect.val()) {
+                    monthSelect.prop('disabled', false);
+                    monthSelect.val(null).trigger('change');
+                } else {
+                    monthSelect.prop('disabled', true);
+                    monthSelect.val(null).trigger('change');
+                }
+                showOrHideTable();
+                if (canLoadTable()) {
+                    if (!table) loadTable();
+                    else table.ajax.reload();
+                } else if (table) {
+                    table.clear().draw();
+                }
+            });
+            monthSelect.on('change', function() {
+                showOrHideTable();
+                if (canLoadTable()) {
+                    if (!table) loadTable();
+                    else table.ajax.reload();
+                } else if (table) {
+                    table.clear().draw();
+                }
+            });
+
+            // Hide table on page load
+            showOrHideTable();
+        });
+    </script>
+}

@@ -1,0 +1,13 @@
+@{
+  Layout = "_CommonMasterLayout";
+}
+
+@section VendorStyles { @await RenderSectionAsync("VendorStyles", required: false) }
+
+@section styles { @await RenderSectionAsync("styles", required: false) }
+
+@RenderBody()
+
+@section VendorScripts { @await RenderSectionAsync("VendorScripts", required: false) }
+
+@section scripts { @await RenderSectionAsync("scripts", required: false) }

@@ -1,0 +1,25 @@
+﻿@model GiselX.Service.Dto.CompanyDto
+
+@{
+    ViewData["Title"] = "Company Details";
+    Layout = "_ContentNavbarLayout";
+}
+
+<div class="card">
+    <div class="card-header d-flex align-items-center justify-content-between">
+        <h5 class="mb-0">Company Details</h5>
+        <small class="text-muted float-end">Company Information</small>
+    </div>
+    <div class="card-body">
+        <dl class="row mb-0">
+            <dt class="col-sm-3 mb-3 fw-medium">Name</dt>
+            <dd class="col-sm-9 mb-3">@Model.Name</dd>
+            <dt class="col-sm-3 mb-3 fw-medium">Address</dt>
+            <dd class="col-sm-9 mb-3">@Model.Address</dd>
+        </dl>
+        <div class="mt-4">
+            <a asp-action="Index" class="btn btn-secondary">Back to List</a>
+            <a asp-action="Edit" asp-route-id="@Model.Id" class="btn btn-primary ms-2">Edit</a>
+        </div>
+    </div>
+</div>

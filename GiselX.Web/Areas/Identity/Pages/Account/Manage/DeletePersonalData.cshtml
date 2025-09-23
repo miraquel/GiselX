@@ -1,0 +1,25 @@
+﻿@page
+@model DeletePersonalDataModel
+@{
+    ViewData["Title"] = "Delete Personal Data";
+    ViewData["ActivePage"] = ManageNavPages.PersonalData;
+}
+
+<div class="card mb-6">
+    <div class="card-header d-flex align-items-center justify-content-between">
+        <h4 class="mb-0">Delete Personal Data</h4>
+        <small class="text-muted float-end">Permanently remove your account</small>
+    </div>
+    <div class="card-body">
+        <div class="alert alert-warning" role="alert">
+            <p>
+                <strong>Account deletion is currently disabled. Please contact your administrator if you have concerns about your personal data.</strong>
+            </p>
+        </div>
+        <!-- Delete form is disabled -->
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

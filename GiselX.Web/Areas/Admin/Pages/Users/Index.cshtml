@@ -1,0 +1,207 @@
+﻿@page
+@model IndexModel
+@{
+    ViewData["Title"] = "User Management";
+}
+
+@section styles
+{
+    <link href="/lib/datatables-bs5/datatables.boostrap5.css" rel="stylesheet" type="text/css" />
+    <link href="/lib/datatables-responsive-bs5/responsive.bootstrap5.css" rel="stylesheet" type="text/css" />
+    <link href="/lib/datatables-buttons-bs5/buttons.boostrap5.css" rel="stylesheet" type="text/css" />
+    <link href="/lib/datatables-rowgroup-bs5/rowgroup.bootstrap5.css" rel="stylesheet" type="text/css" />
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+}
+
+<!-- Display TempData or ViewData messages -->
+@if (TempData["StatusMessage"] != null)
+{
+    <div class="alert alert-success">@TempData["StatusMessage"]</div>
+}
+@if (TempData["ErrorMessage"] != null)
+{
+    <div class="alert alert-danger">@TempData["ErrorMessage"]</div>
+}
+
+<!-- Users List Table -->
+<div class="card">
+    <div class="card-datatable text-nowrap">
+        <table id="users-table" class="datatables-basic table table-bordered table-responsive" style="width: 100%;">
+            <thead>
+            <tr>
+                <th>User</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+            </thead>
+            <tbody>
+            <!-- DataTables will populate this -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="/lib/jquery/dist/jquery.min.js"></script>
+    <script src="/lib/datatables-bs5/datatables.bootstrap5.js"></script>
+    <script src="/js/helper.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script>
+        $(document).ready(function () {
+            let r = document.createElement("h5");
+            r.classList.add("card-title", "mb-0");
+            r.innerHTML = "Users";
+            const table = $('#users-table').DataTable({
+                processing: true,
+                paging: true,
+                serverSide: true,
+                searching: true,
+                ordering: true,
+                autoWidth: false,
+                responsive: true,
+                scrollX: true,
+                layout: {
+                    top2Start: {
+                        rowClass: "row card-header mx-0 px-2",
+                        features: [r]
+                    },
+                    top2End: {
+                        rowClass: "row card-header mx-0 px-2",
+                        features: [{
+                            buttons: [{
+                                text: '<span class="d-flex align-items-center"><i class="icon-base ri ri-add-line icon-18px me-sm-1"></i><span class="d-none d-sm-inline-block">Add New Record</span></span>',
+                                className: "create-new btn btn-primary",
+                                action: function () {
+                                    window.location.href = '/Admin/Users/Create';
+                                }
+                            }]
+                        }]
+                    },
+                    topStart: {
+                        rowClass: "row m-3 mx-2 my-0 justify-content-between",
+                        features: [{
+                            pageLength: {
+                                menu: [10, 25, 50, 100],
+                                text: "Show_MENU_entries"
+                            }
+                        }]
+                    },
+                    topEnd: {
+                        search: {
+                            placeholder: "Type search here"
+                        }
+                    },
+                    bottomStart: {
+                        rowClass: "row mx-3 justify-content-between",
+                        features: ["info"]
+                    },
+                    bottomEnd: "paging"
+                },
+                order: [[0, 'asc']],
+                ajax: {
+                    url: '/api/users',
+                    type: 'GET',
+                    data: function (d) {
+                        const query = {
+                            pageNumber: (d.start / d.length) + 1,
+                            pageSize: d.length,
+                        };
+                        if (d.search && d.search.value) {
+                            query.Search = d.search.value;
+                        }
+                        if (d.order && d.order.length) {
+                            query.SortBy = d.order[0].column ? d.columns[d.order[0].column].name : "FirstName";
+                            query.IsSortAscending = d.order[0].dir ? d.order[0].dir === 'asc' : true;
+                        }
+
+                        return query;
+                    },
+                    dataSrc: function (json) {
+                        if (json.data && Array.isArray(json.data.items)) {
+                            json.recordsTotal = json.data.totalCount;
+                            json.recordsFiltered = json.data.totalFilteredCount;
+                            return json.data.items;
+                        }
+                        return json;
+                    },
+                    error: function (err) {
+                        alert(err.responseJSON?.errorMessage || "An error occurred while fetching data");
+                    }
+                },
+                columns: [
+                    {
+                        data: 'userName',
+                        name: 'UserName',
+                        render: function (data, type, row) {
+                            const initials = ((row.firstName?.charAt(0) || '') + (row.lastName?.charAt(0) || '')).trim();
+                            const name = ((row.firstName || '') + ' ' + (row.lastName || '')).trim();
+                            return `
+                                <div class="d-flex justify-content-start align-items-center user-name">
+                                    <div class="avatar-wrapper">
+                                        <div class="avatar avatar-sm me-4">
+                                            <span class="avatar-initial rounded-circle bg-label-primary">${initials}</span>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex flex-column">
+                                        <span class="fw-medium">
+                                            <a href="/Admin/Users/Details?id=${row.id}">${name}</a>
+                                        </span>
+                                        <small>${row.userName}</small>
+                                    </div>
+                                </div>`;
+                        }
+                    },
+                    {
+                        data: 'email',
+                        name: 'Email',
+                    },
+                    {
+                        data: 'roles',
+                        name: 'Roles',
+                        render: function (data) {
+                            return `<span class="text-truncate d-flex align-items-center text-heading">
+                                <i class="icon-base ri ri-user-line icon-22px text-primary me-2"></i>
+                                ${data || ''}
+                            </span>`;
+                        }
+                    },
+                    {
+                        data: 'active',
+                        name: 'Active',
+                        render: function (data, type, row) {
+                            if (data === false) {
+                                return `<span class="badge rounded-pill bg-label-danger">Inactive</span>`;
+                            }
+                            return `<span class="badge rounded-pill bg-label-success">Active</span>`;
+                        }
+                    },
+                    {
+                        data: null,
+                        orderable: false,
+                        render: function (data, type, row) {
+                            return `
+                                <div class="d-flex align-items-center">
+                                    <a href="/Admin/Users/Edit?id=${row.id}" class="btn btn-icon btn-text-secondary rounded-pill" title="Edit User">
+                                        <i class="icon-base ri ri-edit-line icon-md"></i>
+                                    </a>
+                                    <a href="/Admin/Users/UserRoles?userId=${row.id}" class="btn btn-icon btn-text-secondary rounded-pill" title="Assign Roles">
+                                        <i class="icon-base ri ri-user-line icon-md"></i>
+                                    </a>
+                                    <a href="/Admin/Users/Suspend?id=${row.id}" class="btn btn-icon btn-text-secondary rounded-pill" title="Suspend User">
+                                        <i class="icon-base ri ri-pause-circle-line icon-md"></i>
+                                    </a>
+                                </div>`;
+                        }
+                    }
+                ],
+                initComplete: function () {
+                    // remove mt-2 class from .dt-layout-table div
+                    $('.dt-layout-table').removeClass('mt-2');
+                    $(".card-header").after('<hr class="my-0">')
+                }
+            });
+        });
+    </script>
+}

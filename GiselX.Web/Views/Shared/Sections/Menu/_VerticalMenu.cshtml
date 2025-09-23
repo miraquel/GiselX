@@ -1,0 +1,96 @@
+@using GiselX.Common.Constants
+@{
+  //TempData.Keep();
+  string currentPage = ViewContext.HttpContext.Request.Path;
+  var permissions = ViewBag.Permissions as List<string> ?? [];
+}
+
+<!-- Menu -->
+<aside id="layout-menu" class="layout-menu menu-vertical menu bg-menu-theme">
+
+  <div class='app-brand demo mt-3 @((ViewData["navbarFull"] != null && Convert.ToBoolean(ViewData["navbarFull"])) ? "d-xl-none" : "")'>
+    <a asp-controller="Home" asp-action="Index" class="app-brand-link">
+      <span class="app-brand-logo demo me-1">  @await Html.PartialAsync("../_Partials/_Macros")</span>
+      <span class="app-brand-text demo menu-text fw-semibold ms-2">@TempData.Peek("appName")</span>
+    </a>
+
+    <a href="javascript:void(0);" class="layout-menu-toggle menu-link text-large ms-auto">
+      <i class="menu-toggle-icon d-xl-block align-middle"></i>
+    </a>
+  </div>
+
+  <div class="menu-inner-shadow"></div>
+
+  <ul class="menu-inner py-1">
+    <li class="menu-header mt-3">
+      <span class="menu-header-text">Main Menu</span>
+    </li>
+    <!-- Dashboards -->
+    <li class='menu-item@(currentPage.EndsWith("/") ? " active" : "")'>
+      <a asp-area="" asp-controller="Home" asp-action="Index" class="menu-link">
+        <i class="menu-icon tf-icons ri-home-smile-line"></i>
+        <div>Home</div>
+      </a>
+    </li>
+  
+    <!-- ServiceLevel -->
+    @if (User.HasClaim(c => c is { Type: "permission", Value: PermissionConstants.ServiceLevels.Index }))
+    {
+    <li class='menu-item@(currentPage.StartsWith("/ServiceLevels") ? " active" : "")'>
+      <a asp-area="" asp-controller="ServiceLevels" asp-action="Index" class="menu-link">
+        <i class="menu-icon tf-icons ri-exchange-dollar-line"></i>
+        <div>Service Level</div>
+      </a>
+    </li>
+    }
+
+    <!-- Example: Keep only a few essential menus below, remove unused ones -->
+    <li class="menu-header mt-7">
+      <span class="menu-header-text">Settings</span>
+    </li>
+    <li class='menu-item@(currentPage.StartsWith("/Identity/Account/Manage") ? " active" : "")'>
+      <a asp-area="Identity" asp-page="/Account/Manage/Index" class="menu-link">
+        <i class="menu-icon tf-icons ri-user-3-line"></i>
+        <div>My Profile</div>
+      </a>
+    </li>
+    
+    @if (User.HasClaim(c => c is { Type: "permission", Value: PermissionConstants.Users.Index or PermissionConstants.Roles.Index }))
+    {
+      <li class="menu-header mt-7">
+        <span class="menu-header-text">Admin</span>
+      </li>
+    }
+    @if (User.HasClaim(c => c is { Type: "permission", Value: PermissionConstants.Users.Index } ))
+    {
+    <li class='menu-item@(currentPage.StartsWith("/Admin/Users") ? " active" : "")'>
+      <a asp-area="Admin" asp-page="/Users/Index" class="menu-link">
+        <i class="menu-icon tf-icons ri-user-3-line"></i>
+        <div>Users</div>
+      </a>
+    </li>
+    }
+    @if (User.HasClaim(c => c is { Type: "permission", Value: PermissionConstants.Roles.Index } ))
+    {
+    <li class='menu-item@(currentPage.StartsWith("/Admin/Roles") ? " active" : "")'>
+      <a asp-area="Admin" asp-page="/Roles/Index" class="menu-link">
+        <i class="menu-icon tf-icons ri-shield-user-line"></i>
+        <div>Roles</div>
+      </a>
+    </li>
+    }
+    @if (User.HasClaim(c => c is { Type: "permission", Value: PermissionConstants.Companies.Index }))
+    {
+    <li class='menu-item@(currentPage.StartsWith("/Admin/Companies") ? " active" : "")'>
+      <a asp-area="Admin" asp-controller="Companies" asp-action="Index" class="menu-link">
+        <i class="menu-icon tf-icons ri-building-2-line"></i>
+        <div>Companies</div>
+      </a>
+    </li>
+    }
+  </ul>
+  
+  
+
+</aside>
+<!-- / Menu -->

@@ -1,0 +1,30 @@
+﻿@page
+@model RegisterModel
+@{
+    Layout = "_BlankLayout";
+    ViewData["Title"] = "Register";
+}
+
+@section styles {
+<link rel="stylesheet" href="~/vendor/css/pages/page-auth.css">
+}
+
+<div class="position-relative">
+    <div class="authentication-wrapper authentication-basic container-p-y">
+        <div class="authentication-inner py-6 mx-4">
+            <div class="card p-7">
+                <div class="card-body mt-1">
+                    <h4 class="mb-1">Registration Disabled</h4>
+                    <p class="mb-5">Self-registration is currently disabled. Please contact your administrator to create an account.</p>
+                </div>
+            </div>
+            <img src="~/img/illustrations/tree-3.png" alt="auth-tree" class="authentication-image-object-left d-none d-lg-block">
+            <img src="~/img/illustrations/auth-basic-mask-light.png" class="authentication-image d-none d-lg-block" height="172" alt="triangle-bg" data-app-light-img="illustrations/auth-basic-mask-light.png" data-app-dark-img="illustrations/auth-basic-mask-dark.png">
+            <img src="~/img/illustrations/tree.png" alt="auth-tree" class="authentication-image-object-right d-none d-lg-block">
+        </div>
+    </div>
+</div>
+
+@section scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

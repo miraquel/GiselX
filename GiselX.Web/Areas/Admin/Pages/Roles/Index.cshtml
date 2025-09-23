@@ -1,0 +1,163 @@
+﻿@page
+@model IndexModel
+@{
+    ViewData["Title"] = "Role Management";
+}
+
+@section styles
+{
+    <link href="/lib/datatables-bs5/datatables.boostrap5.css" rel="stylesheet" type="text/css" />
+    <link href="/lib/datatables-responsive-bs5/responsive.bootstrap5.css" rel="stylesheet" type="text/css" />
+    <link href="/lib/datatables-buttons-bs5/buttons.boostrap5.css" rel="stylesheet" type="text/css" />
+    <link href="/lib/datatables-rowgroup-bs5/rowgroup.bootstrap5.css" rel="stylesheet" type="text/css" />
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+}
+
+<div class="card">
+    <div class="card-datatable text-nowrap">
+        <table id="roles-table" class="datatables-basic table table-bordered table-responsive" style="width: 100%;">
+            <thead>
+            <tr>
+                <th>Role Name</th>
+                <th>Description</th>
+                <th>Role Id</th>
+                <th class="text-center">Actions</th>
+            </tr>
+            </thead>
+            <tbody>
+            <!-- DataTables will populate this -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="/lib/jquery/dist/jquery.min.js"></script>
+    <script src="/lib/datatables-bs5/datatables.bootstrap5.js"></script>
+    <script src="/js/helper.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script>
+        $(document).ready(function () {
+            let r = document.createElement("h5");
+            r.classList.add("card-title", "mb-0");
+            r.innerHTML = "Roles";
+            const table = $('#roles-table').DataTable({
+                processing: true,
+                paging: true,
+                serverSide: true,
+                searching: true,
+                ordering: true,
+                autoWidth: false,
+                responsive: true,
+                scrollX: true,
+                layout: {
+                    top2Start: {
+                        rowClass: "row card-header mx-0 px-2",
+                        features: [r]
+                    },
+                    top2End: {
+                        rowClass: "row card-header mx-0 px-2",
+                        features: [{
+                            buttons: [{
+                                text: '<span class="d-flex align-items-center"><i class="icon-base ri ri-add-line icon-18px me-sm-1"></i><span class="d-none d-sm-inline-block">Create New Role</span></span>',
+                                className: "create-new btn btn-primary",
+                                action: function () {
+                                    window.location.href = '/Admin/Roles/Create';
+                                }
+                            }]
+                        }]
+                    },
+                    topStart: {
+                        rowClass: "row m-3 mx-2 my-0 justify-content-between",
+                        features: [{
+                            pageLength: {
+                                menu: [10, 25, 50, 100],
+                                text: "Show_MENU_entries"
+                            }
+                        }]
+                    },
+                    topEnd: {
+                        search: {
+                            placeholder: "Type search here"
+                        }
+                    },
+                    bottomStart: {
+                        rowClass: "row mx-3 justify-content-between",
+                        features: ["info"]
+                    },
+                    bottomEnd: "paging"
+                },
+                order: [[0, 'asc']],
+                ajax: {
+                    url: '/api/roles',
+                    type: 'GET',
+                    data: function (d) {
+                        const query = {
+                            pageNumber: (d.start / d.length) + 1,
+                            pageSize: d.length,
+                        };
+                        if (d.search && d.search.value) {
+                            query.Search = d.search.value;
+                        }
+                        if (d.order && d.order.length) {
+                            query.SortBy = d.order[0].column ? d.columns[d.order[0].column].name : "Name";
+                            query.IsSortAscending = d.order[0].dir ? d.order[0].dir === 'asc' : true;
+                        }
+                        return query;
+                    },
+                    dataSrc: function (json) {
+                        if (json.data && Array.isArray(json.data.items)) {
+                            json.recordsTotal = json.data.totalCount;
+                            json.recordsFiltered = json.data.totalFilteredCount;
+                            return json.data.items;
+                        }
+                        return json;
+                    },
+                    error: function (err) {
+                        alert(err.responseJSON?.errorMessage || "An error occurred while fetching data");
+                    }
+                },
+                columns: [
+                    {
+                        data: 'name',
+                        name: 'Name',
+                        render: function (data, type, row) {
+                            return `<span class="fw-medium">${data}</span>`;
+                        }
+                    },
+                    {
+                        data: 'description',
+                        name: 'Description',
+                        render: function (data) {
+                            return `<span>${data || ''}</span>`;
+                        }
+                    },
+                    {
+                        data: 'id',
+                        name: 'Id',
+                        render: function (data) {
+                            return `<span>${data}</span>`;
+                        }
+                    },
+                    {
+                        data: null,
+                        orderable: false,
+                        className: 'text-center',
+                        render: function (data, type, row) {
+                            return `
+                                <div class="d-flex align-items-center justify-content-center">
+                                    <a href="/Admin/Roles/RolePermissions?id=${row.id}" class="btn btn-icon btn-text-secondary rounded-pill" title="Assign Permissions">
+                                        <i class="icon-base ri ri-user-settings-line icon-md"></i>
+                                    </a>
+                                </div>`;
+                        }
+                    }
+                ],
+                initComplete: function () {
+                    $('.dt-layout-table').removeClass('mt-2');
+                    $(".card-header").after('<hr class="my-0">')
+                }
+            });
+        });
+    </script>
+}

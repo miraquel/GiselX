@@ -1,0 +1,210 @@
+﻿@model IEnumerable<GiselX.Service.Dto.CompanyDto>
+
+@{
+    ViewData["Title"] = "Company Management";
+    Layout = "_ContentNavbarLayout";
+}
+
+@section styles {
+    <link href="/lib/datatables-bs5/datatables.boostrap5.css" rel="stylesheet" type="text/css" />
+    <link href="/lib/datatables-responsive-bs5/responsive.bootstrap5.css" rel="stylesheet" type="text/css" />
+    <link href="/lib/datatables-buttons-bs5/buttons.boostrap5.css" rel="stylesheet" type="text/css" />
+    <link href="/lib/datatables-rowgroup-bs5/rowgroup.bootstrap5.css" rel="stylesheet" type="text/css" />
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <link href="/lib/select2-bootstrap-5-theme/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
+}
+
+@Html.AntiForgeryToken()
+
+@if (TempData["StatusMessage"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        @TempData["StatusMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+@if (TempData["ErrorMessage"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        @TempData["ErrorMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+<div class="card">
+    <div class="card-datatable text-nowrap">
+        <table id="companies-table" class="datatables-basic table table-bordered table-responsive" style="width: 100%;">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Address</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tfoot>
+                <tr>
+                    <th>Name</th>
+                    <th>Address</th>
+                    <th>Actions</th>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="/lib/jquery/dist/jquery.min.js"></script>
+    <script src="/lib/datatables-bs5/datatables.bootstrap5.js"></script>
+    <script src="/lib/moment/moment.js"></script>
+    <script src="/js/helper.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script>
+        const token = $('input[name="_+-_RequestVerificationToken"]').val();
+        $(document).ready(function () {
+            let table;
+            function getRefreshButton() {
+                return {
+                    text: '<i class="ri-refresh-line"></i> Refresh',
+                    className: 'btn btn-outline-primary',
+                    action: function (e, dt, node, config) {
+                        dt.ajax.reload();
+                    },
+                    titleAttr: 'Refresh Table'
+                };
+            }
+            let r = document.createElement("h5");
+            r.classList.add("card-title", "mb-0");
+            r.innerHTML = "Users";
+            table = $('#companies-table').DataTable({
+                searchDelay: 1000,
+                destroy: true,
+                layout: {
+                    top2Start: {
+                        rowClass: "row card-header mx-0 px-2",
+                        features: [r]
+                    },
+                    top2End: {
+                        rowClass: "row card-header mx-0 px-2",
+                        features: [{
+                            buttons: [{
+                                text: '<span class="d-flex align-items-center"><i class="icon-base ri ri-add-line icon-18px me-sm-1"></i><span class="d-none d-sm-inline-block">Add New Record</span></span>',
+                                className: "create-new btn btn-primary",
+                                action: function () {
+                                    window.location.href = '/Admin/Companies/Create';
+                                }
+                            }]
+                        }]
+                    },
+                    topStart: {
+                        rowClass: "row m-3 mx-2 my-0 justify-content-between",
+                        features: [{
+                            pageLength: {
+                                menu: [10, 25, 50, 100],
+                                text: "Show_MENU_entries"
+                            }
+                        }]
+                    },
+                    topEnd: {
+                        buttons: [getRefreshButton()],
+                    },
+                    bottomStart: {
+                        rowClass: "row mx-3 justify-content-between",
+                        features: ["info"]
+                    },
+                    bottomEnd: "paging"
+                },
+                order: [[0, 'asc']],
+                processing: true,
+                paging: true,
+                serverSide: true,
+                searching: true,
+                ordering: true,
+                autoWidth: false,
+                scrollX: true,
+                ajax: {
+                    url: '/api/Companies',
+                    type: 'GET',
+                    data: function (d) {
+                        const query = {
+                            pageNumber: (d.start / d.length) + 1,
+                            pageSize: d.length,
+                        };
+                        if (d.search && d.search.value) {
+                            query.Search = d.search.value;
+                        }
+                        if (d.order && d.order.length) {
+                            query.SortBy = d.columns[d.order[0].column].data;
+                            query.IsSortAscending = d.order[0].dir === 'asc';
+                        }
+                        d.columns.forEach((column, _) => {
+                            if (column.search && column.search.value) {
+                                query[`Filters.${column.data.charAt(0).toUpperCase() + column.data.slice(1)}`] = column.search.value;
+                            }
+                        });
+                        return query;
+                    },
+                    beforeSend: function(xhr) {
+                        xhr.setRequestHeader("RequestVerificationToken", token);
+                    },
+                    dataSrc: function (json) {
+                        if (json.data && Array.isArray(json.data.items)) {
+                            json.recordsTotal = json.data.totalCount;
+                            json.recordsFiltered = json.data.totalFilteredCount;
+                            return json.data.items;
+                        }
+                        return json;
+                    },
+                    error: function (err) {
+                        alert(err.responseJSON?.errorMessage || "An error occurred while fetching data");
+                    }
+                },
+                columns: [
+                    { data: 'name', name: 'Name' },
+                    { data: 'address', name: 'Address' },
+                    {
+                        data: null,
+                        orderable: false,
+                        render: function (data, type, row) {
+                            return `
+                                <div class="d-flex align-items-center">
+                                    <a href="/Admin/Companies/Edit/${row.id}" class="btn btn-icon btn-text-secondary rounded-pill" title="Edit Company">
+                                        <i class="icon-base ri ri-edit-line icon-md"></i>
+                                    </a>
+                                    <a href="/Admin/Companies/Details/${row.id}" class="btn btn-icon btn-text-secondary rounded-pill" title="View Details">
+                                        <i class="icon-base ri ri-eye-line icon-md"></i>
+                                    </a>
+                                </div>`;
+                        }
+                    }
+                ],
+                columnDefs: [
+                    {
+                        targets: [0, 1],
+                        className: 'text-center'
+                    }
+                ],
+                initComplete: function () {
+                    $('.dt-layout-table').removeClass('mt-2');
+                    $(".card-header").after('<hr class="my-0">');
+                    $(".dt-buttons").children().removeClass("btn-secondary");
+                    this.api()
+                        .columns()
+                        .every(function () {
+                            let column = this;
+                            let title = column.footer().textContent;
+                            let input = document.createElement('input');
+                            input.placeholder = title;
+                            input.className = "form-control";
+                            input.style.width = '100%';
+                            column.footer().replaceChildren(input);
+                            input.addEventListener('keyup', debounce(() => {
+                                if (column.search() !== input.value) {
+                                    column.search(input.value).draw();
+                                }
+                            }, 1000));
+                        });
+                }
+            });
+        });
+    </script>
+}

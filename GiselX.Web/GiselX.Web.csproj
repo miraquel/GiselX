@@ -1,0 +1,73 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+    <PropertyGroup>
+        <TargetFramework>net9.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <UserSecretsId>aspnet-GiselX.Web-e49bc5c5-f94e-4197-be67-55bd3fd13c5a</UserSecretsId>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <None Update="app.db" CopyToOutputDirectory="PreserveNewest" ExcludeFromSingleFile="true"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="ClosedXML" Version="0.105.0" />
+        <PackageReference Include="Microsoft.AspNetCore.Diagnostics.EntityFrameworkCore" Version="9.0.4"/>
+        <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="9.0.4"/>
+        <PackageReference Include="Microsoft.AspNetCore.Identity.UI" Version="9.0.4"/>
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.4"/>
+        <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.8" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="9.0.4"/>
+        <PackageReference Include="Microsoft.VisualStudio.Web.CodeGeneration.Design" Version="9.0.0" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\GiselX.Common\GiselX.Common.csproj" />
+      <ProjectReference Include="..\GiselX.Repository\GiselX.Repository.csproj" />
+      <ProjectReference Include="..\GiselX.Service\GiselX.Service.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="Areas\Admin\Views\" />
+      <Folder Include="Areas\Api\" />
+      <Folder Include="Context\Data\" />
+      <Folder Include="Context\Migrations\" />
+      <Folder Include="wwwroot\fonts\" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <_ContentIncludedByDefault Remove="Areas\Admin\Views\Roles\Create.cshtml" />
+      <_ContentIncludedByDefault Remove="Areas\Admin\Views\Roles\Index.cshtml" />
+      <_ContentIncludedByDefault Remove="Areas\Admin\Views\Roles\RolePermissions.cshtml" />
+      <_ContentIncludedByDefault Remove="Areas\Admin\Views\Roles\_ViewImports.cshtml" />
+      <_ContentIncludedByDefault Remove="Areas\Admin\Views\Users\Index.cshtml" />
+      <_ContentIncludedByDefault Remove="Areas\Admin\Views\Users\UserRoles.cshtml" />
+      <_ContentIncludedByDefault Remove="Areas\Admin\Views\Users\_ViewImports.cshtml" />
+      <_ContentIncludedByDefault Remove="Areas\Admin\_ValidationScriptsPartial.cshtml" />
+      <_ContentIncludedByDefault Remove="Areas\Admin\_ViewImports.cshtml" />
+      <_ContentIncludedByDefault Remove="Areas\Admin\_ViewStart.cshtml" />
+      <_ContentIncludedByDefault Remove="Views\ServiceLevels\Index.cshtml" />
+      <_ContentIncludedByDefault Remove="Areas\Admin\Views\User\Create.cshtml" />
+      <_ContentIncludedByDefault Remove="Areas\Admin\Views\User\Delete.cshtml" />
+      <_ContentIncludedByDefault Remove="Areas\Admin\Views\User\Details.cshtml" />
+      <_ContentIncludedByDefault Remove="Areas\Admin\Views\User\Edit.cshtml" />
+      <_ContentIncludedByDefault Remove="Areas\Admin\Views\User\Index.cshtml" />
+      <_ContentIncludedByDefault Remove="Areas\Admin\Views\User\UserRoles.cshtml" />
+      <_ContentIncludedByDefault Remove="Areas\Admin\Views\User\_ViewImports.cshtml" />
+      <_ContentIncludedByDefault Remove="Areas\Admin\Views\_ViewImports.cshtml" />
+      <_ContentIncludedByDefault Remove="Areas\Admin\Views\_ViewStart.cshtml" />
+      <_ContentIncludedByDefault Remove="wwwroot\vendor\libs\datatables-buttons-bs5\buttons.boostrap5.css" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <UpToDateCheckInput Remove="Areas\Admin\Views\Roles\Create.cshtml" />
+      <UpToDateCheckInput Remove="Areas\Admin\Views\Roles\Index.cshtml" />
+      <UpToDateCheckInput Remove="Areas\Admin\Views\Roles\RolePermissions.cshtml" />
+      <UpToDateCheckInput Remove="Areas\Admin\Views\Roles\_ViewImports.cshtml" />
+      <UpToDateCheckInput Remove="Areas\Admin\Views\Users\Index.cshtml" />
+      <UpToDateCheckInput Remove="Areas\Admin\Views\Users\UserRoles.cshtml" />
+      <UpToDateCheckInput Remove="Areas\Admin\Views\Users\_ViewImports.cshtml" />
+    </ItemGroup>
+
+</Project>

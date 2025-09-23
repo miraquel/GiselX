@@ -1,0 +1,103 @@
+﻿@page
+@model LoginModel
+
+@{
+    Layout = "_BlankLayout";
+    ViewData["Title"] = "Login";
+}
+
+@await Html.PartialAsync("Sections/_Variables")
+
+@section styles {
+<link rel="stylesheet" href="~/vendor/css/pages/page-auth.css">
+}
+
+<div class="position-relative">
+    <div class="authentication-wrapper authentication-basic container-p-y">
+        <div class="authentication-inner py-6 mx-4">
+
+            <!-- Login -->
+            <div class="card p-7">
+                <!-- Logo -->
+                <div class="app-brand justify-content-center mt-5">
+                    <a href="/" class="app-brand-link gap-3">
+                        <span class="app-brand-logo demo">@await Html.PartialAsync("../_Partials/_Macros")</span>
+                        <span class="app-brand-text demo text-heading fw-semibold">@TempData.Peek("appName")</span>
+                    </a>
+                </div>
+                <!-- /Logo -->
+
+                <div class="card-body mt-1">
+                    <h4 class="mb-1">Welcome to @TempData.Peek("appName")! 👋🏻</h4>
+                    <p class="mb-5">Please sign-in to your account</p>
+
+                    <form id="account" method="post" class="mb-5">
+                        <div asp-validation-summary="ModelOnly" class="text-danger" role="alert"></div>
+                        <div class="form-floating form-floating-outline mb-5">
+                            <input asp-for="Input.Username" class="form-control" autocomplete="username" aria-required="true" placeholder="Username" />
+                            <label asp-for="Input.Username" class="form-label">Username</label>
+                            <span asp-validation-for="Input.Username" class="text-danger"></span>
+                        </div>
+                        <div class="mb-5">
+                            <div class="form-password-toggle">
+                                <div class="input-group input-group-merge">
+                                    <div class="form-floating form-floating-outline">
+                                        <input asp-for="Input.Password" class="form-control" autocomplete="current-password" aria-required="true" placeholder="password" />
+                                        <label asp-for="Input.Password" class="form-label">Password</label>
+                                    </div>
+                                    <span class="input-group-text cursor-pointer"><i class="ri-eye-off-line ri-20px"></i></span>
+                                </div>
+                                <span asp-validation-for="Input.Password" class="text-danger"></span>
+                            </div>
+                        </div>
+                        <div class="mb-5 pb-2 d-flex justify-content-between pt-2 align-items-center">
+                            <div class="form-check mb-0">
+                                <input class="form-check-input" asp-for="Input.RememberMe" />
+                                <label class="form-check-label" asp-for="Input.RememberMe">
+                                    @Html.DisplayNameFor(m => m.Input.RememberMe)
+                                </label>
+                            </div>
+                            <a asp-page="./ForgotPassword" class="float-end mb-1">
+                                <span>Forgot Password?</span>
+                            </a>
+                        </div>
+                        <div class="mb-5">
+                            <button id="login-submit" type="submit" class="btn btn-primary d-grid w-100">Log in</button>
+                        </div>
+                    </form>
+
+                    <p class="text-center mb-5">
+                        <span>New on our platform?</span>
+                        <a asp-page="./Register" asp-route-returnUrl="@Model.ReturnUrl">
+                            <span>Create an account</span>
+                        </a>
+                    </p>
+
+                    @if ((Model.ExternalLogins?.Count ?? 0) > 0)
+                    {
+                        <div class="mb-4">
+                            <form id="external-account" asp-page="./ExternalLogin" asp-route-returnUrl="@Model.ReturnUrl" method="post" class="form-horizontal">
+                                <div>
+                                    <p>
+                                        @foreach (var provider in Model.ExternalLogins!)
+                                        {
+                                            <button type="submit" class="btn btn-primary me-2 mb-2" name="provider" value="@provider.Name" title="Log in using your @provider.DisplayName account">@provider.DisplayName</button>
+                                        }
+                                    </p>
+                                </div>
+                            </form>
+                        </div>
+                    }
+                </div>
+            </div>
+            <!-- /Login -->
+            <img src="~/img/illustrations/tree-3.png" alt="auth-tree" class="authentication-image-object-left d-none d-lg-block">
+            <img src="~/img/illustrations/auth-basic-mask-light.png" class="authentication-image d-none d-lg-block" height="172" alt="triangle-bg" data-app-light-img="illustrations/auth-basic-mask-light.png" data-app-dark-img="illustrations/auth-basic-mask-dark.png">
+            <img src="~/img/illustrations/tree.png" alt="auth-tree" class="authentication-image-object-right d-none d-lg-block">
+        </div>
+    </div>
+</div>
+
+@section scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

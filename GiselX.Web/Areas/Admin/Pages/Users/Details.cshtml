@@ -1,0 +1,48 @@
+﻿@page
+@model GiselX.Web.Areas.Admin.Pages.Users.ViewModel
+@{
+}
+
+@if (string.IsNullOrEmpty(Model.Id))
+{
+    <div class="alert alert-danger">User not found.</div>
+}
+else
+{
+    <div class="card">
+        <div class="card-header d-flex align-items-center justify-content-between">
+            <h5 class="mb-0">User Details</h5>
+            <small class="text-muted float-end">User Information</small>
+        </div>
+        <div class="card-body">
+            <dl class="row mb-0">
+                <dt class="col-sm-3 mb-3 fw-medium">Username</dt>
+                <dd class="col-sm-9 mb-3">@Model.UserName</dd>
+                <dt class="col-sm-3 mb-3 fw-medium">Email</dt>
+                <dd class="col-sm-9 mb-3">@Model.Email</dd>
+                <dt class="col-sm-3 mb-3 fw-medium">First Name</dt>
+                <dd class="col-sm-9 mb-3">@Model.FirstName</dd>
+                <dt class="col-sm-3 mb-3 fw-medium">Last Name</dt>
+                <dd class="col-sm-9 mb-3">@Model.LastName</dd>
+                <dt class="col-sm-3 mb-3 fw-medium">Active</dt>
+                <dd class="col-sm-9 mb-3">
+                    @if (Model.Active)
+                    {
+                        <span class="badge rounded-pill bg-label-success">Active</span>
+                    }
+                    else
+                    {
+                        <span class="badge rounded-pill bg-label-danger">Inactive</span>
+                    }
+                </dd>
+                <dt class="col-sm-3 mb-3 fw-medium">Roles</dt>
+                <dd class="col-sm-9 mb-3">@Model.Roles</dd>
+                <dt class="col-sm-3 mb-3 fw-medium">Phone Number</dt>
+                <dd class="col-sm-9 mb-3">@Model.PhoneNumber</dd>
+            </dl>
+            <div class="mt-4">
+                <a asp-page="Index" class="btn btn-secondary">Back to List</a>
+            </div>
+        </div>
+    </div>
+}

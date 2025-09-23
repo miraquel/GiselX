@@ -1,0 +1,755 @@
+Index: GiselX.Web/Areas/Admin/Views/Roles/Index.cshtml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/GiselX.Web/Areas/Admin/Views/Roles/Index.cshtml b/GiselX.Web/Areas/Admin/Views/Roles/Index.cshtml
+new file mode 100644
+--- /dev/null
++++ b/GiselX.Web/Areas/Admin/Views/Roles/Index.cshtml
+@@ -0,0 +1,95 @@
++@model ResearchApps.Web.Areas.Admin.Models.Roles.RoleIndexViewModel
++@{
++    ViewData["Title"] = "Role Management";
++}
++
++<div class="card">
++    <div class="card-header d-flex align-items-center">
++        <h1 class="card-title mb-0">Role Management</h1>
++        <div class="ms-auto">
++            <a asp-action="Create" asp-controller="Roles" class="btn btn-primary btn-sm">
++                <i class="ri-add-line align-bottom me-1"></i>
++                Create New Role
++            </a>
++        </div>
++    </div>
++    <div class="card-body">
++        <table class="table table-bordered table-striped">
++            <thead>
++                <tr>
++                    <th>Role Name</th>
++                    <th>Description</th>
++                    <th>Role Id</th>
++                    <th class="text-center">Actions</th>
++                </tr>
++            </thead>
++            <tbody>
++            @foreach (var role in Model.Roles)
++            {
++                <tr>
++                    <td>@role.Name</td>
++                    <td>@role.Description</td>
++                    <td>@role.Id</td>
++                    <td class="text-center">
++                        <a asp-action="RolePermissions" asp-controller="Roles" asp-route-id="@role.Id" class="btn btn-sm btn-secondary">
++                            Assign Permissions
++                        </a>
++                    </td>
++                </tr>
++            }
++            </tbody>
++        </table>
++        <div class="d-flex justify-content-end">
++            <nav>
++                <ul class="pagination mb-0">
++                    <li class="page-item @(Model.PageNumber == 1 ? "disabled" : "")">
++                        <a class="page-link" asp-route-pageNumber="@(Model.PageNumber - 1)" asp-route-pageSize="@Model.PageSize">Previous</a>
++                    </li>
++                    @{
++                        var totalPages = Model.TotalPages;
++                        var current = Model.PageNumber;
++                        var pageSize = Model.PageSize;
++                        const int pageWindow = 3;
++
++                        // Always show first page
++                        <li class="page-item @(current == 1 ? "active" : "")">
++                            <a class="page-link" asp-route-pageNumber="1" asp-route-pageSize="@pageSize">1</a>
++                        </li>
++
++                        // Determine start and end for window
++                        var startPage = Math.Max(2, current - pageWindow);
++                        var endPage = Math.Min(totalPages - 1, current + pageWindow);
++
++                        if (startPage > 2)
++                        {
++                            <li class="page-item disabled"><span class="page-link">...</span></li>
++                        }
++
++                        for (var i = startPage; i <= endPage; i++)
++                        {
++                            <li class="page-item @(i == current ? "active" : "")">
++                                <a class="page-link" asp-route-pageNumber="@i" asp-route-pageSize="@pageSize">@i</a>
++                            </li>
++                        }
++
++                        if (endPage < totalPages - 1)
++                        {
++                            <li class="page-item disabled"><span class="page-link">...</span></li>
++                        }
++
++                        if (totalPages > 1)
++                        {
++                            // Always show last page
++                            <li class="page-item @(current == totalPages ? "active" : "")">
++                                <a class="page-link" asp-route-pageNumber="@totalPages" asp-route-pageSize="@pageSize">@totalPages</a>
++                            </li>
++                        }
++                    }
++                    <li class="page-item @(Model.PageNumber == Model.TotalPages || Model.TotalPages == 0 ? "disabled" : "")">
++                        <a class="page-link" asp-route-pageNumber="@(Model.PageNumber + 1)" asp-route-pageSize="@Model.PageSize">Next</a>
++                    </li>
++                </ul>
++            </nav>
++        </div>
++    </div>
++</div>
+Index: GiselX.Web/Areas/Admin/Views/Roles/Create.cshtml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/GiselX.Web/Areas/Admin/Views/Roles/Create.cshtml b/GiselX.Web/Areas/Admin/Views/Roles/Create.cshtml
+new file mode 100644
+--- /dev/null
++++ b/GiselX.Web/Areas/Admin/Views/Roles/Create.cshtml
+@@ -0,0 +1,26 @@
++@model ResearchApps.Web.Areas.Admin.Models.Roles.RoleCreateViewModel
++@{
++    ViewData["Title"] = "Create Role";
++}
++
++<h1>Create Role</h1>
++
++<form asp-action="Create" asp-controller="Roles" method="post">
++    <div class="mb-3">
++        <label asp-for="RoleName" class="form-label"></label>
++        <input asp-for="RoleName" class="form-control" />
++        <span asp-validation-for="RoleName" class="text-danger"></span>
++    </div>
++    <div class="mb-3">
++        <label asp-for="RoleDescription" class="form-label"></label>
++        <input asp-for="RoleDescription" class="form-control" />
++        <span asp-validation-for="RoleDescription" class="text-danger"></span>
++    </div>
++    <button type="submit" class="btn btn-primary">Create</button>
++    <a asp-action="Index" asp-controller="Roles" class="btn btn-secondary">Cancel</a>
++</form>
++
++@section Scripts {
++    <partial name="_ValidationScriptsPartial" />
++}
++
+Index: GiselX.Web/Areas/Admin/Views/Roles/_ViewImports.cshtml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/GiselX.Web/Areas/Admin/Views/Roles/_ViewImports.cshtml b/GiselX.Web/Areas/Admin/Views/Roles/_ViewImports.cshtml
+new file mode 100644
+--- /dev/null
++++ b/GiselX.Web/Areas/Admin/Views/Roles/_ViewImports.cshtml
+@@ -0,0 +1,5 @@
++@using ResearchApps.Web.Areas.Admin.Models.Roles
++@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
++@using ResearchApps.Web.Areas.Admin.Models.Users
++@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
++
+Index: GiselX.Web/Areas/Admin/Views/Roles/RolePermissions.cshtml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/GiselX.Web/Areas/Admin/Views/Roles/RolePermissions.cshtml b/GiselX.Web/Areas/Admin/Views/Roles/RolePermissions.cshtml
+new file mode 100644
+--- /dev/null
++++ b/GiselX.Web/Areas/Admin/Views/Roles/RolePermissions.cshtml
+@@ -0,0 +1,91 @@
++@model ResearchApps.Web.Areas.Admin.Models.Roles.RolePermissionsViewModel
++@{
++    ViewData["Title"] = "Assign Permissions to Role";
++}
++
++<div class="card">
++    <div class="card-header">
++        <h1 class="card-title mb-0">Assign Permissions to Role</h1>
++    </div>
++    <div class="card-body">
++        <form asp-action="RolePermissions" asp-controller="Roles" method="post">
++            <input type="hidden" name="RoleId" value="@Model.RoleId" />
++            <div class="mb-3">
++                @foreach (var group in Model.GroupedPermissions)
++                {
++                    var groupId = "group_" + group.Key;
++                    var collapseId = "collapse_" + group.Key;
++                    var allChecked = group.Value.All(p => Model.SelectedPermissions.Contains(p));
++                    <div class="mb-2">
++                        <div class="card">
++                            <div class="card-header p-2 bg-light">
++                                <div class="d-flex align-items-center">
++                                    <div class="flex-grow-1">
++                                        <button class="btn btn-link btn-sm p-0 me-2" type="button" data-bs-toggle="collapse" data-bs-target="#@collapseId" aria-expanded="true" aria-controls="@collapseId">
++                                            <span class="bi bi-chevron-down"></span>
++                                        </button>
++                                        <strong class="me-2">@Model.GetGroupFriendlyName(group.Key)</strong>
++                                    </div>
++                                    <div class="flex-shrink-0">
++                                        <button type="button" class="btn btn-outline-secondary btn-sm ms-2" onclick="toggleGroup('@groupId', this)">
++                                            <span class="bi bi-check2-square"></span>
++                                            <span class="toggle-label">@(allChecked ? "Uncheck All" : "Check All")</span>
++                                        </button>
++                                    </div>
++                                </div>
++                            </div>
++                            <div class="card-body collapse show" id="@collapseId">
++                                <div class="row">
++                                    @foreach (var permission in group.Value)
++                                    {
++                                        var permId = "perm_" + permission.Replace(".", "_");
++                                        <div class="col-md-4">
++                                            <div class="form-check">
++                                                <input class="form-check-input @groupId"
++                                                       type="checkbox"
++                                                       name="SelectedPermissions"
++                                                       value="@permission"
++                                                       id="@permId"
++                                                       @(Model.SelectedPermissions.Contains(permission) ? "checked" : "") />
++                                                <label class="form-check-label" for="@permId">
++                                                    @Model.GetPermissionFriendlyName(permission)
++                                                </label>
++                                            </div>
++                                        </div>
++                                    }
++                                </div>
++                            </div>
++                        </div>
++                    </div>
++                }
++            </div>
++            <button type="submit" class="btn btn-primary">Save Permissions</button>
++            <a asp-action="Index" asp-controller="Roles" class="btn btn-secondary">Cancel</a>
++        </form>
++    </div>
++</div>
++
++<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
++
++<script>
++    function toggleGroup(groupClass, btn) {
++        let i;
++        const checkboxes = document.getElementsByClassName(groupClass);
++        let allChecked = true;
++        for (i = 0; i < checkboxes.length; i++) {
++            if (!checkboxes[i].checked) {
++                allChecked = false;
++                break;
++            }
++        }
++        const newState = !allChecked;
++        for (i = 0; i < checkboxes.length; i++) {
++            checkboxes[i].checked = newState;
++        }
++        // Update button label
++        const label = btn.querySelector('.toggle-label');
++        if (label) {
++            label.textContent = newState ? "Uncheck All" : "Check All";
++        }
++    }
++</script>
+Index: GiselX.Web/Areas/Admin/Views/Users/Index.cshtml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/GiselX.Web/Areas/Admin/Views/Users/Index.cshtml b/GiselX.Web/Areas/Admin/Views/Users/Index.cshtml
+new file mode 100644
+--- /dev/null
++++ b/GiselX.Web/Areas/Admin/Views/Users/Index.cshtml
+@@ -0,0 +1,34 @@
++@model ResearchApps.Web.Areas.Admin.Models.Users.UserIndexViewModel
++@{
++    ViewData["Title"] = "User Management";
++}
++
++<h1>User Management</h1>
++
++<table class="table table-bordered table-striped">
++    <thead>
++    <tr>
++        <th>Email</th>
++        <th>First Name</th>
++        <th>Last Name</th>
++        <th>Phone Number</th>
++        <th>Actions</th>
++    </tr>
++    </thead>
++    <tbody>
++    @foreach (var user in Model.Users)
++    {
++        <tr>
++            <td>@user.Email</td>
++            <td>@user.FirstName</td>
++            <td>@user.LastName</td>
++            <td>@user.PhoneNumber</td>
++            <td>
++                <a asp-action="UserRoles" asp-controller="Users" asp-route-id="@user.Id" class="btn btn-sm btn-secondary">
++                    Assign Roles
++                </a>
++            </td>
++        </tr>
++    }
++    </tbody>
++</table>
+\ No newline at end of file
+Index: GiselX.Web/Areas/Admin/Views/Users/UserRoles.cshtml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/GiselX.Web/Areas/Admin/Views/Users/UserRoles.cshtml b/GiselX.Web/Areas/Admin/Views/Users/UserRoles.cshtml
+new file mode 100644
+--- /dev/null
++++ b/GiselX.Web/Areas/Admin/Views/Users/UserRoles.cshtml
+@@ -0,0 +1,47 @@
++@model ResearchApps.Web.Areas.Admin.Models.Users.UserRolesViewModel
++@{
++    ViewData["Title"] = "Assign Roles";
++}
++
++<h1>Assign Roles to @Model.UserEntity?.Email</h1>
++
++@if (Model.UserEntity != null)
++{
++    <div class="mb-3">
++        <strong>User:</strong> @Model.UserEntity.Email
++    </div>
++    <form asp-action="UserRoles" asp-controller="Users" method="post">
++        <input type="hidden" name="UserId" value="@Model.UserId" />
++        <table class="table table-bordered">
++            <thead>
++                <tr>
++                    <th>Assign</th>
++                    <th>Role Name</th>
++                    <th>Description</th>
++                </tr>
++            </thead>
++            <tbody>
++            @foreach (var t in Model.Roles)
++            {
++                <tr>
++                    <td>
++                        <input type="checkbox"
++                               name="SelectedRoles"
++                               value="@t.Name"
++                               @(t.Assigned ? "checked" : "")/>
++                    </td>
++                    <td>@t.Name</td>
++                    <td>@t.Description</td>
++                </tr>
++            }
++            </tbody>
++        </table>
++        <button type="submit" class="btn btn-primary">Save</button>
++        <a asp-action="Index" asp-controller="Users" class="btn btn-secondary">Cancel</a>
++    </form>
++}
++else
++{
++    <div class="alert alert-danger">User not found.</div>
++}
++
+Index: GiselX.Web/Areas/Admin/Models/Roles/RoleIndexViewModel.cs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/GiselX.Web/Areas/Admin/Models/Roles/RoleIndexViewModel.cs b/GiselX.Web/Areas/Admin/Models/Roles/RoleIndexViewModel.cs
+new file mode 100644
+--- /dev/null
++++ b/GiselX.Web/Areas/Admin/Models/Roles/RoleIndexViewModel.cs
+@@ -0,0 +1,14 @@
++using System.Collections.Generic;
++using ResearchApps.Domain;
++
++namespace ResearchApps.Web.Areas.Admin.Models.Roles
++{
++    public class RoleIndexViewModel
++    {
++        public IList<AppIdentityRole> Roles { get; set; } = new List<AppIdentityRole>();
++        public int PageNumber { get; set; }
++        public int PageSize { get; set; }
++        public int TotalCount { get; set; }
++        public int TotalPages { get; set; }
++    }
++}
+Index: GiselX.Web/Areas/Admin/Models/Roles/RoleCreateViewModel.cs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/GiselX.Web/Areas/Admin/Models/Roles/RoleCreateViewModel.cs b/GiselX.Web/Areas/Admin/Models/Roles/RoleCreateViewModel.cs
+new file mode 100644
+--- /dev/null
++++ b/GiselX.Web/Areas/Admin/Models/Roles/RoleCreateViewModel.cs
+@@ -0,0 +1,14 @@
++using System.ComponentModel.DataAnnotations;
++
++namespace ResearchApps.Web.Areas.Admin.Models.Roles
++{
++    public class RoleCreateViewModel
++    {
++        [Required]
++        [Display(Name = "Role Name")]
++        public string RoleName { get; set; } = string.Empty;
++
++        [Display(Name = "Role Description")]
++        public string RoleDescription { get; set; } = string.Empty;
++    }
++}
+Index: GiselX.Web/Areas/Admin/Models/Roles/RolePermissionsViewModel.cs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/GiselX.Web/Areas/Admin/Models/Roles/RolePermissionsViewModel.cs b/GiselX.Web/Areas/Admin/Models/Roles/RolePermissionsViewModel.cs
+new file mode 100644
+--- /dev/null
++++ b/GiselX.Web/Areas/Admin/Models/Roles/RolePermissionsViewModel.cs
+@@ -0,0 +1,29 @@
++using System.Globalization;
++using System.Text.RegularExpressions;
++
++namespace ResearchApps.Web.Areas.Admin.Models.Roles;
++
++public class RolePermissionsViewModel
++{
++    public string RoleId { get; set; } = string.Empty;
++    public List<string> SelectedPermissions { get; set; } = new();
++    public Dictionary<string, List<string>> GroupedPermissions { get; set; } = new();
++    public string GetPermissionFriendlyName(string permission)
++    {
++        if (string.IsNullOrWhiteSpace(permission))
++            return permission;
++        var parts = permission.Split('.');
++        var last = parts.Length > 1 ? parts[1] : parts[0];
++        var friendly = Regex.Replace(last, "([a-z])([A-Z])", "$1 $2");
++        friendly = Regex.Replace(friendly, "([A-Z])([A-Z][a-z])", "$1 $2");
++        return char.ToUpper(friendly[0]) + friendly[1..];
++    }
++    public string GetGroupFriendlyName(string group)
++    {
++        if (string.IsNullOrWhiteSpace(group))
++            return group;
++        var friendly = Regex.Replace(group, "([a-z])([A-Z])", "$1 $2");
++        friendly = Regex.Replace(friendly, "([A-Z])([A-Z][a-z])", "$1 $2");
++        return CultureInfo.CurrentCulture.TextInfo.ToTitleCase(friendly.Trim());
++    }
++}
+\ No newline at end of file
+Index: GiselX.Web/Areas/Admin/Models/Users/UserIndexViewModel.cs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/GiselX.Web/Areas/Admin/Models/Users/UserIndexViewModel.cs b/GiselX.Web/Areas/Admin/Models/Users/UserIndexViewModel.cs
+new file mode 100644
+--- /dev/null
++++ b/GiselX.Web/Areas/Admin/Models/Users/UserIndexViewModel.cs
+@@ -0,0 +1,8 @@
++using ResearchApps.Domain;
++
++namespace ResearchApps.Web.Areas.Admin.Models.Users;
++
++public class UserIndexViewModel
++{
++    public IList<AppIdentityUser> Users { get; set; } = new List<AppIdentityUser>();
++}
+\ No newline at end of file
+Index: GiselX.Web/Areas/Admin/Models/Users/UserRolesViewModel.cs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/GiselX.Web/Areas/Admin/Models/Users/UserRolesViewModel.cs b/GiselX.Web/Areas/Admin/Models/Users/UserRolesViewModel.cs
+new file mode 100644
+--- /dev/null
++++ b/GiselX.Web/Areas/Admin/Models/Users/UserRolesViewModel.cs
+@@ -0,0 +1,18 @@
++using ResearchApps.Domain;
++
++namespace ResearchApps.Web.Areas.Admin.Models.Users;
++
++public class UserRolesViewModel
++{
++    public string UserId { get; set; } = string.Empty;
++    public AppIdentityUser? UserEntity { get; set; }
++    public List<RoleViewModel> Roles { get; set; } = [];
++    public List<string> SelectedRoles { get; set; } = [];
++}
++public class RoleViewModel
++{
++    public string Id { get; set; } = string.Empty;
++    public string Name { get; set; } = string.Empty;
++    public string Description { get; set; } = string.Empty;
++    public bool Assigned { get; set; }
++}
+\ No newline at end of file
+Index: GiselX.Web/Areas/Admin/Controllers/RolesController.cs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/GiselX.Web/Areas/Admin/Controllers/RolesController.cs b/GiselX.Web/Areas/Admin/Controllers/RolesController.cs
+new file mode 100644
+--- /dev/null
++++ b/GiselX.Web/Areas/Admin/Controllers/RolesController.cs
+@@ -0,0 +1,115 @@
++using Microsoft.AspNetCore.Identity;
++using Microsoft.AspNetCore.Mvc;
++using ResearchApps.Domain;
++using ResearchApps.Web.Areas.Admin.Models.Roles;
++using ResearchApps.Common.Constants;
++using System.Security.Claims;
++using Microsoft.AspNetCore.Authorization;
++
++namespace ResearchApps.Web.Areas.Admin.Controllers;
++
++[Area("Admin")]
++public class RolesController : Controller
++{
++    private readonly RoleManager<AppIdentityRole> _roleManager;
++    private readonly UserManager<AppIdentityUser> _userManager;
++
++    public RolesController(RoleManager<AppIdentityRole> roleManager, UserManager<AppIdentityUser> userManager)
++    {
++        _roleManager = roleManager;
++        _userManager = userManager;
++    }
++
++    [Authorize(PermissionConstants.Roles.Index)]
++    public IActionResult Index(int pageNumber = 1, int pageSize = 10)
++    {
++        var rolesRaw = _roleManager.Roles;
++        var totalCount = rolesRaw.Count();
++        var roles = rolesRaw.OrderBy(r => r.Name)
++            .Skip((pageNumber - 1) * pageSize)
++            .Take(pageSize)
++            .ToList();
++        var model = new RoleIndexViewModel
++        {
++            Roles = roles,
++            PageNumber = pageNumber,
++            PageSize = pageSize,
++            TotalCount = totalCount,
++            TotalPages = (int)System.Math.Ceiling((double)totalCount / pageSize)
++        };
++        return View(model);
++    }
++
++    [HttpGet]
++    [Authorize(PermissionConstants.Roles.Create)]
++    public IActionResult Create()
++    {
++        return View(new RoleCreateViewModel());
++    }
++
++    [HttpPost]
++    [Authorize(PermissionConstants.Roles.Create)]
++    public async Task<IActionResult> Create(RoleCreateViewModel model)
++    {
++        if (!ModelState.IsValid)
++            return View(model);
++        var roleExists = await _roleManager.RoleExistsAsync(model.RoleName);
++        if (roleExists)
++        {
++            ModelState.AddModelError(string.Empty, "Role already exists.");
++            return View(model);
++        }
++        var role = new AppIdentityRole
++        {
++            Name = model.RoleName,
++            Description = model.RoleDescription
++        };
++        var result = await _roleManager.CreateAsync(role);
++        if (result.Succeeded)
++            return RedirectToAction("Index");
++        foreach (var error in result.Errors)
++            ModelState.AddModelError(string.Empty, error.Description);
++        return View(model);
++    }
++
++    [HttpGet]
++    [Authorize(PermissionConstants.Roles.RolePermissions)]
++    public async Task<IActionResult> RolePermissions(string id)
++    {
++        var role = await _roleManager.FindByIdAsync(id);
++        if (role == null)
++            return NotFound();
++        var groupedPermissions = PermissionConstants.GetGroupedPermissions();
++        var claims = await _roleManager.GetClaimsAsync(role);
++        var selectedPermissions = claims.Where(c => c.Type == "permission").Select(c => c.Value).ToList();
++        var model = new RolePermissionsViewModel
++        {
++            RoleId = id,
++            GroupedPermissions = groupedPermissions,
++            SelectedPermissions = selectedPermissions
++        };
++        return View(model);
++    }
++
++    [HttpPost]
++    [Authorize(PermissionConstants.Roles.RolePermissions)]
++    public async Task<IActionResult> RolePermissions(RolePermissionsViewModel model)
++    {
++        var role = await _roleManager.FindByIdAsync(model.RoleId);
++        if (role == null || string.IsNullOrEmpty(role.Name))
++            return NotFound();
++        var claims = await _roleManager.GetClaimsAsync(role);
++        var currentPermissions = claims.Where(c => c.Type == "permission").Select(c => c.Value).ToHashSet();
++        var selectedPermissions = model.SelectedPermissions.ToHashSet();
++        var toAdd = selectedPermissions.Except(currentPermissions).ToList();
++        var toRemove = currentPermissions.Except(selectedPermissions).ToList();
++        foreach (var permission in toAdd)
++            await _roleManager.AddClaimAsync(role, new Claim("permission", permission));
++        foreach (var claim in claims.Where(c => c.Type == "permission" && toRemove.Contains(c.Value)))
++            await _roleManager.RemoveClaimAsync(role, claim);
++        var usersInRole = await _userManager.GetUsersInRoleAsync(role.Name);
++        foreach (var user in usersInRole)
++            await _userManager.UpdateSecurityStampAsync(user);
++        return RedirectToAction("Index");
++    }
++}
+\ No newline at end of file
+Index: GiselX.Web/Areas/Admin/Controllers/UsersController.cs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/GiselX.Web/Areas/Admin/Controllers/UsersController.cs b/GiselX.Web/Areas/Admin/Controllers/UsersController.cs
+new file mode 100644
+--- /dev/null
++++ b/GiselX.Web/Areas/Admin/Controllers/UsersController.cs
+@@ -0,0 +1,65 @@
++using Microsoft.AspNetCore.Authorization;
++using Microsoft.AspNetCore.Identity;
++using Microsoft.AspNetCore.Mvc;
++using ResearchApps.Common.Constants;
++using ResearchApps.Domain;
++using ResearchApps.Web.Areas.Admin.Models.Users;
++
++namespace ResearchApps.Web.Areas.Admin.Controllers;
++
++[Area("Admin")]
++public class UsersController : Controller
++{
++    private readonly UserManager<AppIdentityUser> _userManager;
++    private readonly RoleManager<AppIdentityRole> _roleManager;
++
++    public UsersController(UserManager<AppIdentityUser> userManager, RoleManager<AppIdentityRole> roleManager)
++    {
++        _userManager = userManager;
++        _roleManager = roleManager;
++    }
++
++    [Authorize(PermissionConstants.Users.Index)]
++    public IActionResult Index()
++    {
++        var users = _userManager.Users.ToList();
++        var userViewModel = new UserIndexViewModel
++        {
++            Users = users
++        };
++        return View(userViewModel);
++    }
++
++    [HttpGet]
++    [Authorize(PermissionConstants.Users.UserRoles)]
++    public async Task<IActionResult> UserRoles(string userId)
++    {
++        if (string.IsNullOrEmpty(userId))
++            return NotFound();
++
++        var user = await _userManager.FindByIdAsync(userId);
++        if (user == null)
++            return NotFound();
++
++        var roles = _roleManager.Roles.ToList();
++        var userRoles = await _userManager.GetRolesAsync(user);
++
++        var roleViewModels = roles.Select(r => new RoleViewModel
++        {
++            Id = r.Id,
++            Name = r.Name ?? string.Empty,
++            Description = r.Description ?? string.Empty,
++            Assigned = r.Name != null && userRoles.Contains(r.Name)
++        }).ToList();
++
++        var model = new UserRolesViewModel
++        {
++            UserId = userId,
++            UserEntity = user,
++            Roles = roleViewModels,
++            SelectedRoles = roleViewModels.Where(r => r.Assigned).Select(r => r.Name).ToList()
++        };
++
++        return View(model);
++    }
++}
+Index: GiselX.Web/Areas/Admin/_ViewStart.cshtml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/GiselX.Web/Areas/Admin/_ViewStart.cshtml b/GiselX.Web/Areas/Admin/_ViewStart.cshtml
+new file mode 100644
+--- /dev/null
++++ b/GiselX.Web/Areas/Admin/_ViewStart.cshtml
+@@ -0,0 +1,3 @@
++@{
++    Layout = "/Views/Shared/_Layout.cshtml";
++}
+\ No newline at end of file
+Index: GiselX.Web/Areas/Admin/_ViewImports.cshtml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/GiselX.Web/Areas/Admin/_ViewImports.cshtml b/GiselX.Web/Areas/Admin/_ViewImports.cshtml
+new file mode 100644
+--- /dev/null
++++ b/GiselX.Web/Areas/Admin/_ViewImports.cshtml
+@@ -0,0 +1,4 @@
++@using Microsoft.AspNetCore.Identity
++@using ResearchApps.Web.Areas.Admin
++@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
++@using ResearchApps.Domain
+Index: GiselX.Web/Areas/Admin/_ValidationScriptsPartial.cshtml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/GiselX.Web/Areas/Admin/_ValidationScriptsPartial.cshtml b/GiselX.Web/Areas/Admin/_ValidationScriptsPartial.cshtml
+new file mode 100644
+--- /dev/null
++++ b/GiselX.Web/Areas/Admin/_ValidationScriptsPartial.cshtml
+@@ -0,0 +1,2 @@
++<script src="~/assets/libs/jquery-validation/jquery.validate.min.js"></script>
++<script src="~/assets/libs/jquery-validation-unobtrusive/jquery.validate.unobtrusive.min.js"></script>
+\ No newline at end of file
+Index: GiselX.Web/GiselX.Web.csproj
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/GiselX.Web/GiselX.Web.csproj b/GiselX.Web/GiselX.Web.csproj
+--- a/GiselX.Web/GiselX.Web.csproj
++++ b/GiselX.Web/GiselX.Web.csproj
+@@ -28,6 +28,7 @@
+     </ItemGroup>
+ 
+     <ItemGroup>
++      <Folder Include="Areas\Admin\Data\" />
+       <Folder Include="Areas\Api\" />
+       <Folder Include="wwwroot\fonts\" />
+     </ItemGroup>
+diff --git a/GiselX.Web/Areas/Admin/Views/Users/_ViewImports.cshtml b/GiselX.Web/Areas/Admin/Views/Users/_ViewImports.cshtml
+new file mode 100644
