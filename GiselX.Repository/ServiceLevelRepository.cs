@@ -37,26 +37,29 @@ public class ServiceLevelRepository : IServiceLevelRepository
 
         var dataTable = new DataTable();
         
-        dataTable.Columns.Add("SoId", typeof(string));
-        dataTable.Columns.Add("SoCreateDate", typeof(DateTime));
-        dataTable.Columns.Add("LeadTimeDlv", typeof(int));
-        dataTable.Columns.Add("LeadTimeRct", typeof(int));
-        dataTable.Columns.Add("ItemId", typeof(string));
-        dataTable.Columns.Add("ItemName", typeof(string));
-        dataTable.Columns.Add("SoQty", typeof(decimal));
-        dataTable.Columns.Add("Unit", typeof(string));
-        dataTable.Columns.Add("KgPerUnit", typeof(decimal));
-        dataTable.Columns.Add("DlvDateRequest", typeof(DateTime));
-        dataTable.Columns.Add("RctDateRequest", typeof(DateTime));
-        dataTable.Columns.Add("DoQty", typeof(decimal));
-        dataTable.Columns.Add("DoDate", typeof(DateTime));
-        dataTable.Columns.Add("ReceiptDate", typeof(DateTime));
-        dataTable.Columns.Add("CreatedBy", typeof(string));
-        dataTable.Columns.Add("CreatedDate", typeof(DateTime));
+        dataTable.Columns.Add(nameof(TransDist.Id), typeof(int));
+        dataTable.Columns.Add(nameof(TransDist.SoId), typeof(string));
+        dataTable.Columns.Add(nameof(TransDist.SoCreateDate), typeof(DateTime));
+        dataTable.Columns.Add(nameof(TransDist.LeadTimeDlv), typeof(int));
+        dataTable.Columns.Add(nameof(TransDist.LeadTimeRct), typeof(int));
+        dataTable.Columns.Add(nameof(TransDist.ItemId), typeof(string));
+        dataTable.Columns.Add(nameof(TransDist.ItemName), typeof(string));
+        dataTable.Columns.Add(nameof(TransDist.SoQty), typeof(decimal));
+        dataTable.Columns.Add(nameof(TransDist.Unit), typeof(string));
+        dataTable.Columns.Add(nameof(TransDist.KgPerUnit), typeof(decimal));
+        dataTable.Columns.Add(nameof(TransDist.DlvDateRequest), typeof(DateTime));
+        dataTable.Columns.Add(nameof(TransDist.RctDateRequest), typeof(DateTime));
+        dataTable.Columns.Add(nameof(TransDist.DoQty), typeof(decimal));
+        dataTable.Columns.Add(nameof(TransDist.DoDate), typeof(DateTime));
+        dataTable.Columns.Add(nameof(TransDist.ReceiptDate), typeof(DateTime));
+        dataTable.Columns.Add(nameof(TransDist.CompanyId), typeof(int));
+        dataTable.Columns.Add(nameof(TransDist.CreatedBy), typeof(string));
+        dataTable.Columns.Add(nameof(TransDist.CreatedDate), typeof(DateTime));
 
         foreach (var transDist in enumerable)
         {
             dataTable.Rows.Add(
+                DBNull.Value,
                 transDist.SoId,
                 transDist.SoCreateDate,
                 transDist.LeadTimeDlv,
@@ -71,6 +74,7 @@ public class ServiceLevelRepository : IServiceLevelRepository
                 transDist.DoQty,
                 transDist.DoDate,
                 transDist.ReceiptDate,
+                transDist.CompanyId,
                 transDist.CreatedBy,
                 transDist.CreatedDate
             );
@@ -85,6 +89,27 @@ public class ServiceLevelRepository : IServiceLevelRepository
         
         var parameters = new DynamicParameters();
         parameters.Add("@CreatedBy", custCode);
+        
+        await _dbConnection.ExecuteAsync("SET ARITHABORT ON", transaction: _dbTransaction);
+        var command = new CommandDefinition(
+            query,
+            parameters,
+            _dbTransaction,
+            cancellationToken: cancellationToken,
+            commandType: CommandType.StoredProcedure
+        );
+
+        return await _dbConnection.QueryAsync<ServiceLevel>(command);
+    }
+
+    public async Task<IEnumerable<ServiceLevel>> SelectByCustPeriodAsync(string custCode, int year, int month, CancellationToken cancellationToken)
+    {
+        const string query = "Gisel_SelectByCustPeriod";
+        
+        var parameters = new DynamicParameters();
+        parameters.Add("@CreatedBy", custCode);
+        parameters.Add("@Year", year);
+        parameters.Add("@Month", month);
         
         await _dbConnection.ExecuteAsync("SET ARITHABORT ON", transaction: _dbTransaction);
         var command = new CommandDefinition(

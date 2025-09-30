@@ -4,6 +4,7 @@ namespace GiselX.Domain;
 
 public class ServiceLevel
 {
+    public int Id { get; set; }
     public string SoId { get; set; } = string.Empty;
     public DateTime SoCreateDate { get; set; } = SqlDateTime.MinValue.Value;
     public int LeadTimeDlv { get; set; }
@@ -20,4 +21,5 @@ public class ServiceLevel
     public DateTime ReceiptDate { get; set; } = SqlDateTime.MinValue.Value;
     public string CreatedBy { get; set; } = string.Empty;
     public DateTime CreatedDate { get; set; } = SqlDateTime.MinValue.Value;
+    public int CompanyId { get; set; }
 }

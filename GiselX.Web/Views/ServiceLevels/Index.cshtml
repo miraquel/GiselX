@@ -195,6 +195,22 @@
                     titleAttr: 'Refresh Table'
                 };
             }
+            
+            function getDownloadButton() {
+                return {
+                    text: '<i class="ri-download-2-fill me-1"></i> Download',
+                    className: 'btn btn-outline-primary',
+                    action: function (e, dt, node, config) {
+                        const year = yearSelect.val();
+                        const month = monthSelect.val();
+                        if (year && month) {
+                            window.location.href = `/ServiceLevels/DownloadSelectByCustPeriod?year=${year}&month=${month}`;
+                        } else {
+                            alert('Please select both Year and Month before downloading.');
+                        }
+                    }
+                }
+            }
 
             function loadTable() {
                 if (table) {
@@ -215,9 +231,17 @@
                             }]
                         },
                         topEnd: {
-                            buttons: [
-                                getRefreshButton()
-                            ],
+                            buttons: {
+                                dom: {
+                                    container: {
+                                        className: 'btn-group'
+                                    }
+                                },
+                                buttons: [
+                                    getRefreshButton(),
+                                    getDownloadButton()
+                                ]
+                            },
                         },
                         bottomStart: {
                             rowClass: "row mx-3 justify-content-between",
@@ -360,9 +384,11 @@
 
                                 let input = document.createElement('input');
                                 input.placeholder = title;
-                                input.className = "form-control";
+                                input.className = "form-control form-control-sm";
                                 input.style.width = '100%';
                                 column.footer().replaceChildren(input);
+                                
+                                column.footer().style.padding = '8px 4px';
 
                                 input.addEventListener('keyup', debounce(() => {
                                     if (column.search() !== input.value) {

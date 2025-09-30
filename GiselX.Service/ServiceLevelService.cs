@@ -135,6 +135,18 @@ public class ServiceLevelService : IServiceLevelService
         };
     }
 
+    public async Task<ServiceResponse<IEnumerable<ServiceLevelDto>>> SelectByCustPeriodAsync(string custCode, int year, int month, CancellationToken cancellationToken)
+    {
+        var serviceLevels = await _serviceLevelRepository.SelectByCustPeriodAsync(custCode, year, month, cancellationToken);
+        
+        return new ServiceResponse<IEnumerable<ServiceLevelDto>>
+        {
+            Data = _mapper.MapToDto(serviceLevels),
+            Message = "Transaction distributions retrieved successfully.",
+            StatusCode = StatusCodes.Status200OK
+        };
+    }
+
     public async Task<ServiceResponse<IEnumerable<PeriodDto>>> SelectPeriodsAsync(CancellationToken cancellationToken)
     {
         var periods = await _serviceLevelRepository.SelectPeriodsAsync(_userClaimDto.Username, cancellationToken);
