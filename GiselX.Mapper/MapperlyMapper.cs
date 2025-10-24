@@ -4,7 +4,7 @@ using GiselX.Service.Dto;
 using GiselX.Service.Dto.Common;
 using Riok.Mapperly.Abstractions;
 
-namespace GiselX.Service;
+namespace GiselX.Mapper;
 
 [Mapper]
 public partial class MapperlyMapper

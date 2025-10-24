@@ -1,4 +1,5 @@
 ﻿using System.Data;
+using GiselX.Mapper;
 using GiselX.Repository.Interface;
 using GiselX.Service.Dto;
 using GiselX.Service.Dto.Common;
