@@ -8,6 +8,7 @@ using GiselX.Service.Interface;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace GiselX.Web.Controllers;
 
@@ -29,11 +30,11 @@ public class ServiceLevelsController : Controller
         return View();
     }
     
-    // Download SelectByCustPeriod
     [HttpGet]
+    [Authorize(PermissionConstants.ServiceLevels.Download)]
     public async Task<IActionResult> DownloadSelectByCustPeriod(int year, int month, CancellationToken cancellationToken)
     {
-        var user = await _userManager.GetUserAsync(User);
+        var user = await _userManager.Users.Include(u => u.Company).SingleOrDefaultAsync(u => User.Identity != null && u.UserName == User.Identity.Name, cancellationToken: cancellationToken);
         if (user == null)
         {
             TempData["ErrorMessage"] = "Current User not found. aborting download.";
@@ -97,7 +98,9 @@ public class ServiceLevelsController : Controller
                 }
             });
 
-            var fileName = $"ServiceLevels_{user.CompanyId}_{month:MMMM}_{year:yyyy}.xlsx";
+            // format the file name as ServiceLevels_CompanyId_Month_Year.xlsx
+            var monthYear = new DateTime(year, month, 1);
+            var fileName = $"ServiceLevels_{user.Company.Name}_{monthYear:MMMM_yyyy}.xlsx";
             return File(stream, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
         }
 
@@ -162,7 +165,7 @@ public class ServiceLevelsController : Controller
             return RedirectToAction(nameof(Index));
         }
 
-        var response = await _serviceLevelService.UploadAsync(serviceLevels, cancellationToken);
+        var response = await _serviceLevelService.UploadAsync(serviceLevels, user.CompanyId, cancellationToken);
         if (response.IsSuccess)
         {
             TempData["SuccessMessage"] = response.Message;

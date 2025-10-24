@@ -8,6 +8,7 @@ public static class PermissionConstants
     {
         public const string Index = "ServiceLevels.Index";
         public const string Upload = "ServiceLevels.Upload";
+        public const string Download = "ServiceLevels.Download";
     }
     
     public static class Companies
@@ -36,6 +37,7 @@ public static class PermissionConstants
         public const string Suspend = "Users.Suspend";
         public const string Details = "Users.Details";
         public const string UserRoles = "Users.UserRoles";
+        public const string ChangePassword = "Users.ChangePassword";
     }
     
     // Get all permissions from PermissionConstants

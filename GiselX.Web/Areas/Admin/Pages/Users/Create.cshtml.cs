@@ -60,7 +60,7 @@ public class CreateModel : PageModel
     [BindProperty]
     [Required]
     [Display(Name = "Company")]
-    public Company Company { get; set; } = new();
+    public int CompanyId { get; set; }
 
     [TempData]
     public string? StatusMessage { get; set; }
@@ -71,6 +71,7 @@ public class CreateModel : PageModel
 
     public async Task<IActionResult> OnPostAsync()
     {
+        
         if (!ModelState.IsValid)
         {
             return Page();
@@ -85,7 +86,7 @@ public class CreateModel : PageModel
             PhoneNumber = PhoneNumber,
             EmailConfirmed = true,
             PhoneNumberConfirmed = !string.IsNullOrWhiteSpace(PhoneNumber),
-            Company = Company
+            CompanyId = CompanyId
         };
         var result = await _userManager.CreateAsync(user, Password);
         if (result.Succeeded)

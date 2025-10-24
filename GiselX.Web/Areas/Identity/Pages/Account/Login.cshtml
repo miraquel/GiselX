@@ -57,9 +57,6 @@
                                     @Html.DisplayNameFor(m => m.Input.RememberMe)
                                 </label>
                             </div>
-                            <a asp-page="./ForgotPassword" class="float-end mb-1">
-                                <span>Forgot Password?</span>
-                            </a>
                         </div>
                         <div class="mb-5">
                             <button id="login-submit" type="submit" class="btn btn-primary d-grid w-100">Log in</button>
@@ -100,4 +97,28 @@
 
 @section scripts {
     <partial name="_ValidationScriptsPartial" />
+    
+    <script>
+        $(document).ready(function () {
+            const toggler = document.querySelectorAll('.form-password-toggle')
+            if (typeof toggler !== 'undefined' && toggler !== null) {
+                toggler.forEach(el => {
+                    el.addEventListener('click', e => {
+                        e.preventDefault()
+                        const formPasswordToggle = el.closest('.form-password-toggle')
+                        const formPasswordToggleIcon = formPasswordToggle.querySelector('i')
+                        const formPasswordToggleInput = formPasswordToggle.querySelector('input')
+
+                        if (formPasswordToggleInput.getAttribute('type') === 'text') {
+                            formPasswordToggleInput.setAttribute('type', 'password')
+                            formPasswordToggleIcon.classList.replace('ri-eye-line', 'ri-eye-off-line')
+                        } else if (formPasswordToggleInput.getAttribute('type') === 'password') {
+                            formPasswordToggleInput.setAttribute('type', 'text')
+                            formPasswordToggleIcon.classList.replace('ri-eye-off-line', 'ri-eye-line')
+                        }
+                    })
+                })
+            }
+        })
+    </script>
 }

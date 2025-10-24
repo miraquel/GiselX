@@ -83,12 +83,12 @@ public class ServiceLevelRepository : IServiceLevelRepository
         await sqlBulkCopy.WriteToServerAsync(dataTable, cancellationToken);
     }
 
-    public async Task<IEnumerable<ServiceLevel>> SelectByCustAsync(string custCode, CancellationToken cancellationToken)
+    public async Task<IEnumerable<ServiceLevel>> SelectByCustAsync(int companyId, CancellationToken cancellationToken)
     {
         const string query = "Gisel_SelectByCust";
         
         var parameters = new DynamicParameters();
-        parameters.Add("@CreatedBy", custCode);
+        parameters.Add("@CompanyId", companyId);
         
         await _dbConnection.ExecuteAsync("SET ARITHABORT ON", transaction: _dbTransaction);
         var command = new CommandDefinition(
@@ -127,9 +127,7 @@ public class ServiceLevelRepository : IServiceLevelRepository
     {
         const string query = "Gisel_del";
         var parameters = new DynamicParameters();
-        parameters.Add("@SoId", serviceLevel.SoId);
-        parameters.Add("@ItemId", serviceLevel.ItemId);
-        parameters.Add("@CreatedBy", serviceLevel.CreatedBy);
+        parameters.Add("@Id", serviceLevel.Id);
         
         await _dbConnection.ExecuteAsync("SET ARITHABORT ON", transaction: _dbTransaction);
         

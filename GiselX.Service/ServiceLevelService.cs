@@ -1,9 +1,11 @@
 ﻿using System.Data;
+using GiselX.Domain;
 using GiselX.Repository.Interface;
 using GiselX.Service.Dto;
 using GiselX.Service.Dto.Common;
 using GiselX.Service.Interface;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Identity;
 
 namespace GiselX.Service;
 
@@ -13,17 +15,19 @@ public class ServiceLevelService : IServiceLevelService
     private readonly IDbTransaction _dbTransaction;
     private readonly UserClaimDto _userClaimDto;
     private readonly MapperlyMapper _mapper = new();
+    private readonly UserManager<AppIdentityUser> _userManager;
 
-    public ServiceLevelService(IServiceLevelRepository serviceLevelRepository, IDbTransaction dbTransaction, UserClaimDto userClaimDto)
+    public ServiceLevelService(IServiceLevelRepository serviceLevelRepository, IDbTransaction dbTransaction, UserClaimDto userClaimDto, UserManager<AppIdentityUser> userManager)
     {
         _serviceLevelRepository = serviceLevelRepository;
         _dbTransaction = dbTransaction;
         _userClaimDto = userClaimDto;
+        _userManager = userManager;
     }
 
-    public async Task<ServiceResponse> UploadAsync(IEnumerable<ServiceLevelDto> serviceLevels, CancellationToken cancellationToken)
+    public async Task<ServiceResponse> UploadAsync(IEnumerable<ServiceLevelDto> serviceLevels, int companyId, CancellationToken cancellationToken)
     {
-       var transDistDtos = serviceLevels as ServiceLevelDto[] ?? serviceLevels.ToArray();
+        var transDistDtos = serviceLevels as ServiceLevelDto[] ?? serviceLevels.ToArray();
         
         var errors = new Dictionary<int, List<string>>();
          
@@ -71,10 +75,10 @@ public class ServiceLevelService : IServiceLevelService
                 rowErrors.Add($"RctDateRequest is required for SoId {transDistDto.Value.SoId}.");
             }
 
-            if (transDistDto.Value.SoQty <= 0)
-            {
-                rowErrors.Add($"SoQty must be greater than zero for SoId {transDistDto.Value.SoId}.");
-            }
+            // if (transDistDto.Value.SoQty <= 0)
+            // {
+            //     rowErrors.Add($"SoQty must be greater than zero for SoId {transDistDto.Value.SoId}.");
+            // }
 
             if (rowErrors.Count != 0)
             {
@@ -102,14 +106,15 @@ public class ServiceLevelService : IServiceLevelService
             };
         }
 
-        var originalTransDists = await _serviceLevelRepository.SelectByCustAsync(_userClaimDto.Username, cancellationToken);
+        var originalTransDists = await _serviceLevelRepository.SelectByCustAsync(companyId, cancellationToken);
         
-        var existingTransDists = transDistDtos.Where(td => originalTransDists.Any(otd => otd.SoId == td.SoId && otd.ItemId == td.ItemId)).ToArray();
+        //var existingTransDists = transDistDtos.Where(td => originalTransDists.Any(otd => otd.SoId == td.SoId && otd.ItemId == td.ItemId)).ToArray();
+        var existingTransDists = originalTransDists.Where(otd => transDistDtos.Any(td => otd.SoId == td.SoId && otd.ItemId == td.ItemId)).ToArray();
         
         // update existing transaction distributions
         foreach (var existingTransDist in existingTransDists)
         {
-            await _serviceLevelRepository.DeleteAsync(_mapper.MapToEntity(existingTransDist), cancellationToken);
+            await _serviceLevelRepository.DeleteAsync(existingTransDist, cancellationToken);
         }
 
         await _serviceLevelRepository.UploadAsync(_mapper.MapToEntity(transDistDtos), cancellationToken);
