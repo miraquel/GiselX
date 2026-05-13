@@ -4,7 +4,10 @@ using GiselX.Domain;
 using GiselX.Repository;
 using GiselX.Service;
 using GiselX.Service.Dto.Common;
+using GiselX.Web;
 using GiselX.Web.Context;
+using Hangfire;
+using Hangfire.Dashboard;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -44,6 +47,14 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.SlidingExpiration = true; // Extends the cookie lifetime on activity
     options.LoginPath = "/Identity/Account/Login"; // Redirect path after logout
 });
+
+// Email settings
+builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("Email"));
+
+// Hangfire
+builder.Services.AddHangfire(config =>
+    config.UseSqlServerStorage(connectionString));
+builder.Services.AddHangfireServer();
 
 builder.Services.AddGiselXRepository();
 builder.Services.AddGiselXService();
@@ -96,5 +107,18 @@ app.MapControllerRoute(
 
 app.MapRazorPages()
     .WithStaticAssets();
+
+// Hangfire dashboard (requires Hangfire.Dashboard permission)
+app.MapHangfireDashboard("/hangfire", new DashboardOptions
+{
+    Authorization = [new HangfireAdminAuthFilter()]
+});
+
+// Register daily reminder recurring job
+var dailyJobHour = app.Configuration.GetValue<int>("Hangfire:DailyJobHour", 8);
+Hangfire.RecurringJob.AddOrUpdate<ReminderJob>(
+    "daily-reminder",
+    job => job.ExecuteAsync(),
+    $"0 {dailyJobHour} * * *");
 
 app.Run();
