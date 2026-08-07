@@ -3,3 +3,15 @@ obj/
 /packages/
 riderModule.iml
 /_ReSharper.Caches/
+
+# IDE / editor local state
+.idea/
+.vs/
+*.user
+
+# Agent & MCP tooling artifacts
+.serena/
+.playwright-mcp/
+
+# Generated output of scripts/gen_db_doc.py
+GiselX-Database-Documentation.xlsx
