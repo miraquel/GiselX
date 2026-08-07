@@ -15,3 +15,7 @@ riderModule.iml
 
 # Generated output of scripts/gen_db_doc.py
 GiselX-Database-Documentation.xlsx
+
+# Local upload fixtures — the app generates its own templates via DownloadTemplate
+GiselX.Web/*_Sample.csv
+GiselX.Web/*_Sample.xlsx
