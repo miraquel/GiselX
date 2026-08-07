@@ -31,6 +31,30 @@ public class ServiceLevelsController : Controller
     }
     
     [HttpGet]
+    [Authorize(PermissionConstants.ServiceLevels.Upload)]
+    public IActionResult DownloadTemplate()
+    {
+        var stream = ExcelHelper.CreateExcelTemplate(headers =>
+        {
+            headers.Add("SO ID");
+            headers.Add("SO Create Date");
+            headers.Add("Lead Time Dlv");
+            headers.Add("Lead Time Rct");
+            headers.Add("Item ID");
+            headers.Add("Item Name");
+            headers.Add("SO Qty");
+            headers.Add("Unit");
+            headers.Add("Kg Per Unit");
+            headers.Add("Dlv Date Request");
+            headers.Add("Rct Date Request");
+            headers.Add("DO Qty");
+            headers.Add("DO Date");
+            headers.Add("Receipt Date");
+        });
+        return File(stream, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "ServiceLevels_Template.xlsx");
+    }
+
+    [HttpGet]
     [Authorize(PermissionConstants.ServiceLevels.Download)]
     public async Task<IActionResult> DownloadSelectByCustPeriod(int year, int month, CancellationToken cancellationToken)
     {

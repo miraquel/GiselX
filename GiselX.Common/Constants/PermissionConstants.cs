@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 
 namespace GiselX.Common.Constants;
 
@@ -11,6 +11,20 @@ public static class PermissionConstants
         public const string Download = "ServiceLevels.Download";
     }
     
+    public static class SalesTransactions
+    {
+        public const string Index = "SalesTransactions.Index";
+        public const string Upload = "SalesTransactions.Upload";
+        public const string Download = "SalesTransactions.Download";
+    }
+
+    public static class Stocks
+    {
+        public const string Index = "Stocks.Index";
+        public const string Upload = "Stocks.Upload";
+        public const string Download = "Stocks.Download";
+    }
+
     public static class Companies
     {
         public const string Index = "Companies.Index";
@@ -40,6 +54,16 @@ public static class PermissionConstants
         public const string ChangePassword = "Users.ChangePassword";
     }
     
+    public static class Hangfire
+    {
+        public const string Dashboard = "Hangfire.Dashboard";
+    }
+
+    public static class EmailTest
+    {
+        public const string Send = "EmailTest.Send";
+    }
+
     // Get all permissions from PermissionConstants
     public static List<string> GetAllPermissions()
     {
