@@ -1,4 +1,4 @@
-﻿using GiselX.Domain;
+using GiselX.Domain;
 using GiselX.Domain.Common;
 using GiselX.Service.Dto;
 using GiselX.Service.Dto.Common;
@@ -25,6 +25,22 @@ public partial class MapperlyMapper
     public partial IEnumerable<ServiceLevelDto> MapToDto(IEnumerable<ServiceLevel> serviceLevels);
     public partial PagedListDto<ServiceLevelDto> MapToDto(PagedList<ServiceLevel> pagedListDto);
     
+    // SalesTransaction
+    public partial SalesTransaction MapToEntity(SalesTransactionDto salesTransactionDto);
+    public partial IEnumerable<SalesTransaction> MapToEntity(IEnumerable<SalesTransactionDto> salesTransactionDtos);
+    public partial PagedList<SalesTransaction> MapToEntity(PagedListDto<SalesTransactionDto> pagedListDto);
+    public partial SalesTransactionDto MapToDto(SalesTransaction salesTransaction);
+    public partial IEnumerable<SalesTransactionDto> MapToDto(IEnumerable<SalesTransaction> salesTransactions);
+    public partial PagedListDto<SalesTransactionDto> MapToDto(PagedList<SalesTransaction> pagedListDto);
+
+    // Stock
+    public partial Stock MapToEntity(StockDto stockDto);
+    public partial IEnumerable<Stock> MapToEntity(IEnumerable<StockDto> stockDtos);
+    public partial PagedList<Stock> MapToEntity(PagedListDto<StockDto> pagedListDto);
+    public partial StockDto MapToDto(Stock stock);
+    public partial IEnumerable<StockDto> MapToDto(IEnumerable<Stock> stocks);
+    public partial PagedListDto<StockDto> MapToDto(PagedList<Stock> pagedListDto);
+
     // Period
     public partial Period MapToEntity(PeriodDto periodDto);
     public partial IEnumerable<Period> MapToEntity(IEnumerable<PeriodDto> periodDtos);
@@ -38,4 +54,10 @@ public partial class MapperlyMapper
     public partial CompanyDto MapToDto(Company company);
     public partial IEnumerable<CompanyDto> MapToDto(IEnumerable<Company> companies);
     public partial PagedListDto<CompanyDto> MapToDto(PagedList<Company> pagedListDto);
+
+    private static GiselX.Domain.WeekDays? MapIntToWeekDays(int? value) =>
+        value.HasValue ? (GiselX.Domain.WeekDays)value.Value : null;
+
+    private static int? MapWeekDaysToInt(GiselX.Domain.WeekDays? value) =>
+        value.HasValue ? (int)value.Value : null;
 }
