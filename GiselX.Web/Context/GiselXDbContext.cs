@@ -23,6 +23,14 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
 
     public virtual DbSet<SalesTransaction> SalesTransaction { get; set; }
 
+    public virtual DbSet<DistributorTemplateMapping> DistributorTemplateMapping { get; set; }
+
+    public virtual DbSet<DistributorTemplateColumn> DistributorTemplateColumn { get; set; }
+
+    public virtual DbSet<SelloutUploadBatch> SelloutUploadBatch { get; set; }
+
+    public virtual DbSet<SelloutStaging> SelloutStaging { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -48,6 +56,84 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
             entity.Property(e => e.ReminderLeadDays).HasDefaultValue(3);
             entity.Property(e => e.DeadlineDaysOfWeek).HasConversion<int?>();
             // DeadlineDayOfMonth is int? — EF maps to INT NULL automatically
+        });
+
+        modelBuilder.Entity<DistributorTemplateMapping>(entity =>
+        {
+            entity.HasIndex(e => new { e.CompanyId, e.Name }).IsUnique();
+            entity.Property(e => e.Name).HasMaxLength(100);
+            entity.Property(e => e.WorksheetName).HasMaxLength(128);
+            entity.Property(e => e.HeaderSignature).HasColumnType("nvarchar(max)");
+            entity.Property(e => e.CreatedBy).HasMaxLength(256);
+            entity.Property(e => e.ModifiedBy).HasMaxLength(256);
+            entity.Property(e => e.CreatedDate).HasColumnType("datetime2");
+            entity.Property(e => e.ModifiedDate).HasColumnType("datetime2");
+            entity.ToTable(table =>
+            {
+                table.HasCheckConstraint("CK_DistributorTemplateMapping_HeaderRow", "[HeaderRowNumber] > 0");
+                table.HasCheckConstraint("CK_DistributorTemplateMapping_FirstDataRow", "[FirstDataRowNumber] > [HeaderRowNumber]");
+            });
+
+            entity.HasOne(e => e.Company).WithMany(e => e.DistributorTemplateMappings)
+                .HasForeignKey(e => e.CompanyId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<DistributorTemplateColumn>(entity =>
+        {
+            entity.HasIndex(e => new { e.DistributorTemplateMappingId, e.SourceColumnNumber }).IsUnique();
+            entity.HasIndex(e => new { e.DistributorTemplateMappingId, e.CanonicalField }).IsUnique();
+            entity.Property(e => e.SourceHeader).HasMaxLength(500);
+            entity.Property(e => e.CanonicalField).HasConversion<int>();
+
+            entity.HasOne(e => e.DistributorTemplateMapping).WithMany(e => e.Columns)
+                .HasForeignKey(e => e.DistributorTemplateMappingId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<SelloutUploadBatch>(entity =>
+        {
+            entity.HasIndex(e => new { e.CompanyId, e.ReportingWeekStart })
+                .IsUnique()
+                .HasFilter("[Status] = 2");
+            entity.Property(e => e.ReportingWeekStart).HasColumnType("date");
+            entity.Property(e => e.OriginalFileName).HasMaxLength(260);
+            entity.Property(e => e.FileSha256).HasMaxLength(64).IsFixedLength();
+            entity.Property(e => e.Status).HasConversion<int>();
+            entity.Property(e => e.ErrorSummary).HasColumnType("nvarchar(max)");
+            entity.Property(e => e.UploadedBy).HasMaxLength(256);
+            entity.Property(e => e.UploadedDate).HasColumnType("datetime2");
+            entity.Property(e => e.CompletedDate).HasColumnType("datetime2");
+            entity.ToTable(table => table.HasCheckConstraint(
+                "CK_SelloutUploadBatch_ReportingWeekMonday",
+                "DATEDIFF(day, '19000101', [ReportingWeekStart]) % 7 = 0"));
+
+            entity.HasOne(e => e.Company).WithMany(e => e.SelloutUploadBatches)
+                .HasForeignKey(e => e.CompanyId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.DistributorTemplateMapping).WithMany(e => e.UploadBatches)
+                .HasForeignKey(e => e.DistributorTemplateMappingId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<SelloutStaging>(entity =>
+        {
+            entity.HasIndex(e => new { e.SelloutUploadBatchId, e.SourceRowNumber });
+            entity.Property(e => e.ExpiredDate).HasColumnType("datetime");
+            entity.Property(e => e.InvoiceDate).HasColumnType("datetime");
+            entity.Property(e => e.ShipDate).HasColumnType("datetime");
+            entity.Property(e => e.InvoiceQty).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.UnitPrice).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.GrossValue).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.DiscountValue).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.DiscountPct).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.NetValue).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.InKg).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.ValidationErrorsJson).HasColumnType("nvarchar(max)");
+
+            entity.HasOne(e => e.SelloutUploadBatch).WithMany(e => e.StagingRows)
+                .HasForeignKey(e => e.SelloutUploadBatchId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<ServelDeliveryEx>(entity =>
@@ -168,12 +254,18 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
             entity.Property(e => e.InvoiceDate).HasColumnType("datetime");
             entity.Property(e => e.ShipDate).HasColumnType("datetime");
             entity.Property(e => e.CreatedDate).HasColumnType("datetime");
+            entity.Property(e => e.ReportingWeekStart).HasColumnType("date");
 
             // GiselSales_* SPs filter by CompanyId and pick the latest CreatedDate batch
             entity.HasIndex(e => new { e.CompanyId, e.CreatedDate });
+            entity.HasIndex(e => new { e.CompanyId, e.ReportingWeekStart });
 
             entity.HasOne(d => d.Company).WithMany(p => p.SalesTransaction)
                 .HasForeignKey(d => d.CompanyId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(d => d.SelloutUploadBatch).WithMany(p => p.SalesTransactions)
+                .HasForeignKey(d => d.SelloutUploadBatchId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 

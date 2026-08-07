@@ -31,6 +31,9 @@ public class SalesTransaction
     public string SalesmanNameGMK { get; set; } = string.Empty;
     public int CompanyId { get; set; }
     public DateTime CreatedDate { get; set; } = SqlDateTime.MinValue.Value;
+    public long? SelloutUploadBatchId { get; set; }
+    public DateTime? ReportingWeekStart { get; set; }
 
     public virtual Company Company { get; set; } = null!;
+    public virtual SelloutUploadBatch? SelloutUploadBatch { get; set; }
 }

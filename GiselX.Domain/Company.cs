@@ -21,5 +21,7 @@ public partial class Company
     public virtual ICollection<ServelReceiptEx> ServelReceiptEx { get; set; } = new List<ServelReceiptEx>();
     public virtual ICollection<Stock> Stock { get; set; } = new List<Stock>();
     public virtual ICollection<SalesTransaction> SalesTransaction { get; set; } = new List<SalesTransaction>();
+    public virtual ICollection<DistributorTemplateMapping> DistributorTemplateMappings { get; set; } = new List<DistributorTemplateMapping>();
+    public virtual ICollection<SelloutUploadBatch> SelloutUploadBatches { get; set; } = new List<SelloutUploadBatch>();
     public virtual ICollection<AppIdentityUser> Users { get; set; } = new List<AppIdentityUser>();
 }
