@@ -1,4 +1,4 @@
-﻿using System.Data;
+using System.Data;
 using GiselX.Repository.Interface;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
@@ -30,6 +30,9 @@ public static class ServiceCollectionExtensions
         
         // Register repositories
         services.AddScoped<IServiceLevelRepository, ServiceLevelRepository>();
+        services.AddScoped<ISalesTransactionRepository, SalesTransactionRepository>();
+        services.AddScoped<IStockRepository, StockRepository>();
         services.AddScoped<ICompanyRepository, CompanyRepository>();
+        services.AddScoped<IUploadCheckRepository, UploadCheckRepository>();
     }
 }

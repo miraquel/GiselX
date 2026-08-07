@@ -1,4 +1,4 @@
-﻿using System.Data;
+using System.Data;
 using Dapper;
 using GiselX.Domain;
 using GiselX.Domain.Common;
@@ -24,6 +24,10 @@ public class CompanyRepository : ICompanyRepository
         var parameters = new DynamicParameters();
         parameters.Add("@Name", company.Name);
         parameters.Add("@Address", company.Address);
+        parameters.Add("@ContactEmail", company.ContactEmail);
+        parameters.Add("@DeadlineDayOfMonth", company.DeadlineDayOfMonth);
+        parameters.Add("@DeadlineDaysOfWeek", company.DeadlineDaysOfWeek.HasValue ? (int)company.DeadlineDaysOfWeek.Value : (int?)null);
+        parameters.Add("@ReminderLeadDays", company.ReminderLeadDays);
         
         await _dbConnection.ExecuteAsync("SET ARITHABORT ON", transaction: _dbTransaction);
         var command = new CommandDefinition(
@@ -140,6 +144,10 @@ public class CompanyRepository : ICompanyRepository
         parameters.Add("@Id", company.Id);
         parameters.Add("@Name", company.Name);
         parameters.Add("@Address", company.Address);
+        parameters.Add("@ContactEmail", company.ContactEmail);
+        parameters.Add("@DeadlineDayOfMonth", company.DeadlineDayOfMonth);
+        parameters.Add("@DeadlineDaysOfWeek", company.DeadlineDaysOfWeek.HasValue ? (int)company.DeadlineDaysOfWeek.Value : (int?)null);
+        parameters.Add("@ReminderLeadDays", company.ReminderLeadDays);
         
         await _dbConnection.ExecuteAsync("SET ARITHABORT ON", transaction: _dbTransaction);
         var command = new CommandDefinition(
@@ -151,5 +159,20 @@ public class CompanyRepository : ICompanyRepository
         );
 
         return await _dbConnection.QuerySingleAsync<Company>(command);
+    }
+
+    public async Task<IEnumerable<Company>> GetAllWithContactEmailAsync(CancellationToken cancellationToken)
+    {
+        const string query = "Company_SelectForReminder";
+        
+        await _dbConnection.ExecuteAsync("SET ARITHABORT ON", transaction: _dbTransaction);
+        var command = new CommandDefinition(
+            query,
+            null,
+            _dbTransaction,
+            cancellationToken: cancellationToken,
+            commandType: CommandType.StoredProcedure);
+
+        return await _dbConnection.QueryAsync<Company>(command);
     }
 }

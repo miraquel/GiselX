@@ -1,4 +1,4 @@
-﻿using GiselX.Domain;
+using GiselX.Domain;
 using GiselX.Domain.Common;
 
 namespace GiselX.Repository.Interface;
@@ -10,4 +10,5 @@ public interface ICompanyRepository
     Task<Company?> GetCompanyByIdAsync(int id, CancellationToken cancellationToken);
     Task<PagedList<Company>> GetCompaniesAsync(PagedListRequest pagedListRequest, CancellationToken cancellationToken);
     Task<Company> UpdateCompanyAsync(Company company, CancellationToken cancellationToken);
+    Task<IEnumerable<Company>> GetAllWithContactEmailAsync(CancellationToken cancellationToken);
 }
