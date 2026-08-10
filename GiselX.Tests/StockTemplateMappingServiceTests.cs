@@ -41,6 +41,19 @@ public sealed class StockTemplateMappingServiceTests
     }
 
     [Fact]
+    public async Task SaveAsync_accepts_mapping_without_optional_price_unit()
+    {
+        var (service, repository, transaction) = CreateService();
+
+        var response = await service.SaveAsync(ValidMapping(), "admin", CancellationToken.None);
+
+        Assert.True(response.IsSuccess);
+        Assert.DoesNotContain(Assert.Single(repository.Inserted).Columns,
+            column => column.CanonicalField == StockCanonicalField.PriceUnit);
+        Assert.True(transaction.CommitCalled);
+    }
+
+    [Fact]
     public async Task SaveAsync_rejects_duplicate_source_columns()
     {
         var dto = ValidMapping();
