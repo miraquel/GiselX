@@ -1,0 +1,28 @@
+@model GiselX.Web.Models.StockTemplateMappingListViewModel
+@{ ViewData["Title"] = "Stock Mappings"; Layout = "_ContentNavbarLayout"; }
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <div><h5 class="mb-1">Stock Mappings</h5><small class="text-muted">Company-specific Stock workbook formats.</small></div>
+        <div><a asp-action="Create" asp-route-companyId="@Model.CompanyId" class="btn btn-primary">Add Mapping</a>
+            <a asp-controller="Companies" asp-action="Edit" asp-route-id="@Model.CompanyId" class="btn btn-outline-secondary">Back</a></div>
+    </div>
+    <div class="card-body">
+        @if (TempData["StatusMessage"] is string status) { <div class="alert alert-success">@status</div> }
+        @if (TempData["ErrorMessage"] is string error) { <div class="alert alert-danger">@error</div> }
+        @if (Model.Mappings.Count == 0) { <p class="text-muted mb-0">No Stock mappings yet.</p> }
+        else { <div class="table-responsive"><table class="table align-middle"><thead><tr><th>Name</th><th>Worksheet</th><th>Rows</th><th>Columns</th><th>Status</th><th>Actions</th></tr></thead><tbody>
+        @foreach (var mapping in Model.Mappings) { <tr><td>@mapping.Name</td><td>@mapping.WorksheetName</td><td>@mapping.HeaderRowNumber / @mapping.FirstDataRowNumber</td><td>@mapping.Columns.Count</td><td>@(mapping.IsActive ? "Active" : "Inactive")</td><td>
+            <a asp-action="Edit" asp-route-id="@mapping.Id" asp-route-companyId="@Model.CompanyId" class="btn btn-sm btn-outline-primary">Edit</a>
+            @if (mapping.IsActive)
+            {
+                <form asp-action="Deactivate" method="post" class="d-inline"><input type="hidden" name="id" value="@mapping.Id"/><input type="hidden" name="companyId" value="@Model.CompanyId"/><button class="btn btn-sm btn-outline-secondary">Deactivate</button></form>
+            }
+            else
+            {
+                <form asp-action="Activate" method="post" class="d-inline"><input type="hidden" name="id" value="@mapping.Id"/><input type="hidden" name="companyId" value="@Model.CompanyId"/><button class="btn btn-sm btn-outline-secondary">Activate</button></form>
+            }
+            <form asp-action="Delete" method="post" class="d-inline" onsubmit="return confirm('Delete this unused mapping?');"><input type="hidden" name="id" value="@mapping.Id"/><input type="hidden" name="companyId" value="@Model.CompanyId"/><button class="btn btn-sm btn-outline-danger">Delete</button></form>
+        </td></tr> }
+        </tbody></table></div> }
+    </div>
+</div>
