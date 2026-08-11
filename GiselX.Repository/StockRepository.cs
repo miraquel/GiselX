@@ -119,7 +119,8 @@ public class StockRepository : IStockRepository
         return await _dbConnection.QueryAsync<Stock>(command);
     }
 
-    public async Task<PagedList<Stock>> SelectAsync(PagedListRequest pagedListRequest, int companyId, CancellationToken cancellationToken)
+    public async Task<PagedList<Stock>> SelectAsync(PagedListRequest pagedListRequest, int companyId,
+        bool useDistributorIdentity, CancellationToken cancellationToken)
     {
         var parameters = new DynamicParameters();
         parameters.Add("CompanyId", companyId);
@@ -142,7 +143,7 @@ public class StockRepository : IStockRepository
             switch (propertyInfo.PropertyType)
             {
                 case { } t when t == typeof(string):
-                    clauses.Add($"s.[{parameter.Key}] LIKE @{parameter.Key}");
+                    clauses.Add($"{GetColumnExpression(parameter.Key, useDistributorIdentity)} LIKE @{parameter.Key}");
                     var text = parameter.Value.Replace('*', '%');
                     parameters.Add(parameter.Key, text.Contains('%') ? text : $"%{text}%");
                     break;
@@ -163,18 +164,22 @@ public class StockRepository : IStockRepository
         }
         if (!string.IsNullOrWhiteSpace(pagedListRequest.SearchTerm))
         {
-            clauses.Add("(s.ProductId LIKE @Search OR s.ProductName LIKE @Search OR s.BatchNumber LIKE @Search)");
+            var productId = GetColumnExpression(nameof(Stock.ProductId), useDistributorIdentity);
+            var productName = GetColumnExpression(nameof(Stock.ProductName), useDistributorIdentity);
+            clauses.Add($"({productId} LIKE @Search OR {productName} LIKE @Search OR s.BatchNumber LIKE @Search)");
             parameters.Add("Search", $"%{pagedListRequest.SearchTerm}%");
         }
         var where = clauses.Count == 0 ? string.Empty : " AND " + string.Join(" AND ", clauses);
         var sort = allowed.Contains(pagedListRequest.SortBy) ? pagedListRequest.SortBy : nameof(Stock.ProductId);
+        var sortExpression = GetColumnExpression(sort, useDistributorIdentity);
         var direction = pagedListRequest.IsSortAscending ? "ASC" : "DESC";
+        var projection = GetProjection(useDistributorIdentity);
         var query = $"""
             DECLARE @BatchId bigint = (SELECT TOP (1) Id FROM StockUploadBatch
              WHERE CompanyId=@CompanyId AND Status IN (2,3)
              ORDER BY CompletedDate DESC, Id DESC);
-            SELECT s.* FROM Stock s WHERE s.CompanyId=@CompanyId AND s.StockUploadBatchId=@BatchId {where}
-             ORDER BY s.[{sort}] {direction}, s.Id ASC
+            SELECT {projection} FROM Stock s WHERE s.CompanyId=@CompanyId AND s.StockUploadBatchId=@BatchId {where}
+             ORDER BY {sortExpression} {direction}, s.Id ASC
              OFFSET (@PageNumber-1)*@PageSize ROWS FETCH NEXT @PageSize ROWS ONLY;
             SELECT COUNT(*) FROM Stock s WHERE s.CompanyId=@CompanyId AND s.StockUploadBatchId=@BatchId {where};
             """;
@@ -211,11 +216,51 @@ public class StockRepository : IStockRepository
             ORDER BY UploadedDate DESC, Id DESC
             """, new { CompanyId = companyId }, _dbTransaction, cancellationToken: cancellationToken))).ToList();
 
-    public Task<IEnumerable<Stock>> SelectByBatchAsync(long batchId, int companyId,
-        CancellationToken cancellationToken) => _dbConnection.QueryAsync<Stock>(new CommandDefinition("""
-            SELECT s.* FROM Stock s INNER JOIN StockUploadBatch b ON b.Id=s.StockUploadBatchId
+    public Task<IEnumerable<Stock>> SelectByBatchAsync(long batchId, int companyId, bool useDistributorIdentity,
+        CancellationToken cancellationToken)
+    {
+        var projection = GetProjection(useDistributorIdentity);
+        var productId = GetColumnExpression(nameof(Stock.ProductId), useDistributorIdentity);
+        return _dbConnection.QueryAsync<Stock>(new CommandDefinition($"""
+            SELECT {projection} FROM Stock s INNER JOIN StockUploadBatch b ON b.Id=s.StockUploadBatchId
             WHERE b.Id=@BatchId AND b.CompanyId=@CompanyId AND b.Status IN (2,3)
-            ORDER BY s.ProductId, s.Id
+            ORDER BY {productId}, s.Id
             """, new { BatchId = batchId, CompanyId = companyId }, _dbTransaction,
             cancellationToken: cancellationToken));
+    }
+
+    private static string GetColumnExpression(string field, bool useDistributorIdentity) => field switch
+    {
+        nameof(Stock.ProductId) when useDistributorIdentity => "COALESCE(NULLIF(s.DistributorProductId, ''), s.ProductId)",
+        nameof(Stock.ProductName) when useDistributorIdentity => "COALESCE(NULLIF(s.DistributorProductName, ''), s.ProductName)",
+        _ => $"s.[{field}]"
+    };
+
+    private static string GetProjection(bool useDistributorIdentity)
+    {
+        var productId = GetColumnExpression(nameof(Stock.ProductId), useDistributorIdentity);
+        var productName = GetColumnExpression(nameof(Stock.ProductName), useDistributorIdentity);
+        return $"""
+            s.Id,
+            {productId} AS ProductId,
+            {productName} AS ProductName,
+            s.DistributorProductId,
+            s.DistributorProductName,
+            s.ItemMappingId,
+            s.ProductPackaging,
+            s.ProductPcsInCtn,
+            s.ProductNetto,
+            s.ProductUnit,
+            s.PriceUnit,
+            s.SaldoAwal,
+            s.SaldoMasukPO,
+            s.SaldoAkhir,
+            s.BatchNumber,
+            s.ExpiredDate,
+            s.CompanyId,
+            s.CreatedDate,
+            s.StockUploadBatchId,
+            s.StockDate
+            """;
+    }
 }

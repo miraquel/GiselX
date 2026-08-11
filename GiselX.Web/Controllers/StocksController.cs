@@ -71,7 +71,7 @@ public sealed class StocksController(
     [Authorize(PermissionConstants.Stocks.Download)]
     public async Task<IActionResult> DownloadBatch(long batchId, CancellationToken cancellationToken)
     {
-        var response = await stockService.DownloadBatchAsync(batchId, cancellationToken);
+        var response = await stockService.DownloadBatchAsync(batchId, User.IsInRole("Distributor"), cancellationToken);
         if (!response.IsSuccess || response.Data is null)
         {
             TempData["ErrorMessage"] = string.Join(" ", response.Errors);

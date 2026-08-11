@@ -89,13 +89,13 @@ public class StockService : IStockService
     }
 
     public async Task<ServiceResponse<PagedListDto<StockDto>>> SelectAsync(PagedListRequestDto pagedListRequest,
-        CancellationToken cancellationToken)
+        bool useDistributorIdentity, CancellationToken cancellationToken)
     {
         var user = await _userManager.FindByNameAsync(_userClaimDto.Username)
             ?? throw new InvalidOperationException("User not found.");
 
         var pagedList = await _stockRepository.SelectAsync(
-            _mapper.MapToEntity(pagedListRequest), user.CompanyId, cancellationToken);
+            _mapper.MapToEntity(pagedListRequest), user.CompanyId, useDistributorIdentity, cancellationToken);
 
         return new ServiceResponse<PagedListDto<StockDto>>
         {
@@ -151,11 +151,12 @@ public class StockService : IStockService
     }
 
     public async Task<ServiceResponse<IEnumerable<StockDto>>> DownloadBatchAsync(long batchId,
-        CancellationToken cancellationToken)
+        bool useDistributorIdentity, CancellationToken cancellationToken)
     {
         var user = await _userManager.FindByNameAsync(_userClaimDto.Username)
             ?? throw new InvalidOperationException("User not found.");
-        var rows = (await _stockRepository.SelectByBatchAsync(batchId, user.CompanyId, cancellationToken)).ToList();
+        var rows = (await _stockRepository.SelectByBatchAsync(batchId, user.CompanyId, useDistributorIdentity,
+            cancellationToken)).ToList();
         if (rows.Count == 0)
             return new ServiceResponse<IEnumerable<StockDto>>
             {
