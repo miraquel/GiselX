@@ -60,6 +60,16 @@ public sealed class ItemMappingMigrationTests
         Assert.DoesNotContain("@UseDistributorIdentity", PreviousProcedure(sql, "PreviousSalesSelectProcedure"), StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Migration_does_not_change_the_preexisting_identity_schema()
+    {
+        var sql = ReadMigrationSql();
+
+        Assert.DoesNotContain("AspNetUserLogins", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("AspNetUserTokens", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("ProviderKey", sql, StringComparison.Ordinal);
+    }
+
     private static string ReadMigrationSql() => File.ReadAllText(FindFromSolutionRoot(
         "GiselX.Web", "Context", "Migrations", "20260811180000_AddCompanyItemIdentityMapping.cs"));
 

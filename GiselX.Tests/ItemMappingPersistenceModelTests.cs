@@ -1,5 +1,6 @@
 using GiselX.Domain;
 using GiselX.Web.Context;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 namespace GiselX.Tests;
@@ -56,6 +57,20 @@ public sealed class ItemMappingPersistenceModelTests
             ForeignKey(db.Model.FindEntityType(typeof(Stock))!, nameof(Stock.ItemMappingId)).DeleteBehavior);
         Assert.Equal(DeleteBehavior.Restrict,
             ForeignKey(db.Model.FindEntityType(typeof(SalesTransaction))!, nameof(SalesTransaction.ItemMappingId)).DeleteBehavior);
+    }
+
+    [Fact]
+    public void Model_preserves_the_historical_128_character_identity_key_contract()
+    {
+        using var db = CreateContext();
+
+        var login = db.Model.FindEntityType(typeof(IdentityUserLogin<string>))!;
+        var token = db.Model.FindEntityType(typeof(IdentityUserToken<string>))!;
+
+        Assert.Equal(128, login.FindProperty(nameof(IdentityUserLogin<string>.LoginProvider))!.GetMaxLength());
+        Assert.Equal(128, login.FindProperty(nameof(IdentityUserLogin<string>.ProviderKey))!.GetMaxLength());
+        Assert.Equal(128, token.FindProperty(nameof(IdentityUserToken<string>.LoginProvider))!.GetMaxLength());
+        Assert.Equal(128, token.FindProperty(nameof(IdentityUserToken<string>.Name))!.GetMaxLength());
     }
 
     private static void AssertIdentity(

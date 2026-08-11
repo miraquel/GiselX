@@ -150,46 +150,6 @@ namespace GiselX.Web.Context.Migrations
             migrationBuilder.Sql(SalesSelectProcedure);
             migrationBuilder.Sql(SalesSelectByCustPeriodProcedure);
 
-            migrationBuilder.AlterColumn<string>(
-                name: "Name",
-                schema: "identity",
-                table: "AspNetUserTokens",
-                type: "nvarchar(450)",
-                nullable: false,
-                oldClrType: typeof(string),
-                oldType: "nvarchar(128)",
-                oldMaxLength: 128);
-
-            migrationBuilder.AlterColumn<string>(
-                name: "LoginProvider",
-                schema: "identity",
-                table: "AspNetUserTokens",
-                type: "nvarchar(450)",
-                nullable: false,
-                oldClrType: typeof(string),
-                oldType: "nvarchar(128)",
-                oldMaxLength: 128);
-
-            migrationBuilder.AlterColumn<string>(
-                name: "ProviderKey",
-                schema: "identity",
-                table: "AspNetUserLogins",
-                type: "nvarchar(450)",
-                nullable: false,
-                oldClrType: typeof(string),
-                oldType: "nvarchar(128)",
-                oldMaxLength: 128);
-
-            migrationBuilder.AlterColumn<string>(
-                name: "LoginProvider",
-                schema: "identity",
-                table: "AspNetUserLogins",
-                type: "nvarchar(450)",
-                nullable: false,
-                oldClrType: typeof(string),
-                oldType: "nvarchar(128)",
-                oldMaxLength: 128);
-
             migrationBuilder.CreateTable(
                 name: "ItemMapping",
                 columns: table => new
@@ -1201,45 +1161,6 @@ END
                 name: "ItemMappingEnabled",
                 table: "Company");
 
-            migrationBuilder.AlterColumn<string>(
-                name: "Name",
-                schema: "identity",
-                table: "AspNetUserTokens",
-                type: "nvarchar(128)",
-                maxLength: 128,
-                nullable: false,
-                oldClrType: typeof(string),
-                oldType: "nvarchar(450)");
-
-            migrationBuilder.AlterColumn<string>(
-                name: "LoginProvider",
-                schema: "identity",
-                table: "AspNetUserTokens",
-                type: "nvarchar(128)",
-                maxLength: 128,
-                nullable: false,
-                oldClrType: typeof(string),
-                oldType: "nvarchar(450)");
-
-            migrationBuilder.AlterColumn<string>(
-                name: "ProviderKey",
-                schema: "identity",
-                table: "AspNetUserLogins",
-                type: "nvarchar(128)",
-                maxLength: 128,
-                nullable: false,
-                oldClrType: typeof(string),
-                oldType: "nvarchar(450)");
-
-            migrationBuilder.AlterColumn<string>(
-                name: "LoginProvider",
-                schema: "identity",
-                table: "AspNetUserLogins",
-                type: "nvarchar(128)",
-                maxLength: 128,
-                nullable: false,
-                oldClrType: typeof(string),
-                oldType: "nvarchar(450)");
         }
     }
 }
