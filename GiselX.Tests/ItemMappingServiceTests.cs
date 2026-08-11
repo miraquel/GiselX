@@ -1,5 +1,9 @@
 using System.Data;
+using System.Collections;
+using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 using GiselX.Domain;
+using GiselX.Repository;
 using GiselX.Repository.Interface;
 using GiselX.Service;
 using GiselX.Service.Dto;
@@ -22,6 +26,46 @@ public class ItemMappingServiceTests
         Assert.Contains(response.Errors, error => error.Contains("GMK Item ID"));
         Assert.Empty(repository.Inserted);
         Assert.False(transaction.CommitCalled);
+    }
+
+    [Fact]
+    public async Task SaveAsync_rejects_null_distributor_item_id_without_throwing()
+    {
+        var dto = ValidSave();
+        dto.DistributorItemId = null!;
+        var (service, repository, transaction) = CreateService();
+        repository.Mappings.Add(new ItemMapping { Id = 8, CompanyId = 7, DistributorItemId = "OTHER" });
+
+        var response = await service.SaveAsync(dto, "admin", CancellationToken.None);
+
+        Assert.False(response.IsSuccess);
+        Assert.Contains(response.Errors, error => error.Contains("Distributor Item ID"));
+        Assert.Empty(repository.Inserted);
+        Assert.False(transaction.CommitCalled);
+    }
+
+    [Fact]
+    public async Task UpsertAsync_emits_normalized_match_without_changing_existing_activation()
+    {
+        var connection = new RecordingDbConnection();
+        var repository = new ItemMappingRepository(connection, null!);
+
+        await repository.UpsertAsync([new ItemMapping
+        {
+            CompanyId = 7,
+            GmkItemId = "4100039",
+            GmkItemName = "Panadol",
+            DistributorItemId = " P0003 ",
+            DistributorItemName = "Panadol Extra",
+            IsActive = false,
+            CreatedBy = "upload"
+        }], CancellationToken.None);
+
+        Assert.Contains("UPPER(LTRIM(RTRIM(target.DistributorItemId))) = UPPER(LTRIM(RTRIM(source.DistributorItemId)))",
+            connection.LastCommandText);
+        var matchedUpdate = connection.LastCommandText.Split("WHEN NOT MATCHED", StringSplitOptions.None)[0];
+        Assert.DoesNotContain("IsActive = source.IsActive", matchedUpdate);
+        Assert.Contains("source.IsActive", connection.LastCommandText.Split("WHEN NOT MATCHED", StringSplitOptions.None)[1]);
     }
 
     [Fact]
@@ -214,5 +258,97 @@ public class ItemMappingServiceTests
         public void Commit() => CommitCalled = true;
         public void Dispose() { }
         public void Rollback() { }
+    }
+
+    private sealed class RecordingDbConnection : DbConnection
+    {
+        public string LastCommandText { get; set; } = string.Empty;
+        [AllowNull] public override string ConnectionString { get; set; } = string.Empty;
+        public override string Database => "Recording";
+        public override string DataSource => "Recording";
+        public override string ServerVersion => "1";
+        public override ConnectionState State => ConnectionState.Open;
+        public override int ConnectionTimeout => 0;
+        public override void ChangeDatabase(string databaseName) { }
+        public override void Close() { }
+        public override void Open() { }
+        protected override DbTransaction BeginDbTransaction(IsolationLevel isolationLevel) => throw new NotSupportedException();
+        protected override DbCommand CreateDbCommand() => new RecordingDbCommand(this);
+    }
+
+    private sealed class RecordingDbCommand(RecordingDbConnection connection) : DbCommand
+    {
+        [AllowNull] public override string CommandText { get; set; } = string.Empty;
+        public override int CommandTimeout { get; set; }
+        public override CommandType CommandType { get; set; }
+        public override bool DesignTimeVisible { get; set; }
+        public override UpdateRowSource UpdatedRowSource { get; set; }
+        protected override DbConnection? DbConnection { get; set; } = connection;
+        protected override DbTransaction? DbTransaction { get; set; }
+        protected override DbParameterCollection DbParameterCollection { get; } = new RecordingDbParameterCollection();
+        public override void Cancel() { }
+        public override int ExecuteNonQuery()
+        {
+            connection.LastCommandText = CommandText;
+            return 0;
+        }
+        public override object? ExecuteScalar() => null;
+        public override void Prepare() { }
+        protected override DbParameter CreateDbParameter() => new RecordingDbParameter();
+        protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior) => throw new NotSupportedException();
+    }
+
+    private sealed class RecordingDbParameter : DbParameter
+    {
+        public override DbType DbType { get; set; }
+        public override ParameterDirection Direction { get; set; }
+        public override bool IsNullable { get; set; }
+        [AllowNull] public override string ParameterName { get; set; } = string.Empty;
+        [AllowNull] public override string SourceColumn { get; set; } = string.Empty;
+        public override DataRowVersion SourceVersion { get; set; }
+        public override bool SourceColumnNullMapping { get; set; }
+        public override object? Value { get; set; }
+        public override byte Precision { get; set; }
+        public override byte Scale { get; set; }
+        public override int Size { get; set; }
+        public override void ResetDbType() { }
+    }
+
+    private sealed class RecordingDbParameterCollection : DbParameterCollection
+    {
+        private readonly ArrayList _values = [];
+        public override int Count => _values.Count;
+        public override object SyncRoot => ((ICollection)_values).SyncRoot;
+        public override int Add(object value) => _values.Add(value);
+        public override void AddRange(Array values) => _values.AddRange(values);
+        public override void Clear() => _values.Clear();
+        public override bool Contains(object value) => _values.Contains(value);
+        public override bool Contains(string value) => IndexOf(value) >= 0;
+        public override void CopyTo(Array array, int index) => _values.CopyTo(array, index);
+        public override IEnumerator GetEnumerator() => _values.GetEnumerator();
+        public override int IndexOf(object value) => _values.IndexOf(value);
+        public override int IndexOf(string parameterName) => _values.Cast<DbParameter>()
+            .Select((value, index) => (value, index))
+            .Where(pair => pair.value.ParameterName == parameterName)
+            .Select(pair => pair.index)
+            .DefaultIfEmpty(-1)
+            .Single();
+        public override void Insert(int index, object value) => _values.Insert(index, value);
+        public override void Remove(object value) => _values.Remove(value);
+        public override void RemoveAt(int index) => _values.RemoveAt(index);
+        public override void RemoveAt(string parameterName)
+        {
+            var index = IndexOf(parameterName);
+            if (index >= 0) RemoveAt(index);
+        }
+        protected override DbParameter GetParameter(int index) => (DbParameter)_values[index]!;
+        protected override DbParameter GetParameter(string parameterName) => (DbParameter)_values[IndexOf(parameterName)]!;
+        protected override void SetParameter(int index, DbParameter value) => _values[index] = value;
+        protected override void SetParameter(string parameterName, DbParameter value)
+        {
+            var index = IndexOf(parameterName);
+            if (index < 0) Add(value);
+            else _values[index] = value;
+        }
     }
 }

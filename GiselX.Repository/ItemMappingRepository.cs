@@ -103,16 +103,16 @@ public sealed class ItemMappingRepository(IDbConnection dbConnection, IDbTransac
     {
         const string sql = """
             MERGE ItemMapping AS target
-            USING (VALUES (@CompanyId, @GmkItemId, @GmkItemName, @DistributorItemId, @DistributorItemName,
+            USING (VALUES (@CompanyId, @GmkItemId, @GmkItemName, LTRIM(RTRIM(@DistributorItemId)), @DistributorItemName,
                            @IsActive, @CreatedDate, @CreatedBy, @ModifiedDate, @ModifiedBy)) AS source
                 (CompanyId, GmkItemId, GmkItemName, DistributorItemId, DistributorItemName, IsActive,
                  CreatedDate, CreatedBy, ModifiedDate, ModifiedBy)
-            ON target.CompanyId = source.CompanyId AND target.DistributorItemId = source.DistributorItemId
+            ON target.CompanyId = source.CompanyId
+               AND UPPER(LTRIM(RTRIM(target.DistributorItemId))) = UPPER(LTRIM(RTRIM(source.DistributorItemId)))
             WHEN MATCHED THEN UPDATE SET
                 GmkItemId = source.GmkItemId,
                 GmkItemName = source.GmkItemName,
                 DistributorItemName = source.DistributorItemName,
-                IsActive = source.IsActive,
                 ModifiedDate = source.ModifiedDate,
                 ModifiedBy = source.ModifiedBy
             WHEN NOT MATCHED THEN INSERT

@@ -65,7 +65,17 @@ public class CompanyService : ICompanyService
 
     public async Task<ServiceResponse<CompanyDto>> UpdateCompanyAsync(CompanyDto companyDto, CancellationToken cancellationToken)
     {
-        if (companyDto.ItemMappingEnabled &&
+        var existing = await _companyRepository.GetCompanyByIdAsync(companyDto.Id, cancellationToken);
+        if (existing is null)
+        {
+            return new ServiceResponse<CompanyDto>
+            {
+                Errors = ["The company was not found."],
+                StatusCode = StatusCodes.Status404NotFound
+            };
+        }
+
+        if (!existing.ItemMappingEnabled && companyDto.ItemMappingEnabled &&
             !(await _itemMappingRepository.GetActiveByCompanyAsync(companyDto.Id, cancellationToken)).Any())
         {
             return new ServiceResponse<CompanyDto>
@@ -75,7 +85,9 @@ public class CompanyService : ICompanyService
             };
         }
 
-        var company = await _companyRepository.UpdateCompanyAsync(_mapper.MapToEntity(companyDto), cancellationToken);
+        var companyToUpdate = _mapper.MapToEntity(companyDto);
+        companyToUpdate.ItemMappingEnabled = existing.ItemMappingEnabled || companyToUpdate.ItemMappingEnabled;
+        var company = await _companyRepository.UpdateCompanyAsync(companyToUpdate, cancellationToken);
         
         _dbTransaction.Commit();
         

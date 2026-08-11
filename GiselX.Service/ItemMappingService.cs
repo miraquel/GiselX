@@ -131,8 +131,9 @@ public sealed class ItemMappingService(IItemMappingRepository repository, IDbTra
         if (string.IsNullOrWhiteSpace(dto.GmkItemName)) errors.Add("GMK Item Name is required.");
         if (string.IsNullOrWhiteSpace(dto.DistributorItemId)) errors.Add("Distributor Item ID is required.");
         if (string.IsNullOrWhiteSpace(dto.DistributorItemName)) errors.Add("Distributor Item Name is required.");
-        if (existingMappings.Any(mapping => mapping.Id != dto.Id &&
-            string.Equals(mapping.DistributorItemId.Trim(), dto.DistributorItemId.Trim(), StringComparison.OrdinalIgnoreCase)))
+        var distributorItemId = dto.DistributorItemId?.Trim();
+        if (!string.IsNullOrEmpty(distributorItemId) && existingMappings.Any(mapping => mapping.Id != dto.Id &&
+            string.Equals(mapping.DistributorItemId?.Trim(), distributorItemId, StringComparison.OrdinalIgnoreCase)))
             errors.Add("A mapping with this Distributor Item ID already exists for the company.");
         return errors;
     }
