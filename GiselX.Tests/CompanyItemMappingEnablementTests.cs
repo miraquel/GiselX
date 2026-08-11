@@ -48,7 +48,7 @@ public class CompanyItemMappingEnablementTests
     }
 
     [Fact]
-    public async Task UpdateCompanyAsync_preserves_existing_enablement_when_request_uses_default_false()
+    public async Task UpdateCompanyAsync_preserves_existing_enablement_when_item_mapping_state_is_omitted()
     {
         var companyRepository = new FakeCompanyRepository
         {
@@ -61,6 +61,24 @@ public class CompanyItemMappingEnablementTests
 
         Assert.True(response.IsSuccess);
         Assert.True(companyRepository.UpdatedCompany!.ItemMappingEnabled);
+        Assert.True(transaction.CommitCalled);
+    }
+
+    [Fact]
+    public async Task UpdateCompanyAsync_disables_existing_enablement_when_item_mapping_state_is_explicit_false()
+    {
+        var companyRepository = new FakeCompanyRepository
+        {
+            ExistingCompany = new Company { Id = 7, Name = "Distributor", ItemMappingEnabled = true }
+        };
+        var transaction = new FakeTransaction();
+        var service = new CompanyService(companyRepository, new FakeItemMappingRepository(), transaction, new UserClaimDto());
+
+        var response = await service.UpdateCompanyAsync(new CompanyDto
+            { Id = 7, Name = "Distributor", ItemMappingEnabled = false }, default);
+
+        Assert.True(response.IsSuccess);
+        Assert.False(companyRepository.UpdatedCompany!.ItemMappingEnabled);
         Assert.True(transaction.CommitCalled);
     }
 

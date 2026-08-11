@@ -27,7 +27,9 @@ public class CompanyService : ICompanyService
 
     public async Task<ServiceResponse<CompanyDto>> CreateCompanyAsync(CompanyDto companyDto, CancellationToken cancellationToken)
     {
-        var company = await _companyRepository.CreateCompanyAsync(_mapper.MapToEntity(companyDto), cancellationToken);
+        var companyToCreate = _mapper.MapToEntity(companyDto);
+        companyToCreate.ItemMappingEnabled = companyDto.ItemMappingEnabled ?? false;
+        var company = await _companyRepository.CreateCompanyAsync(companyToCreate, cancellationToken);
         
         _dbTransaction.Commit();
         
@@ -75,7 +77,7 @@ public class CompanyService : ICompanyService
             };
         }
 
-        if (!existing.ItemMappingEnabled && companyDto.ItemMappingEnabled &&
+        if (!existing.ItemMappingEnabled && companyDto.ItemMappingEnabled is true &&
             !(await _itemMappingRepository.GetActiveByCompanyAsync(companyDto.Id, cancellationToken)).Any())
         {
             return new ServiceResponse<CompanyDto>
@@ -86,7 +88,7 @@ public class CompanyService : ICompanyService
         }
 
         var companyToUpdate = _mapper.MapToEntity(companyDto);
-        companyToUpdate.ItemMappingEnabled = existing.ItemMappingEnabled || companyToUpdate.ItemMappingEnabled;
+        companyToUpdate.ItemMappingEnabled = companyDto.ItemMappingEnabled ?? existing.ItemMappingEnabled;
         var company = await _companyRepository.UpdateCompanyAsync(companyToUpdate, cancellationToken);
         
         _dbTransaction.Commit();

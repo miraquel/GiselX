@@ -9,5 +9,5 @@ public class CompanyDto
     public int? DeadlineDayOfMonth { get; set; }
     public int? DeadlineDaysOfWeek { get; set; }
     public int ReminderLeadDays { get; set; } = 3;
-    public bool ItemMappingEnabled { get; set; }
+    public bool? ItemMappingEnabled { get; set; }
 }
