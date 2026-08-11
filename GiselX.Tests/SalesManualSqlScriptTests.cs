@@ -32,6 +32,20 @@ public sealed class SalesManualSqlScriptTests
         Assert.Contains("IX_ItemMapping_CompanyId_DistributorItemId", sql, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void Script_always_records_migration_history_and_validates_existing_mapping_relationships()
+    {
+        var sql = ReadScript();
+
+        Assert.Contains("CREATE TABLE dbo.__EFMigrationsHistory", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("IF OBJECT_ID(N'dbo.__EFMigrationsHistory', N'U') IS NOT NULL", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("INSERT INTO dbo.__EFMigrationsHistory", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("sys.foreign_key_columns", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("FK_ItemMapping_Company_CompanyId", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("is_unique", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("key_ordinal", sql, StringComparison.OrdinalIgnoreCase);
+    }
+
     [LocalDbFact]
     [Trait("Category", "Integration")]
     public async Task Script_can_be_applied_twice_and_preserves_historical_gmk_identity()

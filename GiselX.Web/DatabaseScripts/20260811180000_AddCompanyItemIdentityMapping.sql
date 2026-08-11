@@ -20,6 +20,13 @@ BEGIN TRY
        OR OBJECT_ID(N'dbo.SelloutStaging', N'U') IS NULL
         THROW 51101, 'The Company, Stock, StockStaging, SalesTransaction, and SelloutStaging tables must exist before this upgrade.', 1;
 
+    IF OBJECT_ID(N'dbo.__EFMigrationsHistory', N'U') IS NULL
+        CREATE TABLE dbo.__EFMigrationsHistory
+        (
+            MigrationId nvarchar(150) NOT NULL CONSTRAINT PK___EFMigrationsHistory PRIMARY KEY,
+            ProductVersion nvarchar(32) NOT NULL
+        );
+
     IF COL_LENGTH(N'dbo.Company', N'ItemMappingEnabled') IS NULL
     BEGIN
         ALTER TABLE dbo.Company
@@ -90,12 +97,73 @@ BEGIN TRY
 
     IF NOT EXISTS
     (
+        SELECT 1
+        FROM sys.foreign_keys fk
+        WHERE fk.name = N'FK_ItemMapping_Company_CompanyId'
+          AND fk.parent_object_id = OBJECT_ID(N'dbo.ItemMapping', N'U')
+    )
+        ALTER TABLE dbo.ItemMapping ADD CONSTRAINT FK_ItemMapping_Company_CompanyId
+            FOREIGN KEY (CompanyId) REFERENCES dbo.Company(Id) ON DELETE NO ACTION;
+    ELSE IF NOT EXISTS
+    (
+        SELECT 1
+        FROM sys.foreign_keys fk
+        INNER JOIN sys.foreign_key_columns fkc ON fkc.constraint_object_id = fk.object_id
+        INNER JOIN sys.columns parentColumn ON parentColumn.object_id = fkc.parent_object_id
+            AND parentColumn.column_id = fkc.parent_column_id
+        INNER JOIN sys.columns referencedColumn ON referencedColumn.object_id = fkc.referenced_object_id
+            AND referencedColumn.column_id = fkc.referenced_column_id
+        WHERE fk.name = N'FK_ItemMapping_Company_CompanyId'
+          AND fk.parent_object_id = OBJECT_ID(N'dbo.ItemMapping', N'U')
+          AND fk.referenced_object_id = OBJECT_ID(N'dbo.Company', N'U')
+          AND parentColumn.name = N'CompanyId'
+          AND referencedColumn.name = N'Id'
+          AND fk.delete_referential_action = 0
+    )
+        THROW 51103, 'FK_ItemMapping_Company_CompanyId exists but is not the expected restrict CompanyId foreign key.', 1;
+
+    IF NOT EXISTS
+    (
         SELECT 1 FROM sys.indexes
         WHERE object_id = OBJECT_ID(N'dbo.ItemMapping', N'U')
           AND name = N'IX_ItemMapping_CompanyId_DistributorItemId'
     )
         CREATE UNIQUE INDEX IX_ItemMapping_CompanyId_DistributorItemId
             ON dbo.ItemMapping(CompanyId, DistributorItemId);
+    ELSE IF EXISTS
+    (
+        SELECT 1
+        FROM sys.indexes i
+        WHERE i.object_id = OBJECT_ID(N'dbo.ItemMapping', N'U')
+          AND i.name = N'IX_ItemMapping_CompanyId_DistributorItemId'
+          AND
+          (
+              i.is_unique <> 1
+              OR 2 <>
+              (
+                  SELECT COUNT(*)
+                  FROM sys.index_columns ic
+                  WHERE ic.object_id = i.object_id AND ic.index_id = i.index_id AND ic.key_ordinal > 0
+              )
+              OR NOT EXISTS
+              (
+                  SELECT 1
+                  FROM sys.index_columns ic
+                  INNER JOIN sys.columns c ON c.object_id = ic.object_id AND c.column_id = ic.column_id
+                  WHERE ic.object_id = i.object_id AND ic.index_id = i.index_id
+                    AND ic.key_ordinal = 1 AND c.name = N'CompanyId'
+              )
+              OR NOT EXISTS
+              (
+                  SELECT 1
+                  FROM sys.index_columns ic
+                  INNER JOIN sys.columns c ON c.object_id = ic.object_id AND c.column_id = ic.column_id
+                  WHERE ic.object_id = i.object_id AND ic.index_id = i.index_id
+                    AND ic.key_ordinal = 2 AND c.name = N'DistributorItemId'
+              )
+          )
+    )
+        THROW 51104, 'IX_ItemMapping_CompanyId_DistributorItemId exists but is not the expected unique CompanyId/DistributorItemId index.', 1;
 
     IF COL_LENGTH(N'dbo.Stock', N'DistributorProductId') IS NULL
         ALTER TABLE dbo.Stock ADD DistributorProductId nvarchar(100) NULL;
@@ -740,8 +808,7 @@ BEGIN
     ORDER BY [InvoiceDate], [InvoiceNo], [Id];
 END';
 
-    IF OBJECT_ID(N'dbo.__EFMigrationsHistory', N'U') IS NOT NULL
-       AND NOT EXISTS (SELECT 1 FROM dbo.__EFMigrationsHistory WHERE MigrationId = N'20260811180000_AddCompanyItemIdentityMapping')
+    IF NOT EXISTS (SELECT 1 FROM dbo.__EFMigrationsHistory WHERE MigrationId = N'20260811180000_AddCompanyItemIdentityMapping')
         INSERT INTO dbo.__EFMigrationsHistory (MigrationId, ProductVersion)
         VALUES (N'20260811180000_AddCompanyItemIdentityMapping', N'10.0.8');
 
