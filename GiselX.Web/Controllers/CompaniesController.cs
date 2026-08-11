@@ -1,5 +1,6 @@
 using GiselX.Common.Constants;
 using GiselX.Service.Dto;
+using GiselX.Service.Dto.Common;
 using GiselX.Service.Interface;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -52,7 +53,7 @@ public class CompaniesController : Controller
         var result = await _companyService.CreateCompanyAsync(model, cancellationToken);
         if (result.StatusCode != 200)
         {
-            ModelState.AddModelError(string.Empty, result.Message ?? string.Empty);
+            AddFailureErrors(result, "Unable to create the company. Please try again.");
             return View(model);
         }
         TempData["StatusMessage"] = result.Message;
@@ -83,10 +84,24 @@ public class CompaniesController : Controller
         var result = await _companyService.UpdateCompanyAsync(model, cancellationToken);
         if (result.StatusCode != 200)
         {
-            ModelState.AddModelError(string.Empty, result.Message ?? string.Empty);
+            AddFailureErrors(result, "Unable to update the company. Please try again.");
             return View(model);
         }
         TempData["StatusMessage"] = result.Message;
         return RedirectToAction(nameof(Index));
+    }
+
+    private void AddFailureErrors(ServiceResponse response, string fallback)
+    {
+        var errors = response.Errors.Where(error => !string.IsNullOrWhiteSpace(error))
+            .Distinct(StringComparer.Ordinal).ToList();
+        if (errors.Count > 0)
+        {
+            foreach (var error in errors) ModelState.AddModelError(string.Empty, error);
+            return;
+        }
+
+        ModelState.AddModelError(string.Empty,
+            string.IsNullOrWhiteSpace(response.Message) ? fallback : response.Message);
     }
 }
