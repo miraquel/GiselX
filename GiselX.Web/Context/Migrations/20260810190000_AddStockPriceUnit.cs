@@ -22,7 +22,7 @@ public partial class AddStockPriceUnit : Migration
                   AND (TYPE_NAME(c.user_type_id) <> N'decimal' OR c.precision <> 18
                        OR c.scale <> 2 OR c.is_nullable <> 1)
             )
-                THROW 51000, 'dbo.Stock.PriceUnit must be nullable decimal(18,2).', 1;
+                ALTER TABLE dbo.Stock ALTER COLUMN PriceUnit decimal(18,2) NULL;
 
             IF COL_LENGTH(N'dbo.StockStaging', N'PriceUnit') IS NULL
                 ALTER TABLE dbo.StockStaging ADD PriceUnit decimal(18,2) NULL;
@@ -34,7 +34,7 @@ public partial class AddStockPriceUnit : Migration
                   AND (TYPE_NAME(c.user_type_id) <> N'decimal' OR c.precision <> 18
                        OR c.scale <> 2 OR c.is_nullable <> 1)
             )
-                THROW 51001, 'dbo.StockStaging.PriceUnit must be nullable decimal(18,2).', 1;
+                ALTER TABLE dbo.StockStaging ALTER COLUMN PriceUnit decimal(18,2) NULL;
             """);
     }
 
