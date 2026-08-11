@@ -66,6 +66,7 @@ public class CompaniesController : Controller
         var result = await _companyService.GetCompanyByIdAsync(id, cancellationToken);
         if (result.Data == null)
             return NotFound();
+        result.Data.ItemMappingEnabled ??= false;
         return View(result.Data);
     }
 

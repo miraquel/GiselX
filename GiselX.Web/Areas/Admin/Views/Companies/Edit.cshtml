@@ -21,6 +21,8 @@
                class="btn btn-outline-primary">Manage Stock Mappings</a>
             <a asp-controller="StockTemplateMappings" asp-action="Create" asp-route-companyId="@Model.Id"
                class="btn btn-outline-secondary">Add Stock Mapping</a>
+            <a asp-controller="ItemMappings" asp-action="Index" asp-route-companyId="@Model.Id"
+               class="btn btn-outline-primary">Manage Item Mappings</a>
         </div>
         @if (ViewBag.StatusMessage != null)
         {
@@ -49,6 +51,16 @@
                     <input asp-for="ContactEmail" class="form-control" type="email" />
                     <span asp-validation-for="ContactEmail" class="text-danger"></span>
                     <small class="text-muted">Leave blank to disable reminders for this company.</small>
+                </div>
+            </div>
+            <div class="row mb-4">
+                <label asp-for="ItemMappingEnabled" class="col-sm-2 col-form-label">Item identity mapping</label>
+                <div class="col-sm-10 pt-2">
+                    <div class="form-check">
+                        <input asp-for="ItemMappingEnabled" class="form-check-input" />
+                        <label asp-for="ItemMappingEnabled" class="form-check-label">Enable distributor-to-GMK item mapping for future Stock and Sales uploads</label>
+                    </div>
+                    <small class="text-muted">An active mapping is required for every uploaded distributor item ID when enabled.</small>
                 </div>
             </div>
             <div class="row mb-4">

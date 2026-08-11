@@ -1,0 +1,162 @@
+@model GiselX.Web.Models.ItemMappingListViewModel
+@{
+    ViewData["Title"] = "Item Mappings";
+    Layout = "_ContentNavbarLayout";
+}
+
+@functions {
+    string NextDirection(string column) => string.Equals(Model.SortBy, column, StringComparison.OrdinalIgnoreCase) &&
+        !string.Equals(Model.SortDirection, "desc", StringComparison.OrdinalIgnoreCase)
+        ? "desc" : "asc";
+    string SortLabel(string column) => string.Equals(Model.SortBy, column, StringComparison.OrdinalIgnoreCase)
+        ? (string.Equals(Model.SortDirection, "desc", StringComparison.OrdinalIgnoreCase) ? " ↓" : " ↑") : "";
+}
+
+<div class="card">
+    <div class="card-header d-flex flex-wrap gap-2 justify-content-between align-items-center">
+        <div>
+            <h5 class="mb-1">Item Mappings</h5>
+            <small class="text-muted">Map distributor item identities to GMK item identities for this company.</small>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+            <a asp-action="DownloadTemplate" asp-route-companyId="@Model.CompanyId" class="btn btn-outline-secondary">Download Template</a>
+            <a asp-action="Create" asp-route-companyId="@Model.CompanyId" class="btn btn-primary">Add Mapping</a>
+            <a asp-controller="Companies" asp-action="Edit" asp-route-id="@Model.CompanyId" class="btn btn-outline-secondary">Back</a>
+        </div>
+    </div>
+    <div class="card-body">
+        @if (TempData["StatusMessage"] is string status)
+        {
+            <div class="alert alert-success">@status</div>
+        }
+        @if (TempData["ErrorMessage"] is string error)
+        {
+            <div class="alert alert-danger">@error</div>
+        }
+
+        <form method="get" class="row g-2 mb-4">
+            <input type="hidden" name="companyId" value="@Model.CompanyId" />
+            <div class="col-md-6">
+                <label class="visually-hidden" for="search">Search item mappings</label>
+                <input id="search" name="search" value="@Model.Search" class="form-control" placeholder="Search item ID or item name" />
+            </div>
+            <div class="col-auto"><button class="btn btn-outline-primary">Search</button></div>
+        </form>
+
+        <div class="border rounded p-3 mb-4">
+            <h6>Import item mappings from Excel</h6>
+            <p class="text-muted mb-2">Use the template headers exactly. The import is previewed before any changes are saved.</p>
+            <form id="importForm" enctype="multipart/form-data">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="companyId" value="@Model.CompanyId" />
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-6">
+                        <label class="form-label" for="importFile">Item mapping .xlsx file</label>
+                        <input id="importFile" name="file" type="file" class="form-control" accept=".xlsx" required />
+                    </div>
+                    <div class="col-auto"><button type="button" id="previewImport" class="btn btn-outline-primary">Preview Import</button></div>
+                </div>
+            </form>
+            <div id="importResult" class="mt-3" aria-live="polite"></div>
+        </div>
+
+        @if (Model.Mappings.Count == 0)
+        {
+            <p class="text-muted mb-0">No item mappings yet.</p>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table align-middle">
+                    <thead>
+                    <tr>
+                        <th>No</th>
+                        <th><a asp-action="Index" asp-route-companyId="@Model.CompanyId" asp-route-search="@Model.Search" asp-route-sortBy="gmkItemId" asp-route-sortDirection="@NextDirection("gmkItemId")">GMK Item ID@SortLabel("gmkItemId")</a></th>
+                        <th><a asp-action="Index" asp-route-companyId="@Model.CompanyId" asp-route-search="@Model.Search" asp-route-sortBy="gmkItemName" asp-route-sortDirection="@NextDirection("gmkItemName")">GMK Item Name@SortLabel("gmkItemName")</a></th>
+                        <th><a asp-action="Index" asp-route-companyId="@Model.CompanyId" asp-route-search="@Model.Search" asp-route-sortBy="distributorItemId" asp-route-sortDirection="@NextDirection("distributorItemId")">Distributor Item ID@SortLabel("distributorItemId")</a></th>
+                        <th><a asp-action="Index" asp-route-companyId="@Model.CompanyId" asp-route-search="@Model.Search" asp-route-sortBy="distributorItemName" asp-route-sortDirection="@NextDirection("distributorItemName")">Distributor Item Name@SortLabel("distributorItemName")</a></th>
+                        <th><a asp-action="Index" asp-route-companyId="@Model.CompanyId" asp-route-search="@Model.Search" asp-route-sortBy="status" asp-route-sortDirection="@NextDirection("status")">Status@SortLabel("status")</a></th>
+                        <th>Actions</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    @for (var index = 0; index < Model.Mappings.Count; index++)
+                    {
+                        var mapping = Model.Mappings[index];
+                        <tr>
+                            <td>@(index + 1)</td>
+                            <td>@mapping.GmkItemId</td>
+                            <td>@mapping.GmkItemName</td>
+                            <td>@mapping.DistributorItemId</td>
+                            <td>@mapping.DistributorItemName</td>
+                            <td><span class="badge @(mapping.IsActive ? "bg-success" : "bg-secondary")">@(mapping.IsActive ? "Active" : "Inactive")</span></td>
+                            <td class="text-nowrap">
+                                <a asp-action="Edit" asp-route-id="@mapping.Id" asp-route-companyId="@Model.CompanyId" class="btn btn-sm btn-outline-primary">Edit</a>
+                                @if (mapping.IsActive)
+                                {
+                                    <form asp-action="Deactivate" method="post" class="d-inline"><input type="hidden" name="id" value="@mapping.Id" /><input type="hidden" name="companyId" value="@Model.CompanyId" /><button class="btn btn-sm btn-outline-secondary">Deactivate</button></form>
+                                }
+                                else
+                                {
+                                    <form asp-action="Activate" method="post" class="d-inline"><input type="hidden" name="id" value="@mapping.Id" /><input type="hidden" name="companyId" value="@Model.CompanyId" /><button class="btn btn-sm btn-outline-secondary">Activate</button></form>
+                                }
+                                <form asp-action="Delete" method="post" class="d-inline" onsubmit="return confirm('Delete this unused item mapping?');"><input type="hidden" name="id" value="@mapping.Id" /><input type="hidden" name="companyId" value="@Model.CompanyId" /><button class="btn btn-sm btn-outline-danger">Delete</button></form>
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        (() => {
+            const form = document.getElementById('importForm');
+            const previewButton = document.getElementById('previewImport');
+            const output = document.getElementById('importResult');
+            const token = form.querySelector('input[name="__RequestVerificationToken"]');
+
+            const request = async (url) => {
+                const formData = new FormData(form);
+                const response = await fetch(url, {
+                    method: 'POST',
+                    body: formData,
+                    headers: { 'RequestVerificationToken': token.value }
+                });
+                const payload = await response.json().catch(() => ({ errors: ['The server returned an invalid response.'] }));
+                return { response, payload };
+            };
+
+            const errors = (payload) => payload.errors || payload.Errors || [];
+            const data = (payload) => payload.data || payload.Data || payload;
+            const render = (payload, successMessage) => {
+                const preview = data(payload);
+                const rowErrors = preview.errors || preview.Errors || errors(payload);
+                const counts = `<ul class="mb-2"><li>New: ${preview.newRows ?? preview.NewRows ?? 0}</li><li>Updated: ${preview.updatedRows ?? preview.UpdatedRows ?? 0}</li><li>Unchanged: ${preview.unchangedRows ?? preview.UnchangedRows ?? 0}</li><li>Invalid: ${preview.invalidRows ?? preview.InvalidRows ?? 0}</li></ul>`;
+                const detail = rowErrors.length === 0 ? '' : `<ul class="mb-0">${rowErrors.map(error => `<li>Row ${error.sourceRowNumber ?? error.SourceRowNumber}: ${error.field ?? error.Field} — ${error.reason ?? error.Reason}</li>`).join('')}</ul>`;
+                output.innerHTML = `<div class="alert ${rowErrors.length === 0 ? 'alert-success' : 'alert-danger'}">${successMessage || ''}${counts}${detail}</div>`;
+            };
+
+            previewButton.addEventListener('click', async () => {
+                if (!form.reportValidity()) return;
+                previewButton.disabled = true;
+                try {
+                    const preview = await request('@Url.Action("PreflightImport", "ItemMappings", new { area = "Admin" })');
+                    render(preview.payload, preview.response.ok ? 'Preview complete.' : 'The import cannot continue.');
+                    const values = data(preview.payload);
+                    const canImport = values.canImport ?? values.CanImport;
+                    if (preview.response.ok && canImport && window.confirm('Apply this item mapping import?')) {
+                        const imported = await request('@Url.Action("Import", "ItemMappings", new { area = "Admin" })');
+                        render(imported.payload, imported.response.ok ? 'Import completed.' : 'The import was not saved.');
+                        if (imported.response.ok) window.location.reload();
+                    }
+                } finally {
+                    previewButton.disabled = false;
+                }
+            });
+        })();
+    </script>
+}
