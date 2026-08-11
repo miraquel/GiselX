@@ -81,6 +81,29 @@ public sealed class StockUploadServiceTests
         Assert.Equal([3], repository.PublishedSourceRows);
     }
 
+    [Fact]
+    public async Task Upload_forwards_both_item_identities_and_mapping_id_to_stock_staging()
+    {
+        var analysis = Analysis(1, 0);
+        analysis.Rows[0].DistributorProductId = "P-DIST";
+        analysis.Rows[0].DistributorProductName = "Distributor Product";
+        analysis.Rows[0].ItemMappingId = 9;
+        analysis.Rows[0].ProductId = "4100039";
+        analysis.Rows[0].ProductName = "GMK Product";
+        var (service, repository, _) = CreateService(analysis);
+
+        var response = await service.UploadAsync(File(), "stock.xlsx", new DateTime(2026, 8, 10), 7,
+            true, "user", CancellationToken.None);
+
+        Assert.True(response.IsSuccess);
+        var staging = Assert.Single(repository.StagingRows);
+        Assert.Equal("4100039", staging.ProductId);
+        Assert.Equal("GMK Product", staging.ProductName);
+        Assert.Equal("P-DIST", staging.DistributorProductId);
+        Assert.Equal("Distributor Product", staging.DistributorProductName);
+        Assert.Equal(9, staging.ItemMappingId);
+    }
+
     private static (StockUploadService Service, Repository Repository, Transaction Transaction) CreateService(StockWorkbookAnalysisDto analysis)
     {
         var repository = new Repository();

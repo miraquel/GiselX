@@ -22,9 +22,11 @@ public sealed class StockUploadRepository(IDbConnection connection, IDbTransacti
     {
         const string sql = """
             INSERT INTO StockStaging (StockUploadBatchId, SourceRowNumber, ProductId, ProductName,
+             DistributorProductId, DistributorProductName, ItemMappingId,
              ProductPackaging, ProductPcsInCtn, ProductNetto, ProductUnit, PriceUnit, SaldoAwal, SaldoMasukPO,
              SaldoAkhir, BatchNumber, ExpiredDate, IsValid, ValidationErrorsJson)
             VALUES (@StockUploadBatchId, @SourceRowNumber, @ProductId, @ProductName,
+             @DistributorProductId, @DistributorProductName, @ItemMappingId,
              @ProductPackaging, @ProductPcsInCtn, @ProductNetto, @ProductUnit, @PriceUnit, @SaldoAwal, @SaldoMasukPO,
              @SaldoAkhir, @BatchNumber, @ExpiredDate, @IsValid, @ValidationErrorsJson)
             """;
@@ -42,10 +44,12 @@ public sealed class StockUploadRepository(IDbConnection connection, IDbTransacti
 
     public Task PublishValidRowsAsync(long batchId, int companyId, StockUploadBatchStatus status,
         CancellationToken cancellationToken) => connection.ExecuteAsync(new CommandDefinition("""
-            INSERT INTO Stock (ProductId, ProductName, ProductPackaging, ProductPcsInCtn, ProductNetto,
+            INSERT INTO Stock (ProductId, ProductName, DistributorProductId, DistributorProductName, ItemMappingId,
+             ProductPackaging, ProductPcsInCtn, ProductNetto,
              ProductUnit, PriceUnit, SaldoAwal, SaldoMasukPO, SaldoAkhir, BatchNumber, ExpiredDate,
              CompanyId, CreatedDate, StockUploadBatchId, StockDate)
-            SELECT COALESCE(s.ProductId,''), COALESCE(s.ProductName,''), COALESCE(s.ProductPackaging,''),
+            SELECT COALESCE(s.ProductId,''), COALESCE(s.ProductName,''), s.DistributorProductId,
+             s.DistributorProductName, s.ItemMappingId, COALESCE(s.ProductPackaging,''),
              COALESCE(s.ProductPcsInCtn,0), COALESCE(s.ProductNetto,0), COALESCE(s.ProductUnit,''), s.PriceUnit,
              COALESCE(s.SaldoAwal,0), COALESCE(s.SaldoMasukPO,0), s.SaldoAkhir,
              COALESCE(s.BatchNumber,''), COALESCE(s.ExpiredDate,CONVERT(date,'17530101')),

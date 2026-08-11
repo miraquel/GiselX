@@ -83,6 +83,29 @@ public sealed class SelloutUploadServiceTests
     }
 
     [Fact]
+    public async Task UploadAsync_forwards_both_item_identities_and_mapping_id_to_sales_staging()
+    {
+        var analysis = ValidAnalysis(multiWeek: false);
+        analysis.Rows[0].ProductId = "4100039";
+        analysis.Rows[0].ProductName = "GMK Product";
+        analysis.Rows[0].DistributorProductId = "P-DIST";
+        analysis.Rows[0].DistributorProductName = "Distributor Product";
+        analysis.Rows[0].ItemMappingId = 9;
+        var (service, repository, _) = CreateService(analysis);
+
+        var response = await service.UploadAsync(
+            Stream(), "sales.xlsx", 9, multiWeekConfirmed: false, "uploader", CancellationToken.None);
+
+        Assert.True(response.IsSuccess);
+        var staging = repository.StagingRows.First();
+        Assert.Equal("4100039", staging.ProductId);
+        Assert.Equal("GMK Product", staging.ProductName);
+        Assert.Equal("P-DIST", staging.DistributorProductId);
+        Assert.Equal("Distributor Product", staging.DistributorProductName);
+        Assert.Equal(9, staging.ItemMappingId);
+    }
+
+    [Fact]
     public async Task UploadAsync_does_not_commit_when_atomic_promotion_fails()
     {
         var (service, repository, transaction) = CreateService(ValidAnalysis(multiWeek: true));

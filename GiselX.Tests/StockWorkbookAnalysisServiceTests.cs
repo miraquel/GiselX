@@ -13,7 +13,7 @@ public sealed class StockWorkbookAnalysisServiceTests
     {
         var mapping = Mapping();
         var service = new StockWorkbookAnalysisService(new Repository(mapping), new Inspector(mapping),
-            new StockWorkbookParser());
+            new StockWorkbookParser(), new Resolver());
         var workbook = ClosedXmlSelloutWorkbookInspectorTests.BuildWorkbook("Stock",
             [(3, 1, "P1"), (3, 2, "Valid"), (3, 3, "4"), (4, 1, "P2"), (4, 2, "Invalid"), (4, 3, "-1")]);
 
@@ -30,13 +30,59 @@ public sealed class StockWorkbookAnalysisServiceTests
     public async Task AnalyzeAsync_propagates_detection_failure_without_parsing()
     {
         var service = new StockWorkbookAnalysisService(new Repository(Mapping()), new Inspector(null),
-            new StockWorkbookParser());
+            new StockWorkbookParser(), new Resolver());
 
         var result = await service.AnalyzeAsync([1], 7, CancellationToken.None);
 
         Assert.Null(result.Mapping);
         Assert.Empty(result.Rows);
         Assert.Contains("No active Stock mapping", Assert.Single(result.Errors));
+    }
+
+    [Fact]
+    public async Task AnalyzeAsync_replaces_uploaded_stock_identity_with_gmk_identity_and_keeps_distributor_identity()
+    {
+        var mapping = Mapping();
+        var service = new StockWorkbookAnalysisService(new Repository(mapping), new Inspector(mapping),
+            new StockWorkbookParser(), new Resolver(new ItemIdentityResolutionDto
+            {
+                DistributorItemId = "P1", DistributorItemName = "Uploaded Name", GmkItemId = "4100039",
+                GmkItemName = "GMK Name", ItemMappingId = 9
+            }));
+        var workbook = ClosedXmlSelloutWorkbookInspectorTests.BuildWorkbook("Stock",
+            [(3, 1, "P1"), (3, 2, "Uploaded Name"), (3, 3, "4")]);
+
+        var result = await service.AnalyzeAsync(workbook, 7, CancellationToken.None);
+        var row = Assert.Single(result.Rows);
+
+        Assert.True(row.IsValid);
+        Assert.Equal("4100039", row.ProductId);
+        Assert.Equal("GMK Name", row.ProductName);
+        Assert.Equal("P1", row.DistributorProductId);
+        Assert.Equal("Uploaded Name", row.DistributorProductName);
+        Assert.Equal(9, row.ItemMappingId);
+    }
+
+    [Fact]
+    public async Task AnalyzeAsync_marks_unmapped_stock_row_invalid_with_a_product_id_error()
+    {
+        var mapping = Mapping();
+        var service = new StockWorkbookAnalysisService(new Repository(mapping), new Inspector(mapping),
+            new StockWorkbookParser(), new Resolver(new ItemIdentityResolutionDto
+            {
+                DistributorItemId = "P1", DistributorItemName = "Name",
+                ErrorReason = "Distributor Item ID \"P1\" has no active GMK item mapping."
+            }));
+        var workbook = ClosedXmlSelloutWorkbookInspectorTests.BuildWorkbook("Stock",
+            [(3, 1, "P1"), (3, 2, "Name"), (3, 3, "4")]);
+
+        var result = await service.AnalyzeAsync(workbook, 7, CancellationToken.None);
+
+        Assert.Equal(0, result.ValidRows);
+        Assert.Equal(1, result.InvalidRows);
+        var error = Assert.Single(result.RowErrors);
+        Assert.Equal(StockCanonicalField.ProductId, error.Field);
+        Assert.Contains("no active GMK item mapping", error.Reason);
     }
 
     private static StockTemplateMapping Mapping() => new()
@@ -72,5 +118,19 @@ public sealed class StockWorkbookAnalysisServiceTests
                 : new StockMappingDetectionResultDto { Mapping = mappings.Single() });
         public Task<SelloutWorkbookPreviewDto> InspectAsync(byte[] workbook, string? worksheetName, int headerRowNumber,
             int firstDataRowNumber, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    private sealed class Resolver(ItemIdentityResolutionDto? result = null) : IItemMappingResolver
+    {
+        public Task<ItemMappingContextDto> LoadAsync(int companyId, CancellationToken cancellationToken) =>
+            Task.FromResult(new ItemMappingContextDto());
+        public ItemIdentityResolutionDto Resolve(ItemMappingContextDto context, string? distributorItemId,
+            string? distributorItemName) => result ?? new ItemIdentityResolutionDto
+            {
+                DistributorItemId = distributorItemId,
+                DistributorItemName = distributorItemName,
+                GmkItemId = distributorItemId,
+                GmkItemName = distributorItemName
+            };
     }
 }

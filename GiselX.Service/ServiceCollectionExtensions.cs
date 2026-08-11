@@ -27,5 +27,6 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ISelloutUploadService, SelloutUploadService>();
         services.AddScoped<IItemMappingService, ItemMappingService>();
         services.AddScoped<IItemMappingImportService, ItemMappingImportService>();
+        services.AddScoped<IItemMappingResolver, ItemMappingResolver>();
     }
 }

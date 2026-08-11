@@ -139,7 +139,9 @@ public sealed class StockUploadService(
     private static StockStaging ToStaging(StockStagingRowDto row, long batchId) => new()
     {
         StockUploadBatchId = batchId, SourceRowNumber = row.SourceRowNumber, ProductId = row.ProductId,
-        ProductName = row.ProductName, ProductPackaging = row.ProductPackaging,
+        ProductName = row.ProductName, DistributorProductId = row.DistributorProductId,
+        DistributorProductName = row.DistributorProductName, ItemMappingId = row.ItemMappingId,
+        ProductPackaging = row.ProductPackaging,
         ProductPcsInCtn = row.ProductPcsInCtn, ProductNetto = row.ProductNetto, ProductUnit = row.ProductUnit,
         PriceUnit = row.PriceUnit, SaldoAwal = row.SaldoAwal, SaldoMasukPO = row.SaldoMasukPO,
         SaldoAkhir = row.SaldoAkhir,

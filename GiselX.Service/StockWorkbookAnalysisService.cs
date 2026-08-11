@@ -1,3 +1,4 @@
+using System.Text.Json;
 using GiselX.Domain;
 using GiselX.Repository.Interface;
 using GiselX.Service.Dto;
@@ -8,7 +9,8 @@ namespace GiselX.Service;
 public sealed class StockWorkbookAnalysisService(
     IStockTemplateMappingRepository mappingRepository,
     IStockWorkbookInspector inspector,
-    StockWorkbookParser parser) : IStockWorkbookAnalysisService
+    StockWorkbookParser parser,
+    IItemMappingResolver itemMappingResolver) : IStockWorkbookAnalysisService
 {
     public async Task<StockWorkbookAnalysisDto> AnalyzeAsync(byte[] content, int companyId,
         CancellationToken cancellationToken)
@@ -20,12 +22,37 @@ public sealed class StockWorkbookAnalysisService(
             return new StockWorkbookAnalysisDto { Errors = detection.Errors };
 
         var parsed = parser.Parse(content, detection.Mapping);
+        var itemMappingContext = await itemMappingResolver.LoadAsync(companyId, cancellationToken);
+        var errors = parsed.Errors.ToList();
+        foreach (var row in parsed.Rows)
+        {
+            var resolution = itemMappingResolver.Resolve(itemMappingContext, row.ProductId, row.ProductName);
+            row.DistributorProductId = resolution.DistributorItemId;
+            row.DistributorProductName = resolution.DistributorItemName;
+            row.ProductId = resolution.GmkItemId;
+            row.ProductName = resolution.GmkItemName;
+            row.ItemMappingId = resolution.ItemMappingId;
+            if (resolution.ErrorReason is null) continue;
+
+            var error = new StockStagingErrorDto
+            {
+                SourceRowNumber = row.SourceRowNumber,
+                Field = StockCanonicalField.ProductId,
+                RejectedValue = resolution.DistributorItemId,
+                Reason = resolution.ErrorReason
+            };
+            var rowErrors = JsonSerializer.Deserialize<List<StockStagingErrorDto>>(row.ValidationErrorsJson) ?? [];
+            rowErrors.Add(error);
+            row.ValidationErrorsJson = JsonSerializer.Serialize(rowErrors);
+            row.IsValid = false;
+            errors.Add(error);
+        }
         return new StockWorkbookAnalysisDto
         {
             Mapping = detection.Mapping,
             Rows = parsed.Rows,
             IgnoredSummaryRowNumbers = parsed.IgnoredSummaryRowNumbers,
-            RowErrors = parsed.Errors,
+            RowErrors = errors,
             Errors = parsed.BatchError is null ? [] : [parsed.BatchError]
         };
     }

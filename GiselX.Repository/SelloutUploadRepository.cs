@@ -32,11 +32,13 @@ public sealed class SelloutUploadRepository(IDbConnection connection, IDbTransac
     {
         const string sql = """
             INSERT INTO SelloutStaging (SelloutUploadBatchId, SourceRowNumber, CustomerId, CustomerName, CustomerAlias,
-             CustomerAddress, ProductId, ProductBrand, ProductName, ProductPackaging, ProductPcsInCtn, BatchNumber,
+             CustomerAddress, ProductId, ProductBrand, ProductName, DistributorProductId, DistributorProductName,
+             ItemMappingId, ProductPackaging, ProductPcsInCtn, BatchNumber,
              ExpiredDate, InvoiceNo, InvoiceDate, InvoiceQty, InvoiceUnit, UnitPrice, GrossValue, DiscountValue,
              DiscountPct, NetValue, InKg, GeisaPOId, ShipDate, SalesmanNameGMK, IsValid, ValidationErrorsJson)
             VALUES (@SelloutUploadBatchId, @SourceRowNumber, @CustomerId, @CustomerName, @CustomerAlias,
-             @CustomerAddress, @ProductId, @ProductBrand, @ProductName, @ProductPackaging, @ProductPcsInCtn, @BatchNumber,
+             @CustomerAddress, @ProductId, @ProductBrand, @ProductName, @DistributorProductId, @DistributorProductName,
+             @ItemMappingId, @ProductPackaging, @ProductPcsInCtn, @BatchNumber,
              @ExpiredDate, @InvoiceNo, @InvoiceDate, @InvoiceQty, @InvoiceUnit, @UnitPrice, @GrossValue, @DiscountValue,
              @DiscountPct, @NetValue, @InKg, @GeisaPOId, @ShipDate, @SalesmanNameGMK, @IsValid, @ValidationErrorsJson)
             """;
@@ -104,11 +106,12 @@ public sealed class SelloutUploadRepository(IDbConnection connection, IDbTransac
                    AND sales.InvoiceDate<DATEADD(day,7,currentBatch.ReportingWeekStart))));
 
             INSERT INTO SalesTransaction (CustomerId,CustomerName,CustomerAlias,CustomerAddress,ProductId,ProductBrand,
-             ProductName,ProductPackaging,ProductPcsInCtn,BatchNumber,ExpiredDate,InvoiceNo,InvoiceDate,InvoiceQty,InvoiceUnit,
+             ProductName,DistributorProductId,DistributorProductName,ItemMappingId,ProductPackaging,ProductPcsInCtn,BatchNumber,ExpiredDate,InvoiceNo,InvoiceDate,InvoiceQty,InvoiceUnit,
              UnitPrice,GrossValue,DiscountValue,DiscountPct,NetValue,InKg,GeisaPOId,ShipDate,SalesmanNameGMK,CompanyId,CreatedDate,
              SelloutUploadBatchId,ReportingWeekStart)
             SELECT COALESCE(s.CustomerId,''),COALESCE(s.CustomerName,''),COALESCE(s.CustomerAlias,''),COALESCE(s.CustomerAddress,''),
-             COALESCE(s.ProductId,''),COALESCE(s.ProductBrand,''),COALESCE(s.ProductName,''),COALESCE(s.ProductPackaging,''),
+             COALESCE(s.ProductId,''),COALESCE(s.ProductBrand,''),COALESCE(s.ProductName,''),s.DistributorProductId,
+             s.DistributorProductName,s.ItemMappingId,COALESCE(s.ProductPackaging,''),
              COALESCE(s.ProductPcsInCtn,0),COALESCE(s.BatchNumber,''),COALESCE(s.ExpiredDate,CONVERT(date,'17530101')),
              COALESCE(s.InvoiceNo,''),COALESCE(s.InvoiceDate,CONVERT(date,'17530101')),COALESCE(s.InvoiceQty,0),COALESCE(s.InvoiceUnit,''),
              COALESCE(s.UnitPrice,0),COALESCE(s.GrossValue,0),COALESCE(s.DiscountValue,0),COALESCE(s.DiscountPct,0),COALESCE(s.NetValue,0),
