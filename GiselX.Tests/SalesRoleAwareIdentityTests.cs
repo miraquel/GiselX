@@ -7,6 +7,33 @@ using Microsoft.Data.SqlClient;
 
 namespace GiselX.Tests;
 
+[AttributeUsage(AttributeTargets.Method)]
+public sealed class LocalDbFactAttribute : FactAttribute
+{
+    private const string MasterConnectionString =
+        "Server=(localdb)\\MSSQLLocalDB;Integrated Security=true;Initial Catalog=master;TrustServerCertificate=true;Connect Timeout=2";
+
+    public LocalDbFactAttribute()
+    {
+        if (!IsAvailable())
+            Skip = "Requires a running SQL Server LocalDB instance named MSSQLLocalDB.";
+    }
+
+    public static bool IsAvailable()
+    {
+        try
+        {
+            using var connection = new SqlConnection(MasterConnectionString);
+            connection.Open();
+            return true;
+        }
+        catch (SqlException)
+        {
+            return false;
+        }
+    }
+}
+
 public sealed class SalesRoleAwareIdentityTests
 {
     [Fact]
@@ -77,7 +104,8 @@ public sealed class SalesRoleAwareIdentityTests
         Assert.Contains("MONTH([InvoiceDate]) = @Month", procedure);
     }
 
-    [Fact]
+    [LocalDbFact]
+    [Trait("Category", "Integration")]
     public async Task Select_procedure_returns_the_requested_identity_against_localdb()
     {
         var databaseName = $"GiselXSalesIdentity_{Guid.NewGuid():N}";
@@ -85,14 +113,7 @@ public sealed class SalesRoleAwareIdentityTests
         try
         {
             await using var master = new SqlConnection(masterConnectionString);
-            try
-            {
-                await master.OpenAsync();
-            }
-            catch (SqlException)
-            {
-                return;
-            }
+            await master.OpenAsync();
 
             await using (var create = new SqlCommand($"CREATE DATABASE [{databaseName}]", master))
                 await create.ExecuteNonQueryAsync();
