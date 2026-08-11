@@ -139,6 +139,8 @@ BEGIN TRY
           AND
           (
               i.is_unique <> 1
+              OR i.has_filter <> 0
+              OR i.is_disabled <> 0
               OR 2 <>
               (
                   SELECT COUNT(*)

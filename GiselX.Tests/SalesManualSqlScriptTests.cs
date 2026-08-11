@@ -43,6 +43,8 @@ public sealed class SalesManualSqlScriptTests
         Assert.Contains("sys.foreign_key_columns", sql, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("FK_ItemMapping_Company_CompanyId", sql, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("is_unique", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("i.has_filter <> 0", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("i.is_disabled <> 0", sql, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("key_ordinal", sql, StringComparison.OrdinalIgnoreCase);
     }
 
