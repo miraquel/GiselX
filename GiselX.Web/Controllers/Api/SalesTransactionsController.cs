@@ -22,7 +22,7 @@ public class SalesTransactionsController : ControllerBase
     public async Task<IActionResult> SelectAsync([FromQuery] PagedListRequestDto listRequest,
         CancellationToken cancellationToken)
     {
-        var response = await _salesTransactionService.SelectAsync(listRequest, cancellationToken);
+        var response = await _salesTransactionService.SelectAsync(listRequest, User.IsInRole("Distributor"), cancellationToken);
         return StatusCode(response.StatusCode, response);
     }
 

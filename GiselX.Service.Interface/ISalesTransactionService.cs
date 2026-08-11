@@ -8,8 +8,8 @@ public interface ISalesTransactionService
     Task<ServiceResponse> UploadAsync(IEnumerable<SalesTransactionDto> salesTransactions, int companyId,
         CancellationToken cancellationToken);
     Task<ServiceResponse<PagedListDto<SalesTransactionDto>>> SelectAsync(PagedListRequestDto pagedListRequest,
-        CancellationToken cancellationToken);
+        bool useDistributorIdentity, CancellationToken cancellationToken);
     Task<ServiceResponse<IEnumerable<SalesTransactionDto>>> SelectByCustPeriodAsync(int companyId, int year, int month,
-        CancellationToken cancellationToken);
+        bool useDistributorIdentity, CancellationToken cancellationToken);
     Task<ServiceResponse<IEnumerable<PeriodDto>>> SelectPeriodsAsync(CancellationToken cancellationToken);
 }

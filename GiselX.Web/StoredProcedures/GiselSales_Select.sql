@@ -1,6 +1,7 @@
 CREATE OR ALTER PROCEDURE [dbo].[GiselSales_Select]
     -- Paging & sorting
     @CompanyId      INT,
+    @UseDistributorIdentity BIT = 0,
     @PageNumber     INT            = 1,
     @PageSize       INT            = 10,
     @SortColumn     NVARCHAR(100)  = NULL,
@@ -8,6 +9,7 @@ CREATE OR ALTER PROCEDURE [dbo].[GiselSales_Select]
     -- Period filter (from year/month dropdowns)
     @Year           INT            = NULL,
     @Month          INT            = NULL,
+    @SearchTerm     NVARCHAR(200)  = NULL,
     -- String column filters (support LIKE via %)
     @CustomerId         NVARCHAR(100)  = NULL,
     @CustomerName       NVARCHAR(200)  = NULL,
@@ -51,9 +53,9 @@ BEGIN
         [CustomerName],
         [CustomerAlias],
         [CustomerAddress],
-        [ProductId],
+        CASE WHEN @UseDistributorIdentity=1 THEN COALESCE(NULLIF([DistributorProductId],''),[ProductId]) ELSE [ProductId] END AS [ProductId],
         [ProductBrand],
-        [ProductName],
+        CASE WHEN @UseDistributorIdentity=1 THEN COALESCE(NULLIF([DistributorProductName],''),[ProductName]) ELSE [ProductName] END AS [ProductName],
         [ProductPackaging],
         [ProductPcsInCtn],
         [BatchNumber],
@@ -86,14 +88,17 @@ BEGIN
             AND (@Year  IS NULL OR YEAR([InvoiceDate])  = @Year)
             AND (@Month IS NULL OR MONTH([InvoiceDate]) = @Month)
       )
+      AND (@SearchTerm IS NULL OR
+           CASE WHEN @UseDistributorIdentity=1 THEN COALESCE(NULLIF([DistributorProductId],''),[ProductId]) ELSE [ProductId] END LIKE @SearchTerm OR
+           CASE WHEN @UseDistributorIdentity=1 THEN COALESCE(NULLIF([DistributorProductName],''),[ProductName]) ELSE [ProductName] END LIKE @SearchTerm)
       -- String filters
       AND (@CustomerId        IS NULL OR [CustomerId]       LIKE @CustomerId)
       AND (@CustomerName      IS NULL OR [CustomerName]     LIKE @CustomerName)
       AND (@CustomerAlias     IS NULL OR [CustomerAlias]    LIKE @CustomerAlias)
       AND (@CustomerAddress   IS NULL OR [CustomerAddress]  LIKE @CustomerAddress)
-      AND (@ProductId         IS NULL OR [ProductId]        LIKE @ProductId)
+      AND (@ProductId         IS NULL OR CASE WHEN @UseDistributorIdentity=1 THEN COALESCE(NULLIF([DistributorProductId],''),[ProductId]) ELSE [ProductId] END LIKE @ProductId)
       AND (@ProductBrand      IS NULL OR [ProductBrand]     LIKE @ProductBrand)
-      AND (@ProductName       IS NULL OR [ProductName]      LIKE @ProductName)
+      AND (@ProductName       IS NULL OR CASE WHEN @UseDistributorIdentity=1 THEN COALESCE(NULLIF([DistributorProductName],''),[ProductName]) ELSE [ProductName] END LIKE @ProductName)
       AND (@ProductPackaging  IS NULL OR [ProductPackaging] LIKE @ProductPackaging)
       AND (@BatchNumber       IS NULL OR [BatchNumber]      LIKE @BatchNumber)
       AND (@InvoiceNo         IS NULL OR [InvoiceNo]        LIKE @InvoiceNo)
@@ -124,11 +129,11 @@ BEGIN
         CASE WHEN @SortOrder = 'ASC' AND @SortColumn IN ('customerName', 'CustomerName')
             THEN [CustomerName]    END ASC,
         CASE WHEN @SortOrder = 'ASC' AND @SortColumn IN ('productId', 'ProductId')
-            THEN [ProductId]       END ASC,
+            THEN CASE WHEN @UseDistributorIdentity=1 THEN COALESCE(NULLIF([DistributorProductId],''),[ProductId]) ELSE [ProductId] END END ASC,
         CASE WHEN @SortOrder = 'ASC' AND @SortColumn IN ('productBrand', 'ProductBrand')
             THEN [ProductBrand]    END ASC,
         CASE WHEN @SortOrder = 'ASC' AND @SortColumn IN ('productName', 'ProductName')
-            THEN [ProductName]     END ASC,
+            THEN CASE WHEN @UseDistributorIdentity=1 THEN COALESCE(NULLIF([DistributorProductName],''),[ProductName]) ELSE [ProductName] END END ASC,
         CASE WHEN @SortOrder = 'ASC' AND @SortColumn IN ('productPackaging', 'ProductPackaging')
             THEN [ProductPackaging] END ASC,
         CASE WHEN @SortOrder = 'ASC' AND @SortColumn IN ('batchNumber', 'BatchNumber')
@@ -147,11 +152,11 @@ BEGIN
         CASE WHEN @SortOrder = 'DESC' AND @SortColumn IN ('customerName', 'CustomerName')
             THEN [CustomerName]    END DESC,
         CASE WHEN @SortOrder = 'DESC' AND @SortColumn IN ('productId', 'ProductId')
-            THEN [ProductId]       END DESC,
+            THEN CASE WHEN @UseDistributorIdentity=1 THEN COALESCE(NULLIF([DistributorProductId],''),[ProductId]) ELSE [ProductId] END END DESC,
         CASE WHEN @SortOrder = 'DESC' AND @SortColumn IN ('productBrand', 'ProductBrand')
             THEN [ProductBrand]    END DESC,
         CASE WHEN @SortOrder = 'DESC' AND @SortColumn IN ('productName', 'ProductName')
-            THEN [ProductName]     END DESC,
+            THEN CASE WHEN @UseDistributorIdentity=1 THEN COALESCE(NULLIF([DistributorProductName],''),[ProductName]) ELSE [ProductName] END END DESC,
         CASE WHEN @SortOrder = 'DESC' AND @SortColumn IN ('productPackaging', 'ProductPackaging')
             THEN [ProductPackaging] END DESC,
         CASE WHEN @SortOrder = 'DESC' AND @SortColumn IN ('batchNumber', 'BatchNumber')
@@ -234,13 +239,16 @@ BEGIN
             AND (@Year  IS NULL OR YEAR([InvoiceDate])  = @Year)
             AND (@Month IS NULL OR MONTH([InvoiceDate]) = @Month)
       )
+      AND (@SearchTerm IS NULL OR
+           CASE WHEN @UseDistributorIdentity=1 THEN COALESCE(NULLIF([DistributorProductId],''),[ProductId]) ELSE [ProductId] END LIKE @SearchTerm OR
+           CASE WHEN @UseDistributorIdentity=1 THEN COALESCE(NULLIF([DistributorProductName],''),[ProductName]) ELSE [ProductName] END LIKE @SearchTerm)
       AND (@CustomerId        IS NULL OR [CustomerId]       LIKE @CustomerId)
       AND (@CustomerName      IS NULL OR [CustomerName]     LIKE @CustomerName)
       AND (@CustomerAlias     IS NULL OR [CustomerAlias]    LIKE @CustomerAlias)
       AND (@CustomerAddress   IS NULL OR [CustomerAddress]  LIKE @CustomerAddress)
-      AND (@ProductId         IS NULL OR [ProductId]        LIKE @ProductId)
+      AND (@ProductId         IS NULL OR CASE WHEN @UseDistributorIdentity=1 THEN COALESCE(NULLIF([DistributorProductId],''),[ProductId]) ELSE [ProductId] END LIKE @ProductId)
       AND (@ProductBrand      IS NULL OR [ProductBrand]     LIKE @ProductBrand)
-      AND (@ProductName       IS NULL OR [ProductName]      LIKE @ProductName)
+      AND (@ProductName       IS NULL OR CASE WHEN @UseDistributorIdentity=1 THEN COALESCE(NULLIF([DistributorProductName],''),[ProductName]) ELSE [ProductName] END LIKE @ProductName)
       AND (@ProductPackaging  IS NULL OR [ProductPackaging] LIKE @ProductPackaging)
       AND (@BatchNumber       IS NULL OR [BatchNumber]      LIKE @BatchNumber)
       AND (@InvoiceNo         IS NULL OR [InvoiceNo]        LIKE @InvoiceNo)

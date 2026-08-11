@@ -371,7 +371,7 @@
                                 pageSize: d.length,
                             };
                             if (d.search && d.search.value) {
-                                query.Search = d.search.value;
+                                query.SearchTerm = d.search.value;
                             }
                             if (d.order && d.order.length) {
                                 query.SortBy = d.columns[d.order[0].column].data;

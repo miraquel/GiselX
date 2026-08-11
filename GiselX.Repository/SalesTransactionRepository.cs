@@ -9,6 +9,22 @@ namespace GiselX.Repository;
 
 public class SalesTransactionRepository : ISalesTransactionRepository
 {
+    private static readonly HashSet<string> SelectableFields =
+    [
+        nameof(SalesTransaction.CustomerId), nameof(SalesTransaction.CustomerName),
+        nameof(SalesTransaction.CustomerAlias), nameof(SalesTransaction.CustomerAddress),
+        nameof(SalesTransaction.ProductId), nameof(SalesTransaction.ProductBrand),
+        nameof(SalesTransaction.ProductName), nameof(SalesTransaction.ProductPackaging),
+        nameof(SalesTransaction.BatchNumber), nameof(SalesTransaction.InvoiceNo),
+        nameof(SalesTransaction.InvoiceUnit), nameof(SalesTransaction.GeisaPOId),
+        nameof(SalesTransaction.SalesmanNameGMK), nameof(SalesTransaction.ProductPcsInCtn),
+        nameof(SalesTransaction.InvoiceQty), nameof(SalesTransaction.UnitPrice),
+        nameof(SalesTransaction.GrossValue), nameof(SalesTransaction.DiscountValue),
+        nameof(SalesTransaction.DiscountPct), nameof(SalesTransaction.NetValue), nameof(SalesTransaction.InKg),
+        nameof(SalesTransaction.ExpiredDate), nameof(SalesTransaction.InvoiceDate),
+        nameof(SalesTransaction.ShipDate), nameof(SalesTransaction.CreatedDate)
+    ];
+
     private readonly IDbConnection _dbConnection;
     private readonly IDbTransaction _dbTransaction;
 
@@ -117,7 +133,8 @@ public class SalesTransactionRepository : ISalesTransactionRepository
         return await _dbConnection.QueryAsync<SalesTransaction>(command);
     }
 
-    public async Task<IEnumerable<SalesTransaction>> SelectByCustPeriodAsync(int companyId, int year, int month, CancellationToken cancellationToken)
+    public async Task<IEnumerable<SalesTransaction>> SelectByCustPeriodAsync(int companyId, int year, int month,
+        bool useDistributorIdentity, CancellationToken cancellationToken)
     {
         const string query = "GiselSales_SelectByCustPeriod";
 
@@ -125,6 +142,7 @@ public class SalesTransactionRepository : ISalesTransactionRepository
         parameters.Add("@CompanyId", companyId);
         parameters.Add("@Year", year);
         parameters.Add("@Month", month);
+        parameters.Add("@UseDistributorIdentity", useDistributorIdentity);
 
         await _dbConnection.ExecuteAsync("SET ARITHABORT ON", transaction: _dbTransaction);
         var command = new CommandDefinition(
@@ -156,12 +174,13 @@ public class SalesTransactionRepository : ISalesTransactionRepository
         await _dbConnection.ExecuteAsync(command);
     }
 
-    public async Task<PagedList<SalesTransaction>> SelectAsync(PagedListRequest pagedListRequest, int companyId, CancellationToken cancellationToken)
+    public async Task<PagedList<SalesTransaction>> SelectAsync(PagedListRequest pagedListRequest, int companyId,
+        bool useDistributorIdentity, CancellationToken cancellationToken)
     {
         const string query = "GiselSales_Select";
 
         var parameters = new DynamicParameters();
-        foreach (var parameter in pagedListRequest.Filters.Where(parameter => typeof(SalesTransaction).GetProperty(parameter.Key)?.CanRead is true))
+        foreach (var parameter in pagedListRequest.Filters.Where(parameter => SelectableFields.Contains(parameter.Key)))
         {
             if (string.IsNullOrWhiteSpace(parameter.Value))
             {
@@ -204,6 +223,13 @@ public class SalesTransactionRepository : ISalesTransactionRepository
         parameters.Add("@CompanyId", companyId);
         parameters.Add("@SortOrder", pagedListRequest.IsSortAscending ? "ASC" : "DESC");
         parameters.Add("@SortColumn", pagedListRequest.SortBy);
+        parameters.Add("@UseDistributorIdentity", useDistributorIdentity);
+
+        if (!string.IsNullOrWhiteSpace(pagedListRequest.SearchTerm))
+        {
+            var searchTerm = pagedListRequest.SearchTerm.Replace('*', '%');
+            parameters.Add("@SearchTerm", searchTerm.Contains('%') ? searchTerm : $"%{searchTerm}%");
+        }
 
         if (pagedListRequest.Filters.TryGetValue("Year", out var yearFilter) && int.TryParse(yearFilter, out var year))
             parameters.Add("@Year", year);

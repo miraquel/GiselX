@@ -108,13 +108,13 @@ public class SalesTransactionService : ISalesTransactionService
     }
 
     public async Task<ServiceResponse<PagedListDto<SalesTransactionDto>>> SelectAsync(PagedListRequestDto pagedListRequest,
-        CancellationToken cancellationToken)
+        bool useDistributorIdentity, CancellationToken cancellationToken)
     {
         var user = await _userManager.FindByNameAsync(_userClaimDto.Username)
             ?? throw new InvalidOperationException("User not found.");
 
         var pagedList = await _salesTransactionRepository.SelectAsync(
-            _mapper.MapToEntity(pagedListRequest), user.CompanyId, cancellationToken);
+            _mapper.MapToEntity(pagedListRequest), user.CompanyId, useDistributorIdentity, cancellationToken);
 
         return new ServiceResponse<PagedListDto<SalesTransactionDto>>
         {
@@ -125,9 +125,10 @@ public class SalesTransactionService : ISalesTransactionService
     }
 
     public async Task<ServiceResponse<IEnumerable<SalesTransactionDto>>> SelectByCustPeriodAsync(int companyId, int year,
-        int month, CancellationToken cancellationToken)
+        int month, bool useDistributorIdentity, CancellationToken cancellationToken)
     {
-        var results = await _salesTransactionRepository.SelectByCustPeriodAsync(companyId, year, month, cancellationToken);
+        var results = await _salesTransactionRepository.SelectByCustPeriodAsync(companyId, year, month,
+            useDistributorIdentity, cancellationToken);
 
         return new ServiceResponse<IEnumerable<SalesTransactionDto>>
         {

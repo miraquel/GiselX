@@ -70,7 +70,8 @@ public class SalesTransactionsController : Controller
     public async Task<IActionResult> DownloadSelectByCustPeriod(int year, int month, CancellationToken cancellationToken)
     {
         var user = await _userManager.Users.Include(u => u.Company)
-            .SingleOrDefaultAsync(u => User.Identity != null && u.UserName == User.Identity.Name, cancellationToken: cancellationToken);
+            .SingleOrDefaultAsync(u => User.Identity != null && u.UserName == User.Identity.Name,
+                cancellationToken: cancellationToken);
 
         if (user == null)
         {
@@ -78,7 +79,8 @@ public class SalesTransactionsController : Controller
             return RedirectToAction(nameof(Index));
         }
 
-        var response = await _salesTransactionService.SelectByCustPeriodAsync(user.CompanyId, year, month, cancellationToken);
+        var response = await _salesTransactionService.SelectByCustPeriodAsync(user.CompanyId, year, month,
+            User.IsInRole("Distributor"), cancellationToken);
         if (response is { IsSuccess: true, Data: not null })
         {
             var stream = ExcelHelper.ExportExcel(response.Data, (row, dto) =>
