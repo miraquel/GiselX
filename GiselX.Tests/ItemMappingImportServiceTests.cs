@@ -3,11 +3,28 @@ using ClosedXML.Excel;
 using GiselX.Domain;
 using GiselX.Repository.Interface;
 using GiselX.Service;
+using GiselX.Service.Interface;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace GiselX.Tests;
 
 public sealed class ItemMappingImportServiceTests
 {
+    [Fact]
+    public void AddGiselXService_resolves_item_mapping_import_service()
+    {
+        var services = new ServiceCollection();
+        services.AddGiselXService();
+        services.AddScoped<IItemMappingRepository>(_ => new FakeRepository());
+        services.AddScoped<IDbTransaction, FakeTransaction>();
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+
+        var service = scope.ServiceProvider.GetRequiredService<IItemMappingImportService>();
+
+        Assert.IsType<ItemMappingImportService>(service);
+    }
+
     [Fact]
     public async Task PreflightAsync_classifies_new_updated_unchanged_and_invalid_rows_without_writing()
     {

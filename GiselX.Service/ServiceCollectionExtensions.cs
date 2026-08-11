@@ -26,6 +26,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ISelloutWorkbookAnalysisService, SelloutWorkbookAnalysisService>();
         services.AddScoped<ISelloutUploadService, SelloutUploadService>();
         services.AddScoped<IItemMappingService, ItemMappingService>();
+        services.AddScoped<ItemMappingWorkbookParser>();
         services.AddScoped<IItemMappingImportService, ItemMappingImportService>();
         services.AddScoped<IItemMappingResolver, ItemMappingResolver>();
     }
