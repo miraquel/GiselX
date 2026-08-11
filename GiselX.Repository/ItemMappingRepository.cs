@@ -1,0 +1,142 @@
+using System.Data;
+using Dapper;
+using GiselX.Domain;
+using GiselX.Repository.Interface;
+
+namespace GiselX.Repository;
+
+public sealed class ItemMappingRepository(IDbConnection dbConnection, IDbTransaction dbTransaction)
+    : IItemMappingRepository
+{
+    public Task<IReadOnlyList<ItemMapping>> GetByCompanyAsync(int companyId, CancellationToken cancellationToken) =>
+        LoadAsync(companyId, false, cancellationToken);
+
+    public Task<IReadOnlyList<ItemMapping>> GetActiveByCompanyAsync(int companyId, CancellationToken cancellationToken) =>
+        LoadAsync(companyId, true, cancellationToken);
+
+    public Task<ItemMapping?> GetByIdAsync(int id, int companyId, CancellationToken cancellationToken)
+    {
+        const string sql = "SELECT * FROM ItemMapping WHERE Id = @Id AND CompanyId = @CompanyId;";
+        return dbConnection.QuerySingleOrDefaultAsync<ItemMapping>(new CommandDefinition(sql, new { Id = id, CompanyId = companyId },
+            dbTransaction, cancellationToken: cancellationToken));
+    }
+
+    public Task<int> InsertAsync(ItemMapping mapping, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            INSERT INTO ItemMapping
+                (CompanyId, GmkItemId, GmkItemName, DistributorItemId, DistributorItemName, IsActive,
+                 CreatedDate, CreatedBy, ModifiedDate, ModifiedBy)
+            OUTPUT INSERTED.Id
+            VALUES
+                (@CompanyId, @GmkItemId, @GmkItemName, @DistributorItemId, @DistributorItemName, @IsActive,
+                 @CreatedDate, @CreatedBy, @ModifiedDate, @ModifiedBy);
+            """;
+        return dbConnection.ExecuteScalarAsync<int>(new CommandDefinition(sql, mapping, dbTransaction,
+            cancellationToken: cancellationToken));
+    }
+
+    public async Task UpdateAsync(ItemMapping mapping, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            UPDATE ItemMapping
+            SET GmkItemId = @GmkItemId,
+                GmkItemName = @GmkItemName,
+                DistributorItemId = @DistributorItemId,
+                DistributorItemName = @DistributorItemName,
+                ModifiedDate = @ModifiedDate,
+                ModifiedBy = @ModifiedBy
+            WHERE Id = @Id AND CompanyId = @CompanyId;
+            """;
+        var affected = await dbConnection.ExecuteAsync(new CommandDefinition(sql, mapping, dbTransaction,
+            cancellationToken: cancellationToken));
+        if (affected == 0) throw new InvalidOperationException("The item mapping was not found.");
+    }
+
+    public async Task SetActiveAsync(int id, int companyId, bool isActive, string modifiedBy, DateTime modifiedDate,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            UPDATE ItemMapping
+            SET IsActive = @IsActive, ModifiedBy = @ModifiedBy, ModifiedDate = @ModifiedDate
+            WHERE Id = @Id AND CompanyId = @CompanyId;
+            """;
+        var affected = await dbConnection.ExecuteAsync(new CommandDefinition(sql,
+            new { Id = id, CompanyId = companyId, IsActive = isActive, ModifiedBy = modifiedBy, ModifiedDate = modifiedDate },
+            dbTransaction, cancellationToken: cancellationToken));
+        if (affected == 0) throw new InvalidOperationException("The item mapping was not found.");
+    }
+
+    public async Task<ItemMappingDeleteResult> DeleteAsync(int id, int companyId, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            DELETE mapping
+            FROM ItemMapping mapping
+            WHERE mapping.Id = @Id
+              AND mapping.CompanyId = @CompanyId
+              AND NOT EXISTS (SELECT 1 FROM Stock WHERE ItemMappingId = mapping.Id)
+              AND NOT EXISTS (SELECT 1 FROM StockStaging WHERE ItemMappingId = mapping.Id)
+              AND NOT EXISTS (SELECT 1 FROM SalesTransaction WHERE ItemMappingId = mapping.Id)
+              AND NOT EXISTS (SELECT 1 FROM SelloutStaging WHERE ItemMappingId = mapping.Id);
+
+            SELECT CASE
+                WHEN @@ROWCOUNT = 1 THEN 1
+                WHEN EXISTS (
+                    SELECT 1
+                    FROM ItemMapping mapping
+                    WHERE mapping.Id = @Id
+                      AND mapping.CompanyId = @CompanyId
+                      AND (
+                          EXISTS (SELECT 1 FROM Stock WHERE ItemMappingId = mapping.Id)
+                          OR EXISTS (SELECT 1 FROM StockStaging WHERE ItemMappingId = mapping.Id)
+                          OR EXISTS (SELECT 1 FROM SalesTransaction WHERE ItemMappingId = mapping.Id)
+                          OR EXISTS (SELECT 1 FROM SelloutStaging WHERE ItemMappingId = mapping.Id)
+                      )) THEN 2
+                ELSE 0
+            END;
+            """;
+        return (ItemMappingDeleteResult)await dbConnection.ExecuteScalarAsync<int>(new CommandDefinition(sql,
+            new { Id = id, CompanyId = companyId }, dbTransaction, cancellationToken: cancellationToken));
+    }
+
+    public Task UpsertAsync(IReadOnlyList<ItemMapping> values, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            MERGE ItemMapping AS target
+            USING (VALUES (@CompanyId, @GmkItemId, @GmkItemName, @DistributorItemId, @DistributorItemName,
+                           @IsActive, @CreatedDate, @CreatedBy, @ModifiedDate, @ModifiedBy)) AS source
+                (CompanyId, GmkItemId, GmkItemName, DistributorItemId, DistributorItemName, IsActive,
+                 CreatedDate, CreatedBy, ModifiedDate, ModifiedBy)
+            ON target.CompanyId = source.CompanyId AND target.DistributorItemId = source.DistributorItemId
+            WHEN MATCHED THEN UPDATE SET
+                GmkItemId = source.GmkItemId,
+                GmkItemName = source.GmkItemName,
+                DistributorItemName = source.DistributorItemName,
+                IsActive = source.IsActive,
+                ModifiedDate = source.ModifiedDate,
+                ModifiedBy = source.ModifiedBy
+            WHEN NOT MATCHED THEN INSERT
+                (CompanyId, GmkItemId, GmkItemName, DistributorItemId, DistributorItemName, IsActive,
+                 CreatedDate, CreatedBy, ModifiedDate, ModifiedBy)
+            VALUES
+                (source.CompanyId, source.GmkItemId, source.GmkItemName, source.DistributorItemId,
+                 source.DistributorItemName, source.IsActive, source.CreatedDate, source.CreatedBy,
+                 source.ModifiedDate, source.ModifiedBy);
+            """;
+        return dbConnection.ExecuteAsync(new CommandDefinition(sql, values, dbTransaction, cancellationToken: cancellationToken));
+    }
+
+    private async Task<IReadOnlyList<ItemMapping>> LoadAsync(int companyId, bool activeOnly,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT *
+            FROM ItemMapping
+            WHERE CompanyId = @CompanyId AND (@ActiveOnly = 0 OR IsActive = 1)
+            ORDER BY DistributorItemId;
+            """;
+        var values = await dbConnection.QueryAsync<ItemMapping>(new CommandDefinition(sql,
+            new { CompanyId = companyId, ActiveOnly = activeOnly }, dbTransaction, cancellationToken: cancellationToken));
+        return values.ToList();
+    }
+}

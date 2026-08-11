@@ -12,7 +12,8 @@ CREATE OR ALTER PROCEDURE [dbo].[Company_Select]
     @Id                 INT        = NULL,
     @DeadlineDayOfMonth INT        = NULL,
     @DeadlineDaysOfWeek INT        = NULL,
-    @ReminderLeadDays   INT        = NULL
+    @ReminderLeadDays   INT        = NULL,
+    @ItemMappingEnabled BIT        = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -28,7 +29,8 @@ BEGIN
         [ContactEmail],
         [DeadlineDayOfMonth],
         [DeadlineDaysOfWeek],
-        [ReminderLeadDays]
+        [ReminderLeadDays],
+        [ItemMappingEnabled]
     FROM [dbo].[Company]
     WHERE 1 = 1
       -- String filters
@@ -40,6 +42,7 @@ BEGIN
       AND (@DeadlineDayOfMonth IS NULL OR [DeadlineDayOfMonth] = @DeadlineDayOfMonth)
       AND (@DeadlineDaysOfWeek IS NULL OR [DeadlineDaysOfWeek] = @DeadlineDaysOfWeek)
       AND (@ReminderLeadDays   IS NULL OR [ReminderLeadDays]   = @ReminderLeadDays)
+      AND (@ItemMappingEnabled IS NULL OR [ItemMappingEnabled] = @ItemMappingEnabled)
     ORDER BY
         -- String columns ASC
         CASE WHEN @SortOrder = 'ASC' AND @SortColumn IN ('name', 'Name')
@@ -84,5 +87,6 @@ BEGIN
       AND (@Id                 IS NULL OR [Id]                 = @Id)
       AND (@DeadlineDayOfMonth IS NULL OR [DeadlineDayOfMonth] = @DeadlineDayOfMonth)
       AND (@DeadlineDaysOfWeek IS NULL OR [DeadlineDaysOfWeek] = @DeadlineDaysOfWeek)
-      AND (@ReminderLeadDays   IS NULL OR [ReminderLeadDays]   = @ReminderLeadDays);
+      AND (@ReminderLeadDays   IS NULL OR [ReminderLeadDays]   = @ReminderLeadDays)
+      AND (@ItemMappingEnabled IS NULL OR [ItemMappingEnabled] = @ItemMappingEnabled);
 END

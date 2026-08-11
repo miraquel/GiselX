@@ -28,6 +28,7 @@ public class CompanyRepository : ICompanyRepository
         parameters.Add("@DeadlineDayOfMonth", company.DeadlineDayOfMonth);
         parameters.Add("@DeadlineDaysOfWeek", company.DeadlineDaysOfWeek.HasValue ? (int)company.DeadlineDaysOfWeek.Value : (int?)null);
         parameters.Add("@ReminderLeadDays", company.ReminderLeadDays);
+        parameters.Add("@ItemMappingEnabled", company.ItemMappingEnabled);
         
         await _dbConnection.ExecuteAsync("SET ARITHABORT ON", transaction: _dbTransaction);
         var command = new CommandDefinition(
@@ -104,6 +105,12 @@ public class CompanyRepository : ICompanyRepository
                         parameters.Add($"@{parameter.Key}", decimalValue);
                     }
                     break;
+                case { } t when t == typeof(bool):
+                    if (bool.TryParse(parameter.Value, out var boolValue))
+                    {
+                        parameters.Add($"@{parameter.Key}", boolValue);
+                    }
+                    break;
                 case { } t when t == typeof(DateTime):
                     if (DateTime.TryParse(parameter.Value, out var dateTimeValue) || DateTime.TryParseExact(parameter.Value, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out dateTimeValue))
                     {
@@ -148,6 +155,7 @@ public class CompanyRepository : ICompanyRepository
         parameters.Add("@DeadlineDayOfMonth", company.DeadlineDayOfMonth);
         parameters.Add("@DeadlineDaysOfWeek", company.DeadlineDaysOfWeek.HasValue ? (int)company.DeadlineDaysOfWeek.Value : (int?)null);
         parameters.Add("@ReminderLeadDays", company.ReminderLeadDays);
+        parameters.Add("@ItemMappingEnabled", company.ItemMappingEnabled);
         
         await _dbConnection.ExecuteAsync("SET ARITHABORT ON", transaction: _dbTransaction);
         var command = new CommandDefinition(

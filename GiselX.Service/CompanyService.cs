@@ -11,13 +11,16 @@ namespace GiselX.Service;
 public class CompanyService : ICompanyService
 {
     private readonly ICompanyRepository _companyRepository;
+    private readonly IItemMappingRepository _itemMappingRepository;
     private readonly IDbTransaction _dbTransaction;
     private readonly UserClaimDto _userClaimDto;
     private readonly MapperlyMapper _mapper = new();
 
-    public CompanyService(ICompanyRepository companyRepository, IDbTransaction dbTransaction, UserClaimDto userClaimDto)
+    public CompanyService(ICompanyRepository companyRepository, IItemMappingRepository itemMappingRepository,
+        IDbTransaction dbTransaction, UserClaimDto userClaimDto)
     {
         _companyRepository = companyRepository;
+        _itemMappingRepository = itemMappingRepository;
         _dbTransaction = dbTransaction;
         _userClaimDto = userClaimDto;
     }
@@ -62,6 +65,16 @@ public class CompanyService : ICompanyService
 
     public async Task<ServiceResponse<CompanyDto>> UpdateCompanyAsync(CompanyDto companyDto, CancellationToken cancellationToken)
     {
+        if (companyDto.ItemMappingEnabled &&
+            !(await _itemMappingRepository.GetActiveByCompanyAsync(companyDto.Id, cancellationToken)).Any())
+        {
+            return new ServiceResponse<CompanyDto>
+            {
+                Errors = ["At least one active item mapping is required before item mapping can be enabled."],
+                StatusCode = StatusCodes.Status400BadRequest
+            };
+        }
+
         var company = await _companyRepository.UpdateCompanyAsync(_mapper.MapToEntity(companyDto), cancellationToken);
         
         _dbTransaction.Commit();
