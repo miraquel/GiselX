@@ -23,6 +23,8 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
 
     public virtual DbSet<SalesTransaction> SalesTransaction { get; set; }
 
+    public virtual DbSet<ItemMapping> ItemMapping { get; set; }
+
     public virtual DbSet<DistributorTemplateMapping> DistributorTemplateMapping { get; set; }
 
     public virtual DbSet<DistributorTemplateColumn> DistributorTemplateColumn { get; set; }
@@ -64,8 +66,24 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
             // New reminder fields
             entity.Property(e => e.ContactEmail).HasMaxLength(255);
             entity.Property(e => e.ReminderLeadDays).HasDefaultValue(3);
+            entity.Property(e => e.ItemMappingEnabled).HasDefaultValue(false);
             entity.Property(e => e.DeadlineDaysOfWeek).HasConversion<int?>();
             // DeadlineDayOfMonth is int? — EF maps to INT NULL automatically
+        });
+
+        modelBuilder.Entity<ItemMapping>(entity =>
+        {
+            entity.HasIndex(e => new { e.CompanyId, e.DistributorItemId }).IsUnique();
+            entity.Property(e => e.GmkItemId).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.GmkItemName).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.DistributorItemId).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.DistributorItemName).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.CreatedBy).HasMaxLength(256);
+            entity.Property(e => e.ModifiedBy).HasMaxLength(256);
+            entity.Property(e => e.CreatedDate).HasColumnType("datetime2");
+            entity.Property(e => e.ModifiedDate).HasColumnType("datetime2");
+            entity.HasOne(e => e.Company).WithMany(e => e.ItemMappings)
+                .HasForeignKey(e => e.CompanyId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<DistributorTemplateMapping>(entity =>
@@ -156,6 +174,8 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
             entity.HasIndex(e => new { e.StockUploadBatchId, e.SourceRowNumber });
             entity.Property(e => e.ProductId).HasMaxLength(100);
             entity.Property(e => e.ProductName).HasMaxLength(200);
+            entity.Property(e => e.DistributorProductId).HasMaxLength(100);
+            entity.Property(e => e.DistributorProductName).HasMaxLength(200);
             entity.Property(e => e.ProductPackaging).HasMaxLength(100);
             entity.Property(e => e.ProductUnit).HasMaxLength(50);
             entity.Property(e => e.BatchNumber).HasMaxLength(100);
@@ -168,6 +188,8 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
             entity.Property(e => e.ValidationErrorsJson).HasColumnType("nvarchar(max)").HasDefaultValue("[]");
             entity.HasOne(e => e.StockUploadBatch).WithMany(e => e.StagingRows)
                 .HasForeignKey(e => e.StockUploadBatchId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<ItemMapping>().WithMany()
+                .HasForeignKey(e => e.ItemMappingId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<SelloutUploadBatch>(entity =>
@@ -232,11 +254,15 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
             entity.Property(e => e.DiscountPct).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.NetValue).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.InKg).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.DistributorProductId).HasMaxLength(100);
+            entity.Property(e => e.DistributorProductName).HasMaxLength(200);
             entity.Property(e => e.ValidationErrorsJson).HasColumnType("nvarchar(max)");
 
             entity.HasOne(e => e.SelloutUploadBatch).WithMany(e => e.StagingRows)
                 .HasForeignKey(e => e.SelloutUploadBatchId)
                 .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<ItemMapping>().WithMany()
+                .HasForeignKey(e => e.ItemMappingId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<ServelDeliveryEx>(entity =>
@@ -313,6 +339,8 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
         {
             entity.Property(e => e.ProductId).HasMaxLength(100);
             entity.Property(e => e.ProductName).HasMaxLength(200);
+            entity.Property(e => e.DistributorProductId).HasMaxLength(100);
+            entity.Property(e => e.DistributorProductName).HasMaxLength(200);
             entity.Property(e => e.ProductPackaging).HasMaxLength(100);
             entity.Property(e => e.ProductUnit).HasMaxLength(50);
             entity.Property(e => e.BatchNumber).HasMaxLength(100);
@@ -336,6 +364,10 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
             entity.HasOne(d => d.StockUploadBatch).WithMany(p => p.Stocks)
                 .HasForeignKey(d => d.StockUploadBatchId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(d => d.ItemMapping).WithMany(p => p.Stocks)
+                .HasForeignKey(d => d.ItemMappingId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<SalesTransaction>(entity =>
@@ -347,6 +379,8 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
             entity.Property(e => e.ProductId).HasMaxLength(100);
             entity.Property(e => e.ProductBrand).HasMaxLength(200);
             entity.Property(e => e.ProductName).HasMaxLength(200);
+            entity.Property(e => e.DistributorProductId).HasMaxLength(100);
+            entity.Property(e => e.DistributorProductName).HasMaxLength(200);
             entity.Property(e => e.ProductPackaging).HasMaxLength(100);
             entity.Property(e => e.BatchNumber).HasMaxLength(100);
             entity.Property(e => e.InvoiceNo).HasMaxLength(100);
@@ -376,6 +410,10 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
 
             entity.HasOne(d => d.SelloutUploadBatch).WithMany(p => p.SalesTransactions)
                 .HasForeignKey(d => d.SelloutUploadBatchId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(d => d.ItemMapping).WithMany(p => p.SalesTransactions)
+                .HasForeignKey(d => d.ItemMappingId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 

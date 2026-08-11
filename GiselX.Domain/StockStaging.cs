@@ -7,6 +7,9 @@ public sealed class StockStaging
     public int SourceRowNumber { get; set; }
     public string? ProductId { get; set; }
     public string? ProductName { get; set; }
+    public string? DistributorProductId { get; set; }
+    public string? DistributorProductName { get; set; }
+    public int? ItemMappingId { get; set; }
     public string? ProductPackaging { get; set; }
     public int? ProductPcsInCtn { get; set; }
     public decimal? ProductNetto { get; set; }

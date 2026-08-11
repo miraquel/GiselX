@@ -12,6 +12,9 @@ public sealed class SelloutStaging
     public string? ProductId { get; set; }
     public string? ProductBrand { get; set; }
     public string? ProductName { get; set; }
+    public string? DistributorProductId { get; set; }
+    public string? DistributorProductName { get; set; }
+    public int? ItemMappingId { get; set; }
     public string? ProductPackaging { get; set; }
     public int? ProductPcsInCtn { get; set; }
     public string? BatchNumber { get; set; }

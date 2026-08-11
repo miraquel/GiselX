@@ -12,6 +12,9 @@ public class SalesTransaction
     public string ProductId { get; set; } = string.Empty;
     public string ProductBrand { get; set; } = string.Empty;
     public string ProductName { get; set; } = string.Empty;
+    public string? DistributorProductId { get; set; }
+    public string? DistributorProductName { get; set; }
+    public int? ItemMappingId { get; set; }
     public string ProductPackaging { get; set; } = string.Empty;
     public int ProductPcsInCtn { get; set; }
     public string BatchNumber { get; set; } = string.Empty;
@@ -35,5 +38,6 @@ public class SalesTransaction
     public DateTime? ReportingWeekStart { get; set; }
 
     public virtual Company Company { get; set; } = null!;
+    public virtual ItemMapping? ItemMapping { get; set; }
     public virtual SelloutUploadBatch? SelloutUploadBatch { get; set; }
 }
