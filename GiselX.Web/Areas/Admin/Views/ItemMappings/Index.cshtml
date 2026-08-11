@@ -132,11 +132,17 @@
 
             const errors = (payload) => payload.errors || payload.Errors || [];
             const data = (payload) => payload.data || payload.Data || payload;
+            const text = (value) => String(value ?? '').replace(/[&<>'"]/g, character => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+            })[character]);
+            const formatError = (error) => typeof error === 'string'
+                ? text(error)
+                : `Row ${text(error.sourceRowNumber ?? error.SourceRowNumber)}: ${text(error.field ?? error.Field)} — ${text(error.reason ?? error.Reason)}`;
             const render = (payload, successMessage) => {
                 const preview = data(payload);
                 const rowErrors = preview.errors || preview.Errors || errors(payload);
                 const counts = `<ul class="mb-2"><li>New: ${preview.newRows ?? preview.NewRows ?? 0}</li><li>Updated: ${preview.updatedRows ?? preview.UpdatedRows ?? 0}</li><li>Unchanged: ${preview.unchangedRows ?? preview.UnchangedRows ?? 0}</li><li>Invalid: ${preview.invalidRows ?? preview.InvalidRows ?? 0}</li></ul>`;
-                const detail = rowErrors.length === 0 ? '' : `<ul class="mb-0">${rowErrors.map(error => `<li>Row ${error.sourceRowNumber ?? error.SourceRowNumber}: ${error.field ?? error.Field} — ${error.reason ?? error.Reason}</li>`).join('')}</ul>`;
+                const detail = rowErrors.length === 0 ? '' : `<ul class="mb-0">${rowErrors.map(error => `<li>${formatError(error)}</li>`).join('')}</ul>`;
                 output.innerHTML = `<div class="alert ${rowErrors.length === 0 ? 'alert-success' : 'alert-danger'}">${successMessage || ''}${counts}${detail}</div>`;
             };
 

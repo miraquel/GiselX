@@ -103,18 +103,51 @@ public sealed class ItemMappingControllerTests
     {
         var import = new CapturingImportService();
         var controller = CreateController(new CapturingItemMappingService(), import);
-        await using var content = new MemoryStream([1, 2, 3]);
+        var workbook = ValidWorkbook();
+        await using var content = new MemoryStream(workbook);
         var file = new FormFile(content, 0, content.Length, "file", "items.xlsx");
 
         var result = await controller.PreflightImport(7, file, CancellationToken.None);
 
         Assert.IsType<JsonResult>(result);
         Assert.Equal(7, import.PreflightCompanyId);
-        Assert.Equal(new byte[] { 1, 2, 3 }, import.PreflightWorkbook);
+        Assert.Equal(workbook, import.PreflightWorkbook);
+    }
+
+    [Fact]
+    public async Task PreflightImport_rejects_a_file_that_is_not_xlsx()
+    {
+        var import = new CapturingImportService();
+        var controller = CreateController(new CapturingItemMappingService(), import);
+        await using var content = new MemoryStream([1, 2, 3]);
+        var file = new FormFile(content, 0, content.Length, "file", "items.csv");
+
+        var result = await controller.PreflightImport(7, file, CancellationToken.None);
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result);
+        var response = Assert.IsType<ServiceResponse>(badRequest.Value);
+        Assert.Contains(".xlsx", Assert.Single(response.Errors), StringComparison.OrdinalIgnoreCase);
+        Assert.Null(import.PreflightWorkbook);
     }
 
     [Fact]
     public async Task Import_confirms_server_owned_true_state_after_browser_confirmation()
+    {
+        var import = new CapturingImportService();
+        var controller = CreateController(new CapturingItemMappingService(), import);
+        var workbook = ValidWorkbook();
+        await using var content = new MemoryStream(workbook);
+        var file = new FormFile(content, 0, content.Length, "file", "items.xlsx");
+
+        var result = await controller.Import(7, file, CancellationToken.None);
+
+        Assert.IsType<JsonResult>(result);
+        Assert.Equal((7, true, "admin"), import.ImportRequest);
+        Assert.Equal(workbook, import.ImportWorkbook);
+    }
+
+    [Fact]
+    public async Task Import_rejects_a_corrupt_xlsx_before_calling_import_service()
     {
         var import = new CapturingImportService();
         var controller = CreateController(new CapturingItemMappingService(), import);
@@ -123,9 +156,10 @@ public sealed class ItemMappingControllerTests
 
         var result = await controller.Import(7, file, CancellationToken.None);
 
-        Assert.IsType<JsonResult>(result);
-        Assert.Equal((7, true, "admin"), import.ImportRequest);
-        Assert.Equal(new byte[] { 4, 5 }, import.ImportWorkbook);
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result);
+        var response = Assert.IsType<ServiceResponse>(badRequest.Value);
+        Assert.Contains("valid .xlsx", Assert.Single(response.Errors), StringComparison.OrdinalIgnoreCase);
+        Assert.Null(import.ImportWorkbook);
     }
 
     private static ItemMappingsController CreateController(CapturingItemMappingService service,
@@ -141,6 +175,15 @@ public sealed class ItemMappingControllerTests
             ControllerContext = new ControllerContext { HttpContext = httpContext },
             TempData = new TempDataDictionary(httpContext, new InMemoryTempDataProvider())
         };
+    }
+
+    private static byte[] ValidWorkbook()
+    {
+        using var workbook = new XLWorkbook();
+        workbook.Worksheets.Add("Item Mappings").Cell(1, 1).Value = "GMK Item ID";
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        return stream.ToArray();
     }
 
     private sealed class CapturingItemMappingService : IItemMappingService

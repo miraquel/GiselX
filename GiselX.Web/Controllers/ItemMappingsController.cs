@@ -105,8 +105,9 @@ public sealed class ItemMappingsController(IItemMappingService mappingService, I
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> PreflightImport(int companyId, IFormFile file, CancellationToken cancellationToken)
     {
-        if (file is null || file.Length == 0) return BadRequest("An .xlsx file is required.");
-        var response = await importService.PreflightAsync(await ReadAsync(file, cancellationToken), companyId,
+        var workbook = await ReadWorkbookAsync(file, cancellationToken);
+        if (workbook.Error is not null) return BadRequest(InvalidWorkbook(workbook.Error));
+        var response = await importService.PreflightAsync(workbook.Content!, companyId,
             cancellationToken);
         return response.IsSuccess ? Json(response) : BadRequest(response);
     }
@@ -114,8 +115,9 @@ public sealed class ItemMappingsController(IItemMappingService mappingService, I
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> Import(int companyId, IFormFile file, CancellationToken cancellationToken)
     {
-        if (file is null || file.Length == 0) return BadRequest("An .xlsx file is required.");
-        var response = await importService.ImportAsync(await ReadAsync(file, cancellationToken), companyId, true,
+        var workbook = await ReadWorkbookAsync(file, cancellationToken);
+        if (workbook.Error is not null) return BadRequest(InvalidWorkbook(workbook.Error));
+        var response = await importService.ImportAsync(workbook.Content!, companyId, true,
             Username, cancellationToken);
         return response.IsSuccess ? Json(response) : BadRequest(response);
     }
@@ -129,13 +131,33 @@ public sealed class ItemMappingsController(IItemMappingService mappingService, I
         return RedirectToAction(nameof(Index), new { companyId });
     }
 
-    private static async Task<byte[]> ReadAsync(IFormFile file, CancellationToken cancellationToken)
+    private static async Task<WorkbookUpload> ReadWorkbookAsync(IFormFile? file, CancellationToken cancellationToken)
     {
+        if (file is null || file.Length == 0) return new WorkbookUpload(null, "An .xlsx file is required.");
+        if (!string.Equals(Path.GetExtension(file.FileName), ".xlsx", StringComparison.OrdinalIgnoreCase))
+            return new WorkbookUpload(null, "Upload an .xlsx file.");
         await using var source = file.OpenReadStream();
         using var destination = new MemoryStream();
         await source.CopyToAsync(destination, cancellationToken);
-        return destination.ToArray();
+        var content = destination.ToArray();
+        try
+        {
+            using var stream = new MemoryStream(content);
+            using var document = new XLWorkbook(stream);
+            if (!document.Worksheets.Any()) return new WorkbookUpload(null, "Upload a valid .xlsx workbook.");
+            return new WorkbookUpload(content, null);
+        }
+        catch (Exception)
+        {
+            return new WorkbookUpload(null, "Upload a valid .xlsx workbook.");
+        }
     }
+
+    private static ServiceResponse InvalidWorkbook(string error) => new()
+    {
+        Errors = [error],
+        StatusCode = StatusCodes.Status400BadRequest
+    };
 
     private static IReadOnlyList<ItemMappingDto> FilterAndSort(IReadOnlyList<ItemMappingDto> mappings, string? search,
         string? sortBy, string? sortDirection)
@@ -165,4 +187,6 @@ public sealed class ItemMappingsController(IItemMappingService mappingService, I
     }
 
     private static bool Contains(string? value, string term) => value?.Contains(term, StringComparison.OrdinalIgnoreCase) == true;
+
+    private sealed record WorkbookUpload(byte[]? Content, string? Error);
 }
