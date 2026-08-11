@@ -531,6 +531,9 @@ namespace GiselX.Web.Context.Migrations
                     b.Property<DateTime>("ReportingWeekStart")
                         .HasColumnType("date");
 
+                    b.Property<long?>("SelloutUploadGroupId")
+                        .HasColumnType("bigint");
+
                     b.Property<int>("Status")
                         .HasColumnType("int");
 
@@ -552,6 +555,8 @@ namespace GiselX.Web.Context.Migrations
 
                     b.HasIndex("DistributorTemplateMappingId");
 
+                    b.HasIndex("SelloutUploadGroupId");
+
                     b.HasIndex("CompanyId", "ReportingWeekStart")
                         .IsUnique()
                         .HasFilter("[Status] = 2");
@@ -560,6 +565,74 @@ namespace GiselX.Web.Context.Migrations
                         {
                             t.HasCheckConstraint("CK_SelloutUploadBatch_ReportingWeekMonday", "DATEDIFF(day, '19000101', [ReportingWeekStart]) % 7 = 0");
                         });
+                });
+
+            modelBuilder.Entity("GiselX.Domain.SelloutUploadGroup", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime?>("CompletedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("DistributorTemplateMappingId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ErrorSummary")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("FileSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nchar(64)")
+                        .IsFixedLength();
+
+                    b.Property<string>("IgnoredSummaryRowsJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("InvalidRows")
+                        .HasColumnType("int");
+
+                    b.Property<string>("OriginalFileName")
+                        .IsRequired()
+                        .HasMaxLength(260)
+                        .HasColumnType("nvarchar(260)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TotalRows")
+                        .HasColumnType("int");
+
+                    b.Property<string>("UploadedBy")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<DateTime>("UploadedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("ValidRows")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ValidationErrorsJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DistributorTemplateMappingId");
+
+                    b.HasIndex("CompanyId", "UploadedDate");
+
+                    b.ToTable("SelloutUploadGroup");
                 });
 
             modelBuilder.Entity("GiselX.Domain.ServelDeliveryEx", b =>
@@ -780,6 +853,9 @@ namespace GiselX.Web.Context.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<decimal?>("PriceUnit")
+                        .HasColumnType("decimal(18, 2)");
+
                     b.Property<decimal>("SaldoAkhir")
                         .HasColumnType("decimal(18, 2)");
 
@@ -789,11 +865,263 @@ namespace GiselX.Web.Context.Migrations
                     b.Property<decimal>("SaldoMasukPO")
                         .HasColumnType("decimal(18, 2)");
 
+                    b.Property<DateTime?>("StockDate")
+                        .HasColumnType("date");
+
+                    b.Property<long?>("StockUploadBatchId")
+                        .HasColumnType("bigint");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CompanyId", "CreatedDate");
 
+                    b.HasIndex("StockUploadBatchId");
+
                     b.ToTable("Stock");
+                });
+
+            modelBuilder.Entity("GiselX.Domain.StockTemplateColumn", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CanonicalField")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SourceHeader")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("SourceColumnNumber")
+                        .HasColumnType("int");
+
+                    b.Property<int>("StockTemplateMappingId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StockTemplateMappingId", "CanonicalField")
+                        .IsUnique();
+
+                    b.HasIndex("StockTemplateMappingId", "SourceColumnNumber")
+                        .IsUnique();
+
+                    b.ToTable("StockTemplateColumn");
+                });
+
+            modelBuilder.Entity("GiselX.Domain.StockTemplateMapping", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("FirstDataRowNumber")
+                        .HasColumnType("int");
+
+                    b.Property<string>("HeaderSignature")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("HeaderRowNumber")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<DateTime?>("ModifiedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("WorksheetName")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("StockTemplateMapping", t =>
+                        {
+                            t.HasCheckConstraint("CK_StockTemplateMapping_FirstDataRow", "[FirstDataRowNumber] > [HeaderRowNumber]");
+                            t.HasCheckConstraint("CK_StockTemplateMapping_HeaderRow", "[HeaderRowNumber] > 0");
+                        });
+                });
+
+            modelBuilder.Entity("GiselX.Domain.StockUploadBatch", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("CompletedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ErrorSummary")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("FileSha256")
+                        .IsRequired()
+                        .IsFixedLength()
+                        .HasMaxLength(64)
+                        .HasColumnType("nchar(64)");
+
+                    b.Property<string>("IgnoredSummaryRowsJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("nvarchar(max)")
+                        .HasDefaultValue("[]");
+
+                    b.Property<int>("InvalidRows")
+                        .HasColumnType("int");
+
+                    b.Property<string>("OriginalFileName")
+                        .IsRequired()
+                        .HasMaxLength(260)
+                        .HasColumnType("nvarchar(260)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("StockDate")
+                        .HasColumnType("date");
+
+                    b.Property<int?>("StockTemplateMappingId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TotalRows")
+                        .HasColumnType("int");
+
+                    b.Property<string>("UploadedBy")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<DateTime>("UploadedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ValidationErrorsJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("nvarchar(max)")
+                        .HasDefaultValue("[]");
+
+                    b.Property<int>("ValidRows")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("StockTemplateMappingId");
+
+                    b.HasIndex("CompanyId", "CompletedDate", "Id");
+
+                    b.HasIndex("CompanyId", "StockDate");
+
+                    b.ToTable("StockUploadBatch");
+                });
+
+            modelBuilder.Entity("GiselX.Domain.StockStaging", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("BatchNumber")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("ExpiredDate")
+                        .HasColumnType("datetime");
+
+                    b.Property<bool>("IsValid")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("ProductId")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("ProductName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<decimal?>("ProductNetto")
+                        .HasColumnType("decimal(18, 2)");
+
+                    b.Property<string>("ProductPackaging")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int?>("ProductPcsInCtn")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ProductUnit")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<decimal?>("PriceUnit")
+                        .HasColumnType("decimal(18, 2)");
+
+                    b.Property<decimal?>("SaldoAkhir")
+                        .HasColumnType("decimal(18, 2)");
+
+                    b.Property<decimal?>("SaldoAwal")
+                        .HasColumnType("decimal(18, 2)");
+
+                    b.Property<decimal?>("SaldoMasukPO")
+                        .HasColumnType("decimal(18, 2)");
+
+                    b.Property<int>("SourceRowNumber")
+                        .HasColumnType("int");
+
+                    b.Property<long>("StockUploadBatchId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ValidationErrorsJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("nvarchar(max)")
+                        .HasDefaultValue("[]");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StockUploadBatchId", "SourceRowNumber");
+
+                    b.ToTable("StockStaging");
                 });
 
             modelBuilder.Entity("GiselX.Domain.TransDist", b =>
@@ -1052,6 +1380,31 @@ namespace GiselX.Web.Context.Migrations
                         .HasForeignKey("DistributorTemplateMappingId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("GiselX.Domain.SelloutUploadGroup", "SelloutUploadGroup")
+                        .WithMany("Batches")
+                        .HasForeignKey("SelloutUploadGroupId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.Navigation("Company");
+
+                    b.Navigation("DistributorTemplateMapping");
+
+                    b.Navigation("SelloutUploadGroup");
+                });
+
+            modelBuilder.Entity("GiselX.Domain.SelloutUploadGroup", b =>
+                {
+                    b.HasOne("GiselX.Domain.Company", "Company")
+                        .WithMany("SelloutUploadGroups")
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("GiselX.Domain.DistributorTemplateMapping", "DistributorTemplateMapping")
+                        .WithMany("UploadGroups")
+                        .HasForeignKey("DistributorTemplateMappingId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Company");
 
                     b.Navigation("DistributorTemplateMapping");
@@ -1079,6 +1432,57 @@ namespace GiselX.Web.Context.Migrations
                     b.Navigation("Company");
                 });
 
+            modelBuilder.Entity("GiselX.Domain.StockTemplateColumn", b =>
+                {
+                    b.HasOne("GiselX.Domain.StockTemplateMapping", "StockTemplateMapping")
+                        .WithMany("Columns")
+                        .HasForeignKey("StockTemplateMappingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("StockTemplateMapping");
+                });
+
+            modelBuilder.Entity("GiselX.Domain.StockTemplateMapping", b =>
+                {
+                    b.HasOne("GiselX.Domain.Company", "Company")
+                        .WithMany("StockTemplateMappings")
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Company");
+                });
+
+            modelBuilder.Entity("GiselX.Domain.StockUploadBatch", b =>
+                {
+                    b.HasOne("GiselX.Domain.Company", "Company")
+                        .WithMany("StockUploadBatches")
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("GiselX.Domain.StockTemplateMapping", "StockTemplateMapping")
+                        .WithMany("UploadBatches")
+                        .HasForeignKey("StockTemplateMappingId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Company");
+
+                    b.Navigation("StockTemplateMapping");
+                });
+
+            modelBuilder.Entity("GiselX.Domain.StockStaging", b =>
+                {
+                    b.HasOne("GiselX.Domain.StockUploadBatch", "StockUploadBatch")
+                        .WithMany("StagingRows")
+                        .HasForeignKey("StockUploadBatchId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("StockUploadBatch");
+                });
+
             modelBuilder.Entity("GiselX.Domain.Stock", b =>
                 {
                     b.HasOne("GiselX.Domain.Company", "Company")
@@ -1087,7 +1491,14 @@ namespace GiselX.Web.Context.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("GiselX.Domain.StockUploadBatch", "StockUploadBatch")
+                        .WithMany("Stocks")
+                        .HasForeignKey("StockUploadBatchId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Company");
+
+                    b.Navigation("StockUploadBatch");
                 });
 
             modelBuilder.Entity("GiselX.Domain.TransDist", b =>
@@ -1160,11 +1571,17 @@ namespace GiselX.Web.Context.Migrations
 
                     b.Navigation("SelloutUploadBatches");
 
+                    b.Navigation("SelloutUploadGroups");
+
                     b.Navigation("ServelDeliveryEx");
 
                     b.Navigation("ServelReceiptEx");
 
                     b.Navigation("Stock");
+
+                    b.Navigation("StockTemplateMappings");
+
+                    b.Navigation("StockUploadBatches");
 
                     b.Navigation("TransDist");
 
@@ -1176,6 +1593,13 @@ namespace GiselX.Web.Context.Migrations
                     b.Navigation("Columns");
 
                     b.Navigation("UploadBatches");
+
+                    b.Navigation("UploadGroups");
+                });
+
+            modelBuilder.Entity("GiselX.Domain.SelloutUploadGroup", b =>
+                {
+                    b.Navigation("Batches");
                 });
 
             modelBuilder.Entity("GiselX.Domain.SelloutUploadBatch", b =>
@@ -1183,6 +1607,20 @@ namespace GiselX.Web.Context.Migrations
                     b.Navigation("SalesTransactions");
 
                     b.Navigation("StagingRows");
+                });
+
+            modelBuilder.Entity("GiselX.Domain.StockTemplateMapping", b =>
+                {
+                    b.Navigation("Columns");
+
+                    b.Navigation("UploadBatches");
+                });
+
+            modelBuilder.Entity("GiselX.Domain.StockUploadBatch", b =>
+                {
+                    b.Navigation("StagingRows");
+
+                    b.Navigation("Stocks");
                 });
 #pragma warning restore 612, 618
         }

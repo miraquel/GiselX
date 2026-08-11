@@ -1,0 +1,115 @@
+@model GiselX.Web.Models.DistributorTemplateMappingListViewModel
+
+@{
+    ViewData["Title"] = "Distributor Sellout Mappings";
+    Layout = "_ContentNavbarLayout";
+}
+
+<div class="card">
+    <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+        <div>
+            <h5 class="mb-1">Distributor Sellout Mappings</h5>
+            <small class="text-muted">Manage the workbook mappings configured for this company.</small>
+        </div>
+        <div class="d-flex gap-2">
+            <a asp-action="Create" asp-route-companyId="@Model.CompanyId" class="btn btn-primary">Add Mapping</a>
+            <a asp-controller="Companies" asp-action="Edit" asp-route-id="@Model.CompanyId"
+               class="btn btn-outline-secondary">Back to Company</a>
+        </div>
+    </div>
+    <div class="card-body">
+        @if (TempData["StatusMessage"] is string statusMessage)
+        {
+            <div class="alert alert-success" role="alert">@statusMessage</div>
+        }
+        @if (TempData["ErrorMessage"] is string errorMessage)
+        {
+            <div class="alert alert-danger" role="alert">@errorMessage</div>
+        }
+
+        @if (Model.Mappings.Count == 0)
+        {
+            <div class="text-center py-5">
+                <h6>No distributor mappings yet</h6>
+                <p class="text-muted mb-3">Add a mapping to import this company's distributor workbook format.</p>
+                <a asp-action="Create" asp-route-companyId="@Model.CompanyId" class="btn btn-primary">Add Mapping</a>
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Worksheet</th>
+                        <th>Rows</th>
+                        <th>Mapped columns</th>
+                        <th>Status</th>
+                        <th>Audit</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var mapping in Model.Mappings)
+                    {
+                        <tr>
+                            <td class="fw-semibold">@mapping.Name</td>
+                            <td>@mapping.WorksheetName</td>
+                            <td>
+                                <div>Header: @mapping.HeaderRowNumber</div>
+                                <small class="text-muted">First data: @mapping.FirstDataRowNumber</small>
+                            </td>
+                            <td>@mapping.Columns.Count</td>
+                            <td>
+                                @if (mapping.IsActive)
+                                {
+                                    <span class="badge bg-label-success">Active</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-label-secondary">Inactive</span>
+                                }
+                            </td>
+                            <td>
+                                <div>@mapping.CreatedBy</div>
+                                <small class="text-muted">Created @mapping.CreatedDate.ToString("yyyy-MM-dd HH:mm")</small>
+                                @if (mapping.ModifiedDate.HasValue)
+                                {
+                                    <div><small class="text-muted">Modified @mapping.ModifiedDate.Value.ToString("yyyy-MM-dd HH:mm") by @(mapping.ModifiedBy ?? "unknown")</small></div>
+                                }
+                            </td>
+                            <td class="text-end text-nowrap">
+                                <a asp-action="Edit" asp-route-id="@mapping.Id" asp-route-companyId="@Model.CompanyId"
+                                   class="btn btn-sm btn-outline-primary">Edit</a>
+                                @if (mapping.IsActive)
+                                {
+                                    <form asp-action="Deactivate" method="post" class="d-inline">
+                                        <input type="hidden" name="id" value="@mapping.Id" />
+                                        <input type="hidden" name="companyId" value="@Model.CompanyId" />
+                                        <button type="submit" class="btn btn-sm btn-outline-secondary">Deactivate</button>
+                                    </form>
+                                }
+                                else
+                                {
+                                    <form asp-action="Activate" method="post" class="d-inline">
+                                        <input type="hidden" name="id" value="@mapping.Id" />
+                                        <input type="hidden" name="companyId" value="@Model.CompanyId" />
+                                        <button type="submit" class="btn btn-sm btn-outline-secondary">Activate</button>
+                                    </form>
+                                }
+                                <form asp-action="Delete" method="post" class="d-inline"
+                                      onsubmit="return confirm('Permanently delete this unused mapping?');">
+                                    <input type="hidden" name="id" value="@mapping.Id" />
+                                    <input type="hidden" name="companyId" value="@Model.CompanyId" />
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>

@@ -15,6 +15,7 @@ BEGIN
         [ProductPcsInCtn],
         [ProductNetto],
         [ProductUnit],
+        [PriceUnit],
         [SaldoAwal],
         [SaldoMasukPO],
         [SaldoAkhir],

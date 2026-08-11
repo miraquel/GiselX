@@ -9,4 +9,6 @@ public interface IStockService
     Task<ServiceResponse<PagedListDto<StockDto>>> SelectAsync(PagedListRequestDto pagedListRequest, CancellationToken cancellationToken);
     Task<ServiceResponse<IEnumerable<StockDto>>> SelectByCustPeriodAsync(int companyId, int year, int month, CancellationToken cancellationToken);
     Task<ServiceResponse<IEnumerable<PeriodDto>>> SelectPeriodsAsync(CancellationToken cancellationToken);
+    Task<ServiceResponse<IReadOnlyList<StockUploadHistoryOptionDto>>> ListCompletedUploadsAsync(CancellationToken cancellationToken);
+    Task<ServiceResponse<IEnumerable<StockDto>>> DownloadBatchAsync(long batchId, CancellationToken cancellationToken);
 }

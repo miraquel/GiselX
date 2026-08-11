@@ -18,4 +18,5 @@ public sealed class DistributorTemplateMapping
     public Company Company { get; set; } = null!;
     public ICollection<DistributorTemplateColumn> Columns { get; set; } = new List<DistributorTemplateColumn>();
     public ICollection<SelloutUploadBatch> UploadBatches { get; set; } = new List<SelloutUploadBatch>();
+    public ICollection<SelloutUploadGroup> UploadGroups { get; set; } = new List<SelloutUploadGroup>();
 }

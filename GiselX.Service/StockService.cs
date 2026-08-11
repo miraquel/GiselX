@@ -132,4 +132,39 @@ public class StockService : IStockService
             StatusCode = StatusCodes.Status200OK
         };
     }
+
+    public async Task<ServiceResponse<IReadOnlyList<StockUploadHistoryOptionDto>>> ListCompletedUploadsAsync(
+        CancellationToken cancellationToken)
+    {
+        var user = await _userManager.FindByNameAsync(_userClaimDto.Username)
+            ?? throw new InvalidOperationException("User not found.");
+        var batches = await _stockRepository.ListCompletedUploadsAsync(user.CompanyId, cancellationToken);
+        return new ServiceResponse<IReadOnlyList<StockUploadHistoryOptionDto>>
+        {
+            Data = batches.Select(batch => new StockUploadHistoryOptionDto
+            {
+                BatchId = batch.Id, UploadedDate = batch.UploadedDate,
+                StockDate = batch.StockDate, OriginalFileName = batch.OriginalFileName
+            }).ToList(),
+            Message = "Stock upload history retrieved successfully."
+        };
+    }
+
+    public async Task<ServiceResponse<IEnumerable<StockDto>>> DownloadBatchAsync(long batchId,
+        CancellationToken cancellationToken)
+    {
+        var user = await _userManager.FindByNameAsync(_userClaimDto.Username)
+            ?? throw new InvalidOperationException("User not found.");
+        var rows = (await _stockRepository.SelectByBatchAsync(batchId, user.CompanyId, cancellationToken)).ToList();
+        if (rows.Count == 0)
+            return new ServiceResponse<IEnumerable<StockDto>>
+            {
+                Errors = ["The selected completed Stock upload was not found."],
+                StatusCode = StatusCodes.Status404NotFound
+            };
+        return new ServiceResponse<IEnumerable<StockDto>>
+        {
+            Data = _mapper.MapToDto(rows), Message = "Stock snapshot retrieved successfully."
+        };
+    }
 }

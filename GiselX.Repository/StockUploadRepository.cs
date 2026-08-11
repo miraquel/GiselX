@@ -1,0 +1,75 @@
+using System.Data;
+using Dapper;
+using GiselX.Domain;
+using GiselX.Repository.Interface;
+
+namespace GiselX.Repository;
+
+public sealed class StockUploadRepository(IDbConnection connection, IDbTransaction transaction) : IStockUploadRepository
+{
+    public Task<long> InsertBatchAsync(StockUploadBatch batch, CancellationToken cancellationToken) =>
+        connection.ExecuteScalarAsync<long>(new CommandDefinition("""
+            INSERT INTO StockUploadBatch (CompanyId, StockTemplateMappingId, StockDate, OriginalFileName,
+             FileSha256, Status, TotalRows, ValidRows, InvalidRows, IgnoredSummaryRowsJson,
+             ValidationErrorsJson, ErrorSummary, UploadedBy, UploadedDate, CompletedDate)
+            OUTPUT INSERTED.Id VALUES (@CompanyId, @StockTemplateMappingId, @StockDate, @OriginalFileName,
+             @FileSha256, @Status, @TotalRows, @ValidRows, @InvalidRows, @IgnoredSummaryRowsJson,
+             @ValidationErrorsJson, NULL, @UploadedBy, @UploadedDate, NULL)
+            """, batch, transaction, cancellationToken: cancellationToken));
+
+    public async Task InsertStagingAsync(IReadOnlyCollection<StockStaging> rows,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            INSERT INTO StockStaging (StockUploadBatchId, SourceRowNumber, ProductId, ProductName,
+             ProductPackaging, ProductPcsInCtn, ProductNetto, ProductUnit, PriceUnit, SaldoAwal, SaldoMasukPO,
+             SaldoAkhir, BatchNumber, ExpiredDate, IsValid, ValidationErrorsJson)
+            VALUES (@StockUploadBatchId, @SourceRowNumber, @ProductId, @ProductName,
+             @ProductPackaging, @ProductPcsInCtn, @ProductNetto, @ProductUnit, @PriceUnit, @SaldoAwal, @SaldoMasukPO,
+             @SaldoAkhir, @BatchNumber, @ExpiredDate, @IsValid, @ValidationErrorsJson)
+            """;
+        foreach (var chunk in rows.Chunk(500))
+            await connection.ExecuteAsync(new CommandDefinition(sql, chunk, transaction,
+                cancellationToken: cancellationToken));
+    }
+
+    public Task MarkFailedAsync(long batchId, string errorSummary, CancellationToken cancellationToken) =>
+        connection.ExecuteAsync(new CommandDefinition("""
+            UPDATE StockUploadBatch SET Status=1, ErrorSummary=@ErrorSummary, CompletedDate=SYSUTCDATETIME()
+            WHERE Id=@BatchId AND Status=0
+            """, new { BatchId = batchId, ErrorSummary = errorSummary }, transaction,
+            cancellationToken: cancellationToken));
+
+    public Task PublishValidRowsAsync(long batchId, int companyId, StockUploadBatchStatus status,
+        CancellationToken cancellationToken) => connection.ExecuteAsync(new CommandDefinition("""
+            INSERT INTO Stock (ProductId, ProductName, ProductPackaging, ProductPcsInCtn, ProductNetto,
+             ProductUnit, PriceUnit, SaldoAwal, SaldoMasukPO, SaldoAkhir, BatchNumber, ExpiredDate,
+             CompanyId, CreatedDate, StockUploadBatchId, StockDate)
+            SELECT COALESCE(s.ProductId,''), COALESCE(s.ProductName,''), COALESCE(s.ProductPackaging,''),
+             COALESCE(s.ProductPcsInCtn,0), COALESCE(s.ProductNetto,0), COALESCE(s.ProductUnit,''), s.PriceUnit,
+             COALESCE(s.SaldoAwal,0), COALESCE(s.SaldoMasukPO,0), s.SaldoAkhir,
+             COALESCE(s.BatchNumber,''), COALESCE(s.ExpiredDate,CONVERT(date,'17530101')),
+             b.CompanyId, SYSUTCDATETIME(), b.Id, b.StockDate
+            FROM StockStaging s JOIN StockUploadBatch b ON b.Id=s.StockUploadBatchId
+            WHERE b.Id=@BatchId AND b.CompanyId=@CompanyId AND b.Status=0 AND s.IsValid=1;
+
+            UPDATE StockUploadBatch SET Status=@Status, CompletedDate=SYSUTCDATETIME()
+            WHERE Id=@BatchId AND CompanyId=@CompanyId AND Status=0;
+            """, new { BatchId = batchId, CompanyId = companyId, Status = (int)status }, transaction,
+            cancellationToken: cancellationToken));
+
+    public async Task<(StockUploadBatch Batch, IReadOnlyList<StockStaging> Rows)?> GetBatchAsync(
+        long batchId, int companyId, CancellationToken cancellationToken)
+    {
+        using var result = await connection.QueryMultipleAsync(new CommandDefinition("""
+            SELECT b.*, m.Name MappingName FROM StockUploadBatch b
+             LEFT JOIN StockTemplateMapping m ON m.Id=b.StockTemplateMappingId
+             WHERE b.Id=@BatchId AND b.CompanyId=@CompanyId;
+            SELECT s.* FROM StockStaging s JOIN StockUploadBatch b ON b.Id=s.StockUploadBatchId
+             WHERE b.Id=@BatchId AND b.CompanyId=@CompanyId ORDER BY s.SourceRowNumber;
+            """, new { BatchId = batchId, CompanyId = companyId }, transaction,
+            cancellationToken: cancellationToken));
+        var batch = await result.ReadSingleOrDefaultAsync<StockUploadBatch>();
+        return batch is null ? null : (batch, (await result.ReadAsync<StockStaging>()).ToList());
+    }
+}

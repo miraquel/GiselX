@@ -1,0 +1,63 @@
+@model GiselX.Service.Dto.SelloutUploadGroupDto
+@using GiselX.Domain
+@{
+    ViewBag.Title = "Sellout Upload Result";
+    var successful = Model.Status == SelloutUploadGroupStatus.Completed;
+}
+<div class="card">
+    <div class="card-header"><h4>Sellout Upload Result</h4></div>
+    <div class="card-body">
+        <div class="alert @(successful ? "alert-success" : "alert-danger")">
+            @(string.IsNullOrWhiteSpace(Model.Message)
+                ? successful ? "Upload completed." : "Upload failed. No reporting week was replaced."
+                : Model.Message)
+        </div>
+        <dl class="row">
+            <dt class="col-sm-3">Status</dt><dd class="col-sm-9">@Model.Status</dd>
+            <dt class="col-sm-3">File</dt><dd class="col-sm-9">@Model.OriginalFileName</dd>
+            <dt class="col-sm-3">Rows</dt><dd class="col-sm-9">@Model.TotalRows total, @Model.ValidRows valid, @Model.InvalidRows invalid</dd>
+            <dt class="col-sm-3">Uploaded by</dt><dd class="col-sm-9">@Model.UploadedBy</dd>
+            @if (Model.IgnoredSummaryRowNumbers.Count > 0)
+            {
+                <dt class="col-sm-3">Ignored summary rows</dt><dd class="col-sm-9">@string.Join(", ", Model.IgnoredSummaryRowNumbers)</dd>
+            }
+        </dl>
+
+        @if (Model.Batches.Count > 0)
+        {
+            <h5>Affected reporting weeks</h5>
+            <div class="table-responsive mb-4">
+                <table class="table table-bordered">
+                    <thead><tr><th>Week (Monday–Sunday)</th><th>Status</th><th class="text-end">Rows</th></tr></thead>
+                    <tbody>
+                    @foreach (var batch in Model.Batches)
+                    {
+                        <tr>
+                            <td>@batch.ReportingWeekStart.ToString("yyyy-MM-dd") – @batch.ReportingWeekStart.AddDays(6).ToString("yyyy-MM-dd")</td>
+                            <td>@batch.Status</td>
+                            <td class="text-end">@batch.TotalRows</td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        @if (Model.Errors.Count > 0)
+        {
+            <h5>Validation errors</h5>
+            <div class="table-responsive">
+                <table class="table table-bordered">
+                    <thead><tr><th>Row</th><th>Field</th><th>Value</th><th>Reason</th></tr></thead>
+                    <tbody>
+                    @foreach (var error in Model.Errors)
+                    {
+                        <tr><td>@error.SourceRowNumber</td><td>@error.Field</td><td>@error.RejectedValue</td><td>@error.Reason</td></tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+        <a asp-action="Index" class="btn btn-secondary">Back</a>
+    </div>
+</div>

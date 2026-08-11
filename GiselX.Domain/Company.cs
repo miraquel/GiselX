@@ -22,6 +22,9 @@ public partial class Company
     public virtual ICollection<Stock> Stock { get; set; } = new List<Stock>();
     public virtual ICollection<SalesTransaction> SalesTransaction { get; set; } = new List<SalesTransaction>();
     public virtual ICollection<DistributorTemplateMapping> DistributorTemplateMappings { get; set; } = new List<DistributorTemplateMapping>();
+    public virtual ICollection<StockTemplateMapping> StockTemplateMappings { get; set; } = new List<StockTemplateMapping>();
+    public virtual ICollection<StockUploadBatch> StockUploadBatches { get; set; } = new List<StockUploadBatch>();
     public virtual ICollection<SelloutUploadBatch> SelloutUploadBatches { get; set; } = new List<SelloutUploadBatch>();
+    public virtual ICollection<SelloutUploadGroup> SelloutUploadGroups { get; set; } = new List<SelloutUploadGroup>();
     public virtual ICollection<AppIdentityUser> Users { get; set; } = new List<AppIdentityUser>();
 }

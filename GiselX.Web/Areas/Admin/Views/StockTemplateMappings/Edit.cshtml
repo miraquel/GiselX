@@ -1,0 +1,24 @@
+@using GiselX.Domain
+@model GiselX.Web.Models.StockTemplateMappingEditViewModel
+@{ ViewData["Title"] = Model.Id.HasValue ? "Edit Stock Mapping" : "Add Stock Mapping"; Layout = "_ContentNavbarLayout"; }
+<div class="card"><div class="card-header"><h5>@ViewData["Title"]</h5></div><div class="card-body">
+<form asp-action="Save" method="post" enctype="multipart/form-data" id="mappingForm">
+    <input asp-for="CompanyId" type="hidden"/><input asp-for="Id" type="hidden"/><div asp-validation-summary="All" class="text-danger"></div>
+    <div class="mb-3"><label asp-for="Name" class="form-label"></label><input asp-for="Name" class="form-control" required/></div>
+    <div class="mb-3"><label class="form-label">Sample .xlsx file</label><input type="file" name="sampleFile" id="sampleFile" class="form-control" accept=".xlsx" required/></div>
+    <div class="row"><div class="col-md-4 mb-3"><label asp-for="WorksheetName" class="form-label"></label><input asp-for="WorksheetName" class="form-control"/></div><div class="col-md-4 mb-3"><label asp-for="HeaderRowNumber" class="form-label"></label><input asp-for="HeaderRowNumber" class="form-control" min="1"/></div><div class="col-md-4 mb-3"><label asp-for="FirstDataRowNumber" class="form-label"></label><input asp-for="FirstDataRowNumber" class="form-control" min="2"/></div></div>
+    <button type="button" class="btn btn-info" id="inspect">Inspect sample</button>
+    <div class="table-responsive mt-3"><table class="table" id="columns"><thead><tr><th>Column</th><th>Source header</th><th>Stock field</th></tr></thead><tbody>
+    @for (var i = 0; i < Model.Columns.Count; i++) { <tr><td>@Model.Columns[i].SourceColumnNumber<input asp-for="Columns[i].SourceColumnNumber" type="hidden"/></td><td>@Model.Columns[i].SourceHeader</td><td><select asp-for="Columns[i].CanonicalField" asp-items="Html.GetEnumSelectList<StockCanonicalField>()" class="form-select"><option value="">Ignore</option></select></td></tr> }
+    </tbody></table></div>
+    <button class="btn btn-primary" type="submit">Save Mapping</button> <a asp-controller="Companies" asp-action="Edit" asp-route-id="@Model.CompanyId" class="btn btn-secondary">Cancel</a>
+</form></div></div>
+<script>
+document.getElementById('inspect').onclick = async () => {
+ const form = document.getElementById('mappingForm'), data = new FormData();
+ data.append('sampleFile', document.getElementById('sampleFile').files[0]); data.append('worksheetName', form.WorksheetName.value); data.append('headerRowNumber', form.HeaderRowNumber.value); data.append('firstDataRowNumber', form.FirstDataRowNumber.value); data.append('__RequestVerificationToken', form.querySelector('[name=__RequestVerificationToken]').value);
+ const response = await fetch('@Url.Action("Inspect")', {method:'POST', body:data}); const p = await response.json(); if (p.errors?.length) { alert(p.errors.join('\n')); return; } form.WorksheetName.value = p.worksheetName;
+ const fields = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Enum.GetNames<StockCanonicalField>())); const encode = value => { const span = document.createElement('span'); span.textContent = value ?? ''; return span.innerHTML; };
+ document.querySelector('#columns tbody').innerHTML = p.headers.map((h,i) => `<tr><td>${i+1}<input type="hidden" name="Columns[${i}].SourceColumnNumber" value="${i+1}"></td><td>${encode(h)}</td><td><select class="form-select" name="Columns[${i}].CanonicalField"><option value="">Ignore</option>${fields.map((f,n)=>`<option value="${n}">${f}</option>`).join('')}</select></td></tr>`).join('');
+};
+</script>

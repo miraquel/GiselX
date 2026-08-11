@@ -3,6 +3,7 @@ using GiselX.Common.Constants;
 using GiselX.Common.Helpers;
 using GiselX.Domain;
 using GiselX.Service.Dto;
+using GiselX.Service.Dto.Common;
 using GiselX.Service.Interface;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -14,11 +15,13 @@ namespace GiselX.Web.Controllers;
 public class SalesTransactionsController : Controller
 {
     private readonly ISalesTransactionService _salesTransactionService;
+    private readonly ISelloutUploadService _selloutUploadService;
     private readonly UserManager<AppIdentityUser> _userManager;
 
-    public SalesTransactionsController(ISalesTransactionService salesTransactionService, UserManager<AppIdentityUser> userManager)
+    public SalesTransactionsController(ISalesTransactionService salesTransactionService, ISelloutUploadService selloutUploadService, UserManager<AppIdentityUser> userManager)
     {
         _salesTransactionService = salesTransactionService;
+        _selloutUploadService = selloutUploadService;
         _userManager = userManager;
     }
 
@@ -147,7 +150,34 @@ public class SalesTransactionsController : Controller
 
     [HttpPost]
     [Authorize(PermissionConstants.SalesTransactions.Upload)]
-    public async Task<IActionResult> Upload([FromForm(Name = "file")] IFormFile fileInput, CancellationToken cancellationToken)
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> PreflightUpload(
+        [FromForm(Name = "file")] IFormFile? fileInput,
+        CancellationToken cancellationToken)
+    {
+        if (fileInput is null || fileInput.Length == 0)
+        {
+            return BadRequest(new ServiceResponse<SelloutUploadPreflightDto>
+            {
+                Errors = ["Please select a file to upload."],
+                Message = "Please select a file to upload.",
+                StatusCode = StatusCodes.Status400BadRequest
+            });
+        }
+
+        var user = await _userManager.GetUserAsync(User);
+        if (user is null) return Challenge();
+
+        await using var stream = fileInput.OpenReadStream();
+        var response = await _selloutUploadService.PreflightAsync(
+            stream, fileInput.FileName, user.CompanyId, cancellationToken);
+        return StatusCode(response.StatusCode, response);
+    }
+
+    [HttpPost]
+    [Authorize(PermissionConstants.SalesTransactions.Upload)]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Upload([FromForm(Name = "file")] IFormFile fileInput, bool multiWeekConfirmed, CancellationToken cancellationToken)
     {
         if (fileInput.Length == 0)
         {
@@ -162,65 +192,21 @@ public class SalesTransactionsController : Controller
             return RedirectToAction(nameof(Index));
         }
 
-        var salesTransactions = new List<SalesTransactionDto>();
-
-        try
-        {
-            using var stream = new MemoryStream();
-            await fileInput.CopyToAsync(stream, cancellationToken);
-            stream.Position = 0;
-
-            var uploadedAt = DateTime.Now;
-            using var workbook = new ClosedXML.Excel.XLWorkbook(stream);
-            var worksheet = workbook.Worksheet(1);
-            salesTransactions.AddRange(worksheet.RowsUsed()
-                .Skip(1)
-                .Select(row => new SalesTransactionDto
-                {
-                    CustomerId = row.Cell(1).TryGetValue(out string customerId) ? customerId : string.Empty,
-                    CustomerName = row.Cell(2).TryGetValue(out string customerName) ? customerName : string.Empty,
-                    CustomerAlias = row.Cell(3).TryGetValue(out string customerAlias) ? customerAlias : string.Empty,
-                    CustomerAddress = row.Cell(4).TryGetValue(out string customerAddress) ? customerAddress : string.Empty,
-                    ProductId = row.Cell(5).TryGetValue(out string productId) ? productId : string.Empty,
-                    ProductBrand = row.Cell(6).TryGetValue(out string productBrand) ? productBrand : string.Empty,
-                    ProductName = row.Cell(7).TryGetValue(out string productName) ? productName : string.Empty,
-                    ProductPackaging = row.Cell(8).TryGetValue(out string productPackaging) ? productPackaging : string.Empty,
-                    ProductPcsInCtn = row.Cell(9).TryGetValue(out int productPcsInCtn) ? productPcsInCtn : 0,
-                    BatchNumber = row.Cell(10).TryGetValue(out string batchNumber) ? batchNumber : string.Empty,
-                    ExpiredDate = row.Cell(11).TryGetValue(out DateTime expiredDate) ? expiredDate : SqlDateTime.MinValue.Value,
-                    InvoiceNo = row.Cell(12).TryGetValue(out string invoiceNo) ? invoiceNo : string.Empty,
-                    InvoiceDate = row.Cell(13).TryGetValue(out DateTime invoiceDate) ? invoiceDate : SqlDateTime.MinValue.Value,
-                    InvoiceQty = row.Cell(14).TryGetValue(out decimal invoiceQty) ? invoiceQty : 0,
-                    InvoiceUnit = row.Cell(15).TryGetValue(out string invoiceUnit) ? invoiceUnit : string.Empty,
-                    UnitPrice = row.Cell(16).TryGetValue(out decimal unitPrice) ? unitPrice : 0,
-                    GrossValue = row.Cell(17).TryGetValue(out decimal grossValue) ? grossValue : 0,
-                    DiscountValue = row.Cell(18).TryGetValue(out decimal discountValue) ? discountValue : 0,
-                    DiscountPct = row.Cell(19).TryGetValue(out decimal discountPct) ? discountPct : 0,
-                    NetValue = row.Cell(20).TryGetValue(out decimal netValue) ? netValue : 0,
-                    InKg = row.Cell(21).TryGetValue(out decimal inKg) ? inKg : 0,
-                    GeisaPOId = row.Cell(22).TryGetValue(out string geisaPOId) ? geisaPOId : string.Empty,
-                    ShipDate = row.Cell(23).TryGetValue(out DateTime shipDate) ? shipDate : SqlDateTime.MinValue.Value,
-                    SalesmanNameGMK = row.Cell(24).TryGetValue(out string salesmanName) ? salesmanName : string.Empty,
-                    CompanyId = user.CompanyId,
-                    CreatedDate = uploadedAt
-                }));
-        }
-        catch (Exception ex)
-        {
-            TempData["ErrorMessage"] = $"Error processing file: {ex.Message}";
-            return RedirectToAction(nameof(Index));
-        }
-
-        var response = await _salesTransactionService.UploadAsync(salesTransactions, user.CompanyId, cancellationToken);
-        if (response.IsSuccess)
-        {
-            TempData["SuccessMessage"] = response.Message;
-        }
-        else
-        {
-            TempData["ErrorMessage"] = response.Message?.Trim() ?? "Failed to upload sales transactions.";
-        }
-
+        await using var stream = fileInput.OpenReadStream();
+        var response = await _selloutUploadService.UploadAsync(stream, fileInput.FileName, user.CompanyId,
+            multiWeekConfirmed, user.UserName ?? "unknown", cancellationToken);
+        if (response.Data?.GroupId > 0) return RedirectToAction(nameof(UploadResult), new { groupId = response.Data.GroupId });
+        TempData["ErrorMessage"] = response.Message ?? "Failed to upload sellout data.";
         return RedirectToAction(nameof(Index));
+    }
+
+    [HttpGet]
+    [Authorize(PermissionConstants.SalesTransactions.Upload)]
+    public async Task<IActionResult> UploadResult(long? groupId, long? batchId, CancellationToken cancellationToken)
+    {
+        var user = await _userManager.GetUserAsync(User);
+        if (user is null) return Challenge();
+        var response = await _selloutUploadService.GetUploadResultAsync(groupId, batchId, user.CompanyId, cancellationToken);
+        return response.Data is null ? NotFound() : View(response.Data);
     }
 }

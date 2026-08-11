@@ -34,5 +34,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IStockRepository, StockRepository>();
         services.AddScoped<ICompanyRepository, CompanyRepository>();
         services.AddScoped<IUploadCheckRepository, UploadCheckRepository>();
+        services.AddScoped<IDistributorTemplateMappingRepository, DistributorTemplateMappingRepository>();
+        services.AddScoped<IStockTemplateMappingRepository, StockTemplateMappingRepository>();
+        services.AddScoped<ISelloutUploadRepository, SelloutUploadRepository>();
+        services.AddScoped<IStockUploadRepository, StockUploadRepository>();
     }
 }

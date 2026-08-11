@@ -12,6 +12,16 @@
         <small class="text-muted float-end">Company Update</small>
     </div>
     <div class="card-body">
+        <div class="mb-3 d-flex flex-wrap gap-2">
+            <a asp-controller="DistributorTemplateMappings" asp-action="Index" asp-route-companyId="@Model.Id"
+               class="btn btn-outline-primary">Manage Distributor Mappings</a>
+            <a asp-controller="DistributorTemplateMappings" asp-action="Create" asp-route-companyId="@Model.Id"
+               class="btn btn-outline-secondary">Add Distributor Sellout Mapping</a>
+            <a asp-controller="StockTemplateMappings" asp-action="Index" asp-route-companyId="@Model.Id"
+               class="btn btn-outline-primary">Manage Stock Mappings</a>
+            <a asp-controller="StockTemplateMappings" asp-action="Create" asp-route-companyId="@Model.Id"
+               class="btn btn-outline-secondary">Add Stock Mapping</a>
+        </div>
         @if (ViewBag.StatusMessage != null)
         {
             <div class="alert alert-success">@ViewBag.StatusMessage</div>

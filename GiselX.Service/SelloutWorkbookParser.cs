@@ -1,0 +1,195 @@
+using System.Text.Json;
+using GiselX.Domain;
+using GiselX.Service.Dto;
+
+namespace GiselX.Service;
+
+public sealed class SelloutWorkbookParser
+{
+    private static readonly IReadOnlySet<SelloutCanonicalField> IdentityFields =
+        new HashSet<SelloutCanonicalField>
+        {
+            SelloutCanonicalField.CustomerId,
+            SelloutCanonicalField.CustomerName,
+            SelloutCanonicalField.ProductId,
+            SelloutCanonicalField.ProductName,
+            SelloutCanonicalField.InvoiceNo,
+            SelloutCanonicalField.InvoiceDate,
+            SelloutCanonicalField.InvoiceUnit
+        };
+
+    public SelloutParseResult Parse(byte[] workbook, DistributorTemplateMappingDto mapping)
+    {
+        var rows = XlsxSelloutWorkbookInspector.ReadWorksheet(workbook, mapping.WorksheetName);
+        var staged = new List<SelloutStaging>();
+        var allErrors = new List<SelloutStagingErrorDto>();
+        var sourceRows = rows
+            .Where(row => row.Key >= mapping.FirstDataRowNumber)
+            .Where(row => mapping.Columns.Any(column =>
+                !string.IsNullOrWhiteSpace(row.Value.GetValueOrDefault(column.SourceColumnNumber))))
+            .OrderBy(row => row.Key)
+            .ToList();
+        var ignoredSummaryRows = FindTrailingSummaryRows(sourceRows, mapping);
+
+        foreach (var source in sourceRows)
+        {
+            if (ignoredSummaryRows.Contains(source.Key))
+            {
+                continue;
+            }
+
+            var row = new SelloutStaging { SourceRowNumber = source.Key };
+            var errors = new List<SelloutStagingErrorDto>();
+            foreach (var column in mapping.Columns)
+            {
+                var raw = source.Value.GetValueOrDefault(column.SourceColumnNumber);
+                if (!SelloutCellValueConverter.TryConvert(raw, column.CanonicalField, out var value))
+                {
+                    errors.Add(Error(source.Key, column.CanonicalField, raw, $"Value is not a valid {SelloutCanonicalFieldCatalog.GetValueType(column.CanonicalField).Name}."));
+                    continue;
+                }
+                Assign(row, column.CanonicalField, value);
+            }
+
+            Validate(row, errors);
+            row.IsValid = errors.Count == 0;
+            row.ValidationErrorsJson = JsonSerializer.Serialize(errors);
+            staged.Add(row);
+            allErrors.AddRange(errors);
+        }
+
+        var weekSummaries = staged
+            .Where(row => row.IsValid && row.InvoiceDate.HasValue)
+            .GroupBy(row => GetMonday(row.InvoiceDate!.Value))
+            .OrderBy(group => group.Key)
+            .Select(group => new SelloutWeekSummaryDto
+            {
+                ReportingWeekStart = group.Key,
+                RowCount = group.Count()
+            })
+            .ToList();
+
+        return new SelloutParseResult(
+            staged,
+            allErrors,
+            staged.Count == 0 ? "The workbook contains no data rows." : null,
+            weekSummaries,
+            ignoredSummaryRows.OrderBy(row => row).ToList());
+    }
+
+    private static IReadOnlySet<int> FindTrailingSummaryRows(
+        IReadOnlyList<KeyValuePair<int, IReadOnlyDictionary<int, string>>> sourceRows,
+        DistributorTemplateMappingDto mapping)
+    {
+        var ignored = new HashSet<int>();
+        var index = sourceRows.Count - 1;
+        while (index >= 0 && IsSummaryRow(sourceRows[index].Value, mapping))
+        {
+            ignored.Add(sourceRows[index].Key);
+            index--;
+        }
+
+        if (index < 0)
+        {
+            ignored.Clear();
+        }
+
+        return ignored;
+    }
+
+    private static bool IsSummaryRow(
+        IReadOnlyDictionary<int, string> source,
+        DistributorTemplateMappingDto mapping)
+    {
+        var identityValuesAreBlank = mapping.Columns
+            .Where(column => IdentityFields.Contains(column.CanonicalField))
+            .All(column => string.IsNullOrWhiteSpace(source.GetValueOrDefault(column.SourceColumnNumber)));
+        var hasNumericValue = mapping.Columns
+            .Where(column => SelloutCanonicalFieldCatalog.GetValueType(column.CanonicalField) is var type &&
+                             (type == typeof(int) || type == typeof(decimal)))
+            .Any(column => !string.IsNullOrWhiteSpace(source.GetValueOrDefault(column.SourceColumnNumber)));
+
+        return identityValuesAreBlank && hasNumericValue;
+    }
+
+    internal static DateTime GetMonday(DateTime date)
+    {
+        var offset = ((int)date.DayOfWeek + 6) % 7;
+        return date.Date.AddDays(-offset);
+    }
+
+    private static void Validate(SelloutStaging row, List<SelloutStagingErrorDto> errors)
+    {
+        foreach (var field in SelloutCanonicalFieldCatalog.RequiredFields)
+        {
+            if (GetValue(row, field) is null or "")
+            {
+                errors.Add(Error(row.SourceRowNumber, field, null, "A value is required."));
+            }
+        }
+        if (row.InvoiceQty == 0)
+        {
+            errors.Add(Error(row.SourceRowNumber, SelloutCanonicalField.InvoiceQty, row.InvoiceQty?.ToString(), "Invoice quantity must not be zero."));
+        }
+        foreach (var field in Enum.GetValues<SelloutCanonicalField>())
+        {
+            var limit = SelloutCanonicalFieldCatalog.GetMaxLength(field);
+            if (limit.HasValue && GetValue(row, field) is string text && text.Length > limit.Value)
+            {
+                errors.Add(Error(row.SourceRowNumber, field, text, $"Value exceeds the maximum length of {limit.Value}."));
+            }
+        }
+    }
+
+    private static object? GetValue(SelloutStaging row, SelloutCanonicalField field) => field switch
+    {
+        SelloutCanonicalField.CustomerId => row.CustomerId, SelloutCanonicalField.CustomerName => row.CustomerName,
+        SelloutCanonicalField.CustomerAlias => row.CustomerAlias, SelloutCanonicalField.CustomerAddress => row.CustomerAddress,
+        SelloutCanonicalField.ProductId => row.ProductId, SelloutCanonicalField.ProductBrand => row.ProductBrand,
+        SelloutCanonicalField.ProductName => row.ProductName, SelloutCanonicalField.ProductPackaging => row.ProductPackaging,
+        SelloutCanonicalField.ProductPcsInCtn => row.ProductPcsInCtn, SelloutCanonicalField.BatchNumber => row.BatchNumber,
+        SelloutCanonicalField.ExpiredDate => row.ExpiredDate, SelloutCanonicalField.InvoiceNo => row.InvoiceNo,
+        SelloutCanonicalField.InvoiceDate => row.InvoiceDate, SelloutCanonicalField.InvoiceQty => row.InvoiceQty,
+        SelloutCanonicalField.InvoiceUnit => row.InvoiceUnit, SelloutCanonicalField.UnitPrice => row.UnitPrice,
+        SelloutCanonicalField.GrossValue => row.GrossValue, SelloutCanonicalField.DiscountValue => row.DiscountValue,
+        SelloutCanonicalField.DiscountPct => row.DiscountPct, SelloutCanonicalField.NetValue => row.NetValue,
+        SelloutCanonicalField.InKg => row.InKg, SelloutCanonicalField.GeisaPOId => row.GeisaPOId,
+        SelloutCanonicalField.ShipDate => row.ShipDate, SelloutCanonicalField.SalesmanNameGMK => row.SalesmanNameGMK,
+        _ => throw new ArgumentOutOfRangeException(nameof(field))
+    };
+
+    private static void Assign(SelloutStaging row, SelloutCanonicalField field, object? value)
+    {
+        switch (field)
+        {
+            case SelloutCanonicalField.CustomerId: row.CustomerId = (string?)value; break;
+            case SelloutCanonicalField.CustomerName: row.CustomerName = (string?)value; break;
+            case SelloutCanonicalField.CustomerAlias: row.CustomerAlias = (string?)value; break;
+            case SelloutCanonicalField.CustomerAddress: row.CustomerAddress = (string?)value; break;
+            case SelloutCanonicalField.ProductId: row.ProductId = (string?)value; break;
+            case SelloutCanonicalField.ProductBrand: row.ProductBrand = (string?)value; break;
+            case SelloutCanonicalField.ProductName: row.ProductName = (string?)value; break;
+            case SelloutCanonicalField.ProductPackaging: row.ProductPackaging = (string?)value; break;
+            case SelloutCanonicalField.ProductPcsInCtn: row.ProductPcsInCtn = (int?)value; break;
+            case SelloutCanonicalField.BatchNumber: row.BatchNumber = (string?)value; break;
+            case SelloutCanonicalField.ExpiredDate: row.ExpiredDate = (DateTime?)value; break;
+            case SelloutCanonicalField.InvoiceNo: row.InvoiceNo = (string?)value; break;
+            case SelloutCanonicalField.InvoiceDate: row.InvoiceDate = (DateTime?)value; break;
+            case SelloutCanonicalField.InvoiceQty: row.InvoiceQty = (decimal?)value; break;
+            case SelloutCanonicalField.InvoiceUnit: row.InvoiceUnit = (string?)value; break;
+            case SelloutCanonicalField.UnitPrice: row.UnitPrice = (decimal?)value; break;
+            case SelloutCanonicalField.GrossValue: row.GrossValue = (decimal?)value; break;
+            case SelloutCanonicalField.DiscountValue: row.DiscountValue = (decimal?)value; break;
+            case SelloutCanonicalField.DiscountPct: row.DiscountPct = (decimal?)value; break;
+            case SelloutCanonicalField.NetValue: row.NetValue = (decimal?)value; break;
+            case SelloutCanonicalField.InKg: row.InKg = (decimal?)value; break;
+            case SelloutCanonicalField.GeisaPOId: row.GeisaPOId = (string?)value; break;
+            case SelloutCanonicalField.ShipDate: row.ShipDate = (DateTime?)value; break;
+            case SelloutCanonicalField.SalesmanNameGMK: row.SalesmanNameGMK = (string?)value; break;
+            default: throw new ArgumentOutOfRangeException(nameof(field));
+        }
+    }
+
+    private static SelloutStagingErrorDto Error(int row, SelloutCanonicalField field, string? value, string reason) =>
+        new() { SourceRowNumber = row, Field = field, RejectedValue = value, Reason = reason };
+}

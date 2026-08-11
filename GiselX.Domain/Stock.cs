@@ -11,6 +11,7 @@ public class Stock
     public int ProductPcsInCtn { get; set; }
     public decimal ProductNetto { get; set; }
     public string ProductUnit { get; set; } = string.Empty;
+    public decimal? PriceUnit { get; set; }
     public decimal SaldoAwal { get; set; }
     public decimal SaldoMasukPO { get; set; }
     public decimal SaldoAkhir { get; set; }
@@ -18,6 +19,9 @@ public class Stock
     public DateTime ExpiredDate { get; set; } = SqlDateTime.MinValue.Value;
     public int CompanyId { get; set; }
     public DateTime CreatedDate { get; set; } = SqlDateTime.MinValue.Value;
+    public long? StockUploadBatchId { get; set; }
+    public DateTime? StockDate { get; set; }
 
     public virtual Company Company { get; set; } = null!;
+    public virtual StockUploadBatch? StockUploadBatch { get; set; }
 }

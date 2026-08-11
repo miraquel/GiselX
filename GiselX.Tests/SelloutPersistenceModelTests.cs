@@ -55,4 +55,32 @@ public class SelloutPersistenceModelTests
             [nameof(SelloutUploadBatch.CompanyId), nameof(SelloutUploadBatch.ReportingWeekStart)],
             index.Properties.Select(property => property.Name));
     }
+
+    [Fact]
+    public void Model_defines_upload_group_relationships_json_and_audit_index()
+    {
+        using var db = CreateContext();
+        var group = db.Model.FindEntityType(typeof(SelloutUploadGroup));
+
+        Assert.NotNull(group);
+        Assert.Equal("nvarchar(max)", group.FindProperty(nameof(SelloutUploadGroup.IgnoredSummaryRowsJson))!.GetColumnType());
+        Assert.Equal("nvarchar(max)", group.FindProperty(nameof(SelloutUploadGroup.ValidationErrorsJson))!.GetColumnType());
+        Assert.Contains(group.GetIndexes(), index => index.Properties.Select(property => property.Name)
+            .SequenceEqual([nameof(SelloutUploadGroup.CompanyId), nameof(SelloutUploadGroup.UploadedDate)]));
+
+        var companyForeignKey = Assert.Single(group.GetForeignKeys(), foreignKey =>
+            foreignKey.Properties.Single().Name == nameof(SelloutUploadGroup.CompanyId));
+        Assert.Equal(DeleteBehavior.Restrict, companyForeignKey.DeleteBehavior);
+
+        var mappingForeignKey = Assert.Single(group.GetForeignKeys(), foreignKey =>
+            foreignKey.Properties.Single().Name == nameof(SelloutUploadGroup.DistributorTemplateMappingId));
+        Assert.False(mappingForeignKey.IsRequired);
+        Assert.Equal(DeleteBehavior.Restrict, mappingForeignKey.DeleteBehavior);
+
+        var batch = db.Model.FindEntityType(typeof(SelloutUploadBatch))!;
+        var groupForeignKey = Assert.Single(batch.GetForeignKeys(), foreignKey =>
+            foreignKey.Properties.Single().Name == nameof(SelloutUploadBatch.SelloutUploadGroupId));
+        Assert.False(groupForeignKey.IsRequired);
+        Assert.Equal(DeleteBehavior.Cascade, groupForeignKey.DeleteBehavior);
+    }
 }

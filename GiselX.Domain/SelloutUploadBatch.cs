@@ -5,6 +5,7 @@ public sealed class SelloutUploadBatch
     public long Id { get; set; }
     public int CompanyId { get; set; }
     public int? DistributorTemplateMappingId { get; set; }
+    public long? SelloutUploadGroupId { get; set; }
     public DateTime ReportingWeekStart { get; set; }
     public string OriginalFileName { get; set; } = string.Empty;
     public string FileSha256 { get; set; } = string.Empty;
@@ -19,6 +20,7 @@ public sealed class SelloutUploadBatch
 
     public Company Company { get; set; } = null!;
     public DistributorTemplateMapping? DistributorTemplateMapping { get; set; }
+    public SelloutUploadGroup? SelloutUploadGroup { get; set; }
     public ICollection<SelloutStaging> StagingRows { get; set; } = new List<SelloutStaging>();
     public ICollection<SalesTransaction> SalesTransactions { get; set; } = new List<SalesTransaction>();
 }

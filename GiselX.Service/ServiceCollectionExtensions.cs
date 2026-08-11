@@ -15,5 +15,15 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IUploadCheckService, UploadCheckService>();
         services.AddScoped<IEmailService, EmailService>();
         services.AddScoped<ReminderJob>();
+        services.AddScoped<IDistributorTemplateMappingService, DistributorTemplateMappingService>();
+        services.AddScoped<IStockTemplateMappingService, StockTemplateMappingService>();
+        services.AddScoped<ISelloutWorkbookInspector, XlsxSelloutWorkbookInspector>();
+        services.AddScoped<IStockWorkbookInspector, XlsxStockWorkbookInspector>();
+        services.AddScoped<StockWorkbookParser>();
+        services.AddScoped<IStockWorkbookAnalysisService, StockWorkbookAnalysisService>();
+        services.AddScoped<IStockUploadService, StockUploadService>();
+        services.AddScoped<SelloutWorkbookParser>();
+        services.AddScoped<ISelloutWorkbookAnalysisService, SelloutWorkbookAnalysisService>();
+        services.AddScoped<ISelloutUploadService, SelloutUploadService>();
     }
 }

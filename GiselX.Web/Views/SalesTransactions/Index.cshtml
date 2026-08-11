@@ -38,17 +38,14 @@
         <div class="card-tools">
             @if (User.HasClaim("permission", PermissionConstants.SalesTransactions.Upload))
             {
-                <form asp-controller="SalesTransactions" asp-action="Upload" method="post" enctype="multipart/form-data">
+                <form id="selloutUploadForm" asp-controller="SalesTransactions" asp-action="Upload" method="post" enctype="multipart/form-data">
+                    <input type="hidden" id="multiWeekConfirmed" name="multiWeekConfirmed" value="false" />
                     <div class="input-group">
                         <input type="file" id="fileInput" name="file" class="form-control" aria-describedby="fileInputAddon" aria-label="Upload" accept="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
                         <button type="submit" class="btn btn-outline-success material-shadow-none" id="fileInputAddon">
                             <span class="ri-upload-2-fill me-1"></span>
                             Upload
                         </button>
-                        <a asp-controller="SalesTransactions" asp-action="DownloadTemplate" class="btn btn-outline-secondary">
-                            <span class="ri-file-download-line me-1"></span>
-                            Template
-                        </a>
                     </div>
                 </form>
             }
@@ -114,6 +111,40 @@
     </div>
 </div>
 
+<div class="modal fade" id="selloutUploadPreviewModal" tabindex="-1" aria-labelledby="selloutUploadPreviewTitle" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="selloutUploadPreviewTitle">Review sales transaction upload</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="uploadPreviewMessage" class="alert d-none" role="alert"></div>
+                <dl class="row mb-3">
+                    <dt class="col-sm-4">Detected mapping</dt><dd class="col-sm-8" id="previewMapping">-</dd>
+                    <dt class="col-sm-4">Transaction rows</dt><dd class="col-sm-8" id="previewRows">-</dd>
+                    <dt class="col-sm-4">Ignored summary rows</dt><dd class="col-sm-8" id="previewIgnoredRows">None</dd>
+                </dl>
+                <h6>Affected reporting weeks</h6>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered">
+                        <thead><tr><th>Week (Monday–Sunday)</th><th class="text-end">Rows</th></tr></thead>
+                        <tbody id="previewWeeks"></tbody>
+                    </table>
+                </div>
+                <div id="previewErrorsContainer" class="d-none">
+                    <h6 class="text-danger">Validation errors</h6>
+                    <ul id="previewErrors" class="mb-0"></ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success" id="confirmSelloutUpload">Confirm and upload</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 @section scripts
 {
     <script src="/lib/jquery/dist/jquery.min.js"></script>
@@ -122,12 +153,101 @@
     <script src="/js/helper.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <script>
-        const token = $('input[name="_+-_RequestVerificationToken"]').val();
+        const token = $('input[name="__RequestVerificationToken"]').first().val();
 
         $(document).ready(function() {
             const yearSelect = $('#yearSelect');
             const monthSelect = $('#monthSelect');
+            const uploadForm = document.getElementById('selloutUploadForm');
+            const uploadButton = document.getElementById('fileInputAddon');
+            const previewModalElement = document.getElementById('selloutUploadPreviewModal');
+            const previewModal = previewModalElement ? new bootstrap.Modal(previewModalElement) : null;
             let table;
+
+            function addTextRow(target, cells) {
+                const row = document.createElement('tr');
+                cells.forEach((value, index) => {
+                    const cell = document.createElement('td');
+                    cell.textContent = value;
+                    if (index === cells.length - 1) cell.classList.add('text-end');
+                    row.appendChild(cell);
+                });
+                target.appendChild(row);
+            }
+
+            function dateOnly(value) {
+                return value ? value.substring(0, 10) : '';
+            }
+
+            function weekEnd(value) {
+                const date = new Date(`${dateOnly(value)}T00:00:00`);
+                date.setDate(date.getDate() + 6);
+                return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+            }
+
+            function showUploadPreview(response) {
+                const data = response.data || {};
+                const errors = [...(response.errors || []), ...(data.errors || [])];
+                document.getElementById('previewMapping').textContent = data.mappingName || 'Not detected';
+                document.getElementById('previewRows').textContent = `${data.totalRows || 0} total, ${data.validRows || 0} valid, ${data.invalidRows || 0} invalid`;
+                document.getElementById('previewIgnoredRows').textContent = data.ignoredSummaryRowNumbers?.length
+                    ? data.ignoredSummaryRowNumbers.join(', ') : 'None';
+
+                const weeksBody = document.getElementById('previewWeeks');
+                weeksBody.replaceChildren();
+                (data.weeks || []).forEach(week => addTextRow(weeksBody, [
+                    `${dateOnly(week.reportingWeekStart)} – ${weekEnd(week.reportingWeekStart)}`,
+                    String(week.rowCount)
+                ]));
+
+                const message = document.getElementById('uploadPreviewMessage');
+                message.textContent = data.isMultiWeek
+                    ? 'This workbook affects multiple reporting weeks. Confirming will replace every week listed below as one all-or-nothing upload.'
+                    : 'Confirm the reporting week derived from the workbook invoice dates.';
+                message.className = `alert ${errors.length ? 'alert-danger' : data.isMultiWeek ? 'alert-warning' : 'alert-info'}`;
+
+                const errorContainer = document.getElementById('previewErrorsContainer');
+                const errorList = document.getElementById('previewErrors');
+                errorList.replaceChildren();
+                errors.forEach(error => {
+                    const item = document.createElement('li');
+                    item.textContent = error;
+                    errorList.appendChild(item);
+                });
+                errorContainer.classList.toggle('d-none', errors.length === 0);
+                document.getElementById('confirmSelloutUpload').classList.toggle('d-none', errors.length > 0);
+                previewModal?.show();
+            }
+
+            uploadForm?.addEventListener('submit', async function(event) {
+                if (document.getElementById('multiWeekConfirmed').value === 'true') return;
+                event.preventDefault();
+                if (!uploadForm.reportValidity()) return;
+                uploadButton.disabled = true;
+                try {
+                    const response = await fetch('@Url.Action("PreflightUpload", "SalesTransactions")', {
+                        method: 'POST',
+                        headers: { 'RequestVerificationToken': token },
+                        body: new FormData(uploadForm)
+                    });
+                    const payload = await response.json();
+                    showUploadPreview(payload);
+                } catch {
+                    showUploadPreview({ errors: ['The workbook could not be analyzed. Please try again.'] });
+                } finally {
+                    uploadButton.disabled = false;
+                }
+            });
+
+            document.getElementById('confirmSelloutUpload')?.addEventListener('click', function() {
+                document.getElementById('multiWeekConfirmed').value = 'true';
+                this.disabled = true;
+                HTMLFormElement.prototype.submit.call(uploadForm);
+            });
+
+            document.getElementById('fileInput')?.addEventListener('change', function() {
+                document.getElementById('multiWeekConfirmed').value = 'false';
+            });
 
             monthSelect.prop('disabled', true);
 

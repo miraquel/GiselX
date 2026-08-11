@@ -10,4 +10,6 @@ public interface IStockRepository
     Task<IEnumerable<Stock>> SelectByCustPeriodAsync(int companyId, int year, int month, CancellationToken cancellationToken);
     Task<PagedList<Stock>> SelectAsync(PagedListRequest pagedListRequest, int companyId, CancellationToken cancellationToken);
     Task<IEnumerable<Period>> SelectPeriodsAsync(int companyId, CancellationToken cancellationToken);
+    Task<IReadOnlyList<StockUploadBatch>> ListCompletedUploadsAsync(int companyId, CancellationToken cancellationToken);
+    Task<IEnumerable<Stock>> SelectByBatchAsync(long batchId, int companyId, CancellationToken cancellationToken);
 }

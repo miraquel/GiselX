@@ -18,6 +18,7 @@ CREATE OR ALTER PROCEDURE [dbo].[GiselStock_Select]
     @ProductPcsInCtn    INT            = NULL,
     -- Decimal column filters
     @ProductNetto   DECIMAL(18, 2) = NULL,
+    @PriceUnit      DECIMAL(18, 2) = NULL,
     @SaldoAwal      DECIMAL(18, 2) = NULL,
     @SaldoMasukPO   DECIMAL(18, 2) = NULL,
     @SaldoAkhir     DECIMAL(18, 2) = NULL,
@@ -40,6 +41,7 @@ BEGIN
         [ProductPcsInCtn],
         [ProductNetto],
         [ProductUnit],
+        [PriceUnit],
         [SaldoAwal],
         [SaldoMasukPO],
         [SaldoAkhir],
@@ -70,6 +72,7 @@ BEGIN
       AND (@ProductPcsInCtn IS NULL OR [ProductPcsInCtn] = @ProductPcsInCtn)
       -- Decimal filters
       AND (@ProductNetto IS NULL OR [ProductNetto] = @ProductNetto)
+      AND (@PriceUnit    IS NULL OR [PriceUnit]    = @PriceUnit)
       AND (@SaldoAwal    IS NULL OR [SaldoAwal]    = @SaldoAwal)
       AND (@SaldoMasukPO IS NULL OR [SaldoMasukPO] = @SaldoMasukPO)
       AND (@SaldoAkhir   IS NULL OR [SaldoAkhir]   = @SaldoAkhir)
@@ -112,6 +115,8 @@ BEGIN
         -- Decimal columns ASC
         CASE WHEN @SortOrder = 'ASC' AND @SortColumn IN ('productNetto', 'ProductNetto')
             THEN [ProductNetto] END ASC,
+        CASE WHEN @SortOrder = 'ASC' AND @SortColumn IN ('priceUnit', 'PriceUnit')
+            THEN [PriceUnit] END ASC,
         CASE WHEN @SortOrder = 'ASC' AND @SortColumn IN ('saldoAwal', 'SaldoAwal')
             THEN [SaldoAwal]    END ASC,
         CASE WHEN @SortOrder = 'ASC' AND @SortColumn IN ('saldoMasukPO', 'SaldoMasukPO')
@@ -121,6 +126,8 @@ BEGIN
         -- Decimal columns DESC
         CASE WHEN @SortOrder = 'DESC' AND @SortColumn IN ('productNetto', 'ProductNetto')
             THEN [ProductNetto] END DESC,
+        CASE WHEN @SortOrder = 'DESC' AND @SortColumn IN ('priceUnit', 'PriceUnit')
+            THEN [PriceUnit] END DESC,
         CASE WHEN @SortOrder = 'DESC' AND @SortColumn IN ('saldoAwal', 'SaldoAwal')
             THEN [SaldoAwal]    END DESC,
         CASE WHEN @SortOrder = 'DESC' AND @SortColumn IN ('saldoMasukPO', 'SaldoMasukPO')
@@ -157,6 +164,7 @@ BEGIN
       AND (@BatchNumber      IS NULL OR [BatchNumber]      LIKE @BatchNumber)
       AND (@ProductPcsInCtn IS NULL OR [ProductPcsInCtn] = @ProductPcsInCtn)
       AND (@ProductNetto IS NULL OR [ProductNetto] = @ProductNetto)
+      AND (@PriceUnit    IS NULL OR [PriceUnit]    = @PriceUnit)
       AND (@SaldoAwal    IS NULL OR [SaldoAwal]    = @SaldoAwal)
       AND (@SaldoMasukPO IS NULL OR [SaldoMasukPO] = @SaldoMasukPO)
       AND (@SaldoAkhir   IS NULL OR [SaldoAkhir]   = @SaldoAkhir)

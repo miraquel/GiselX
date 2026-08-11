@@ -17,6 +17,8 @@ public class StockDto
     public decimal ProductNetto { get; set; }
     [Display(Name = "Unit")]
     public string ProductUnit { get; set; } = string.Empty;
+    [Display(Name = "Price Unit")]
+    public decimal? PriceUnit { get; set; }
     [Display(Name = "Saldo Awal")]
     public decimal SaldoAwal { get; set; }
     [Display(Name = "Saldo Masuk PO")]
@@ -30,4 +32,7 @@ public class StockDto
     public int CompanyId { get; set; }
     [Display(Name = "Created Date")]
     public DateTime CreatedDate { get; set; } = SqlDateTime.MinValue.Value;
+    public long? StockUploadBatchId { get; set; }
+    [Display(Name = "Stock Date")]
+    public DateTime? StockDate { get; set; }
 }
