@@ -143,12 +143,12 @@ namespace GiselX.Web.Context.Migrations
                     ALTER TABLE dbo.StockStaging ALTER COLUMN PriceUnit decimal(18,2) NULL;
                 """);
 
-            migrationBuilder.Sql(CompanyInsertProcedure);
-            migrationBuilder.Sql(CompanyUpdateProcedure);
-            migrationBuilder.Sql(CompanySelectByIdProcedure);
-            migrationBuilder.Sql(CompanySelectProcedure);
-            migrationBuilder.Sql(SalesSelectProcedure);
-            migrationBuilder.Sql(SalesSelectByCustPeriodProcedure);
+            migrationBuilder.Sql(IsolateProcedureBatch(CompanyInsertProcedure));
+            migrationBuilder.Sql(IsolateProcedureBatch(CompanyUpdateProcedure));
+            migrationBuilder.Sql(IsolateProcedureBatch(CompanySelectByIdProcedure));
+            migrationBuilder.Sql(IsolateProcedureBatch(CompanySelectProcedure));
+            migrationBuilder.Sql(IsolateProcedureBatch(SalesSelectProcedure));
+            migrationBuilder.Sql(IsolateProcedureBatch(SalesSelectByCustPeriodProcedure));
 
             migrationBuilder.CreateTable(
                 name: "ItemMapping",
@@ -236,6 +236,9 @@ namespace GiselX.Web.Context.Migrations
                 principalColumn: "Id",
                 onDelete: ReferentialAction.Restrict);
         }
+
+        private static string IsolateProcedureBatch(string procedureSql) =>
+            $"EXEC(N'{procedureSql.Replace("'", "''", StringComparison.Ordinal)}');";
 
         private const string PreviousCompanyInsertProcedure = """
 CREATE OR ALTER PROCEDURE [dbo].[Company_Insert]
@@ -816,7 +819,86 @@ END
 """;
 
         private const string SalesSelectProcedure = """
-CREATE OR ALT…971 tokens truncated… -- Period
+CREATE OR ALTER PROCEDURE [dbo].[GiselSales_Select]
+    -- Paging & sorting
+    @CompanyId      INT,
+    @UseDistributorIdentity BIT = 0,
+    @PageNumber     INT            = 1,
+    @PageSize       INT            = 10,
+    @SortColumn     NVARCHAR(100)  = NULL,
+    @SortOrder      NVARCHAR(4)    = 'ASC',
+    -- Period filter (from year/month dropdowns)
+    @Year           INT            = NULL,
+    @Month          INT            = NULL,
+    @SearchTerm     NVARCHAR(200)  = NULL,
+    -- String column filters (support LIKE via %)
+    @CustomerId         NVARCHAR(100)  = NULL,
+    @CustomerName       NVARCHAR(200)  = NULL,
+    @CustomerAlias      NVARCHAR(200)  = NULL,
+    @CustomerAddress    NVARCHAR(500)  = NULL,
+    @ProductId          NVARCHAR(100)  = NULL,
+    @ProductBrand       NVARCHAR(200)  = NULL,
+    @ProductName        NVARCHAR(200)  = NULL,
+    @ProductPackaging   NVARCHAR(100)  = NULL,
+    @BatchNumber        NVARCHAR(100)  = NULL,
+    @InvoiceNo          NVARCHAR(100)  = NULL,
+    @InvoiceUnit        NVARCHAR(50)   = NULL,
+    @GeisaPOId          NVARCHAR(100)  = NULL,
+    @SalesmanNameGMK    NVARCHAR(200)  = NULL,
+    -- Integer column filters
+    @ProductPcsInCtn    INT            = NULL,
+    -- Decimal column filters
+    @InvoiceQty     DECIMAL(18, 2) = NULL,
+    @UnitPrice      DECIMAL(18, 2) = NULL,
+    @GrossValue     DECIMAL(18, 2) = NULL,
+    @DiscountValue  DECIMAL(18, 2) = NULL,
+    @DiscountPct    DECIMAL(18, 2) = NULL,
+    @NetValue       DECIMAL(18, 2) = NULL,
+    @InKg           DECIMAL(18, 2) = NULL,
+    -- DateTime column filters
+    @ExpiredDate    DATETIME       = NULL,
+    @InvoiceDate    DATETIME       = NULL,
+    @ShipDate       DATETIME       = NULL,
+    @CreatedDate    DATETIME       = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET ARITHABORT ON;
+
+    DECLARE @Offset INT = (@PageNumber - 1) * @PageSize;
+
+    -- DATA RESULT SET
+    SELECT
+        [Id],
+        [CustomerId],
+        [CustomerName],
+        [CustomerAlias],
+        [CustomerAddress],
+        CASE WHEN @UseDistributorIdentity=1 THEN COALESCE(NULLIF([DistributorProductId],''),[ProductId]) ELSE [ProductId] END AS [ProductId],
+        [ProductBrand],
+        CASE WHEN @UseDistributorIdentity=1 THEN COALESCE(NULLIF([DistributorProductName],''),[ProductName]) ELSE [ProductName] END AS [ProductName],
+        [ProductPackaging],
+        [ProductPcsInCtn],
+        [BatchNumber],
+        [ExpiredDate],
+        [InvoiceNo],
+        [InvoiceDate],
+        [InvoiceQty],
+        [InvoiceUnit],
+        [UnitPrice],
+        [GrossValue],
+        [DiscountValue],
+        [DiscountPct],
+        [NetValue],
+        [InKg],
+        [GeisaPOId],
+        [ShipDate],
+        [SalesmanNameGMK],
+        [CompanyId],
+        [CreatedDate]
+    FROM [dbo].[SalesTransaction]
+    WHERE [CompanyId] = @CompanyId
+      -- Period
       AND (@Year        IS NULL OR YEAR([InvoiceDate])  = @Year)
       AND (@Month       IS NULL OR MONTH([InvoiceDate]) = @Month)
       -- Latest upload batch within the period
@@ -1067,11 +1149,11 @@ END
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             // Restore the pre-mapping procedure signatures before removing the mapped identity columns.
-            migrationBuilder.Sql(PreviousCompanyInsertProcedure);
-            migrationBuilder.Sql(PreviousCompanyUpdateProcedure);
-            migrationBuilder.Sql(PreviousCompanySelectByIdProcedure);
-            migrationBuilder.Sql(PreviousCompanySelectProcedure);
-            migrationBuilder.Sql(PreviousSalesSelectProcedure);
+            migrationBuilder.Sql(IsolateProcedureBatch(PreviousCompanyInsertProcedure));
+            migrationBuilder.Sql(IsolateProcedureBatch(PreviousCompanyUpdateProcedure));
+            migrationBuilder.Sql(IsolateProcedureBatch(PreviousCompanySelectByIdProcedure));
+            migrationBuilder.Sql(IsolateProcedureBatch(PreviousCompanySelectProcedure));
+            migrationBuilder.Sql(IsolateProcedureBatch(PreviousSalesSelectProcedure));
             migrationBuilder.Sql("DROP PROCEDURE IF EXISTS [dbo].[GiselSales_SelectByCustPeriod];");
 
             migrationBuilder.DropForeignKey(

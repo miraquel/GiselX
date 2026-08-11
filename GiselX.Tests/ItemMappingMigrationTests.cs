@@ -1,3 +1,7 @@
+using GiselX.Web.Context.Migrations;
+using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Migrations.Operations;
+
 namespace GiselX.Tests;
 
 public sealed class ItemMappingMigrationTests
@@ -50,11 +54,11 @@ public sealed class ItemMappingMigrationTests
         var sql = ReadMigrationSql();
         var down = sql[sql.IndexOf("protected override void Down", StringComparison.Ordinal)..];
 
-        Assert.Contains("migrationBuilder.Sql(PreviousCompanyInsertProcedure)", down, StringComparison.Ordinal);
-        Assert.Contains("migrationBuilder.Sql(PreviousCompanyUpdateProcedure)", down, StringComparison.Ordinal);
-        Assert.Contains("migrationBuilder.Sql(PreviousCompanySelectByIdProcedure)", down, StringComparison.Ordinal);
-        Assert.Contains("migrationBuilder.Sql(PreviousCompanySelectProcedure)", down, StringComparison.Ordinal);
-        Assert.Contains("migrationBuilder.Sql(PreviousSalesSelectProcedure)", down, StringComparison.Ordinal);
+        Assert.Contains("IsolateProcedureBatch(PreviousCompanyInsertProcedure)", down, StringComparison.Ordinal);
+        Assert.Contains("IsolateProcedureBatch(PreviousCompanyUpdateProcedure)", down, StringComparison.Ordinal);
+        Assert.Contains("IsolateProcedureBatch(PreviousCompanySelectByIdProcedure)", down, StringComparison.Ordinal);
+        Assert.Contains("IsolateProcedureBatch(PreviousCompanySelectProcedure)", down, StringComparison.Ordinal);
+        Assert.Contains("IsolateProcedureBatch(PreviousSalesSelectProcedure)", down, StringComparison.Ordinal);
         Assert.Contains("PreviousCompanyInsertProcedure", sql, StringComparison.Ordinal);
         Assert.DoesNotContain("@ItemMappingEnabled", PreviousProcedure(sql, "PreviousCompanyInsertProcedure"), StringComparison.Ordinal);
         Assert.DoesNotContain("@UseDistributorIdentity", PreviousProcedure(sql, "PreviousSalesSelectProcedure"), StringComparison.Ordinal);
@@ -68,6 +72,49 @@ public sealed class ItemMappingMigrationTests
         Assert.DoesNotContain("AspNetUserLogins", sql, StringComparison.Ordinal);
         Assert.DoesNotContain("AspNetUserTokens", sql, StringComparison.Ordinal);
         Assert.DoesNotContain("ProviderKey", sql, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Procedure_definitions_are_isolated_in_dynamic_sql_batches()
+    {
+        var migration = new InspectableItemMappingMigration();
+        var procedureOperations = migration.GetUpOperations()
+            .Concat(migration.GetDownOperations())
+            .OfType<SqlOperation>()
+            .Where(operation => operation.Sql.Contains("CREATE OR ALTER PROCEDURE", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        Assert.NotEmpty(procedureOperations);
+        Assert.All(procedureOperations, operation =>
+        {
+            var sql = operation.Sql.Trim();
+            Assert.StartsWith("EXEC(N'", sql, StringComparison.Ordinal);
+            Assert.EndsWith("');", sql, StringComparison.Ordinal);
+        });
+    }
+
+    [Fact]
+    public void Upgrade_installs_every_required_mapping_procedure()
+    {
+        var migration = new InspectableItemMappingMigration();
+        var sql = string.Join("\n", migration.GetUpOperations()
+            .OfType<SqlOperation>()
+            .Select(operation => operation.Sql));
+
+        foreach (var procedure in new[]
+                 {
+                     "Company_Insert",
+                     "Company_Update",
+                     "Company_SelectById",
+                     "Company_Select",
+                     "GiselSales_Select",
+                     "GiselSales_SelectByCustPeriod"
+                 })
+        {
+            Assert.Contains($"[dbo].[{procedure}]", sql, StringComparison.Ordinal);
+        }
+
+        Assert.DoesNotContain("tokens truncated", sql, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string ReadMigrationSql() => File.ReadAllText(FindFromSolutionRoot(
@@ -88,5 +135,22 @@ public sealed class ItemMappingMigrationTests
             directory = directory.Parent;
 
         return Path.Combine(directory?.FullName ?? Directory.GetCurrentDirectory(), Path.Combine(parts));
+    }
+
+    private sealed class InspectableItemMappingMigration : AddCompanyItemIdentityMapping
+    {
+        public IReadOnlyList<MigrationOperation> GetUpOperations()
+        {
+            var builder = new MigrationBuilder("Microsoft.EntityFrameworkCore.SqlServer");
+            base.Up(builder);
+            return builder.Operations;
+        }
+
+        public IReadOnlyList<MigrationOperation> GetDownOperations()
+        {
+            var builder = new MigrationBuilder("Microsoft.EntityFrameworkCore.SqlServer");
+            base.Down(builder);
+            return builder.Operations;
+        }
     }
 }
