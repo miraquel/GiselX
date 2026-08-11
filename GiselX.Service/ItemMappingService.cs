@@ -63,7 +63,14 @@ public sealed class ItemMappingService(IItemMappingRepository repository, IDbTra
             Apply(dto, current);
             current.ModifiedBy = username;
             current.ModifiedDate = now;
-            await repository.UpdateAsync(current, token);
+            try
+            {
+                await repository.UpdateAsync(current, token);
+            }
+            catch (ItemMappingDuplicateException)
+            {
+                return DuplicateDistributorItemIdResponse();
+            }
             id = current.Id;
         }
         else
@@ -79,7 +86,14 @@ public sealed class ItemMappingService(IItemMappingRepository repository, IDbTra
                 CreatedBy = username,
                 CreatedDate = now
             };
-            id = await repository.InsertAsync(mapping, token);
+            try
+            {
+                id = await repository.InsertAsync(mapping, token);
+            }
+            catch (ItemMappingDuplicateException)
+            {
+                return DuplicateDistributorItemIdResponse();
+            }
         }
 
         dbTransaction.Commit();
@@ -131,12 +145,23 @@ public sealed class ItemMappingService(IItemMappingRepository repository, IDbTra
         if (string.IsNullOrWhiteSpace(dto.GmkItemName)) errors.Add("GMK Item Name is required.");
         if (string.IsNullOrWhiteSpace(dto.DistributorItemId)) errors.Add("Distributor Item ID is required.");
         if (string.IsNullOrWhiteSpace(dto.DistributorItemName)) errors.Add("Distributor Item Name is required.");
+        if (dto.GmkItemId?.Trim().Length > 100) errors.Add("GMK Item ID must not exceed 100 characters.");
+        if (dto.GmkItemName?.Trim().Length > 200) errors.Add("GMK Item Name must not exceed 200 characters.");
+        if (dto.DistributorItemId?.Trim().Length > 100) errors.Add("Distributor Item ID must not exceed 100 characters.");
+        if (dto.DistributorItemName?.Trim().Length > 200) errors.Add("Distributor Item Name must not exceed 200 characters.");
         var distributorItemId = dto.DistributorItemId?.Trim();
         if (!string.IsNullOrEmpty(distributorItemId) && existingMappings.Any(mapping => mapping.Id != dto.Id &&
             string.Equals(mapping.DistributorItemId?.Trim(), distributorItemId, StringComparison.OrdinalIgnoreCase)))
             errors.Add("A mapping with this Distributor Item ID already exists for the company.");
         return errors;
     }
+
+    private static ServiceResponse<int> DuplicateDistributorItemIdResponse() => new()
+    {
+        Errors = ["A mapping with this Distributor Item ID already exists for the company."],
+        Message = "The item mapping is invalid.",
+        StatusCode = StatusCodes.Status400BadRequest
+    };
 
     private static void Apply(SaveItemMappingDto dto, ItemMapping mapping)
     {

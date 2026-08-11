@@ -27,6 +27,15 @@ public class CompanyService : ICompanyService
 
     public async Task<ServiceResponse<CompanyDto>> CreateCompanyAsync(CompanyDto companyDto, CancellationToken cancellationToken)
     {
+        if (companyDto.ItemMappingEnabled is true)
+        {
+            return new ServiceResponse<CompanyDto>
+            {
+                Errors = ["At least one active item mapping is required before item mapping can be enabled."],
+                StatusCode = StatusCodes.Status400BadRequest
+            };
+        }
+
         var companyToCreate = _mapper.MapToEntity(companyDto);
         companyToCreate.ItemMappingEnabled = companyDto.ItemMappingEnabled ?? false;
         var company = await _companyRepository.CreateCompanyAsync(companyToCreate, cancellationToken);

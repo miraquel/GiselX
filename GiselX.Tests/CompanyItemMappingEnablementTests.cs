@@ -11,6 +11,22 @@ namespace GiselX.Tests;
 public class CompanyItemMappingEnablementTests
 {
     [Fact]
+    public async Task CreateCompanyAsync_rejects_explicit_item_mapping_enablement()
+    {
+        var companyRepository = new FakeCompanyRepository();
+        var transaction = new FakeTransaction();
+        var service = new CompanyService(companyRepository, new FakeItemMappingRepository(), transaction, new UserClaimDto());
+
+        var response = await service.CreateCompanyAsync(new CompanyDto
+            { Name = "Distributor", ItemMappingEnabled = true }, default);
+
+        Assert.False(response.IsSuccess);
+        Assert.Contains(response.Errors, error => error.Contains("active item mapping", StringComparison.OrdinalIgnoreCase));
+        Assert.False(companyRepository.CreateCalled);
+        Assert.False(transaction.CommitCalled);
+    }
+
+    [Fact]
     public async Task UpdateCompanyAsync_rejects_enablement_without_active_mapping()
     {
         var companyRepository = new FakeCompanyRepository();
@@ -118,11 +134,18 @@ public class CompanyItemMappingEnablementTests
 
     private sealed class FakeCompanyRepository : ICompanyRepository
     {
+        public bool CreateCalled { get; private set; }
+        public Company? CreatedCompany { get; private set; }
         public bool UpdateCalled { get; private set; }
         public Company? UpdatedCompany { get; private set; }
         public Company? ExistingCompany { get; set; } = new() { Id = 7, Name = "Distributor" };
 
-        public Task<Company> CreateCompanyAsync(Company company, CancellationToken cancellationToken) => Task.FromResult(company);
+        public Task<Company> CreateCompanyAsync(Company company, CancellationToken cancellationToken)
+        {
+            CreateCalled = true;
+            CreatedCompany = company;
+            return Task.FromResult(company);
+        }
         public Task<Company?> GetCompanyByIdAsync(int id, CancellationToken cancellationToken) => Task.FromResult(ExistingCompany);
         public Task<PagedList<Company>> GetCompaniesAsync(PagedListRequest pagedListRequest, CancellationToken cancellationToken) =>
             Task.FromResult(new PagedList<Company>([], 1, 10, 0));

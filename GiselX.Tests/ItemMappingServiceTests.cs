@@ -44,6 +44,67 @@ public class ItemMappingServiceTests
         Assert.False(transaction.CommitCalled);
     }
 
+    [Theory]
+    [InlineData(nameof(SaveItemMappingDto.GmkItemId), 100)]
+    [InlineData(nameof(SaveItemMappingDto.GmkItemName), 200)]
+    [InlineData(nameof(SaveItemMappingDto.DistributorItemId), 100)]
+    [InlineData(nameof(SaveItemMappingDto.DistributorItemName), 200)]
+    public async Task SaveAsync_accepts_maximum_trimmed_field_length(string field, int length)
+    {
+        var dto = ValidSave();
+        SetField(dto, field, new string('X', length));
+        var (service, repository, transaction) = CreateService();
+
+        var response = await service.SaveAsync(dto, "admin", CancellationToken.None);
+
+        Assert.True(response.IsSuccess);
+        Assert.Single(repository.Inserted);
+        Assert.True(transaction.CommitCalled);
+    }
+
+    [Theory]
+    [InlineData(nameof(SaveItemMappingDto.GmkItemId), 101, "GMK Item ID")]
+    [InlineData(nameof(SaveItemMappingDto.GmkItemName), 201, "GMK Item Name")]
+    [InlineData(nameof(SaveItemMappingDto.DistributorItemId), 101, "Distributor Item ID")]
+    [InlineData(nameof(SaveItemMappingDto.DistributorItemName), 201, "Distributor Item Name")]
+    public async Task SaveAsync_rejects_overlength_trimmed_field(string field, int length, string expectedField)
+    {
+        var dto = ValidSave();
+        SetField(dto, field, new string('X', length));
+        var (service, repository, transaction) = CreateService();
+
+        var response = await service.SaveAsync(dto, "admin", CancellationToken.None);
+
+        Assert.False(response.IsSuccess);
+        Assert.Contains(response.Errors, error => error.Contains(expectedField));
+        Assert.Empty(repository.Inserted);
+        Assert.False(transaction.CommitCalled);
+    }
+
+    [Fact]
+    public async Task SaveAsync_translates_duplicate_key_conflict_to_distributor_item_id_error()
+    {
+        var (service, repository, transaction) = CreateService();
+        repository.InsertException = new ItemMappingDuplicateException();
+
+        var response = await service.SaveAsync(ValidSave(), "admin", CancellationToken.None);
+
+        Assert.False(response.IsSuccess);
+        Assert.Contains(response.Errors, error => error.Contains("Distributor Item ID"));
+        Assert.False(transaction.CommitCalled);
+    }
+
+    [Fact]
+    public async Task SaveAsync_propagates_non_duplicate_persistence_errors()
+    {
+        var (service, repository, transaction) = CreateService();
+        repository.InsertException = new InvalidOperationException("Database unavailable.");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.SaveAsync(ValidSave(), "admin", CancellationToken.None));
+
+        Assert.False(transaction.CommitCalled);
+    }
+
     [Fact]
     public async Task UpsertAsync_emits_normalized_match_without_changing_existing_activation()
     {
@@ -210,11 +271,24 @@ public class ItemMappingServiceTests
         DistributorItemName = " Panadol Extra "
     };
 
+    private static void SetField(SaveItemMappingDto dto, string field, string value)
+    {
+        switch (field)
+        {
+            case nameof(SaveItemMappingDto.GmkItemId): dto.GmkItemId = value; break;
+            case nameof(SaveItemMappingDto.GmkItemName): dto.GmkItemName = value; break;
+            case nameof(SaveItemMappingDto.DistributorItemId): dto.DistributorItemId = value; break;
+            case nameof(SaveItemMappingDto.DistributorItemName): dto.DistributorItemName = value; break;
+            default: throw new ArgumentOutOfRangeException(nameof(field));
+        }
+    }
+
     private sealed class FakeItemMappingRepository(params ItemMapping[] mappings) : IItemMappingRepository
     {
         public List<ItemMapping> Mappings { get; } = [.. mappings];
         public List<ItemMapping> Inserted { get; } = [];
         public List<ItemMapping> Updated { get; } = [];
+        public Exception? InsertException { get; set; }
         public ItemMappingDeleteResult DeleteResult { get; set; }
         public (int Id, int CompanyId)? DeletedMapping { get; private set; }
         public ActiveChange? ActiveChange { get; private set; }
@@ -227,6 +301,7 @@ public class ItemMappingServiceTests
             Task.FromResult(Mappings.SingleOrDefault(mapping => mapping.Id == id && mapping.CompanyId == companyId));
         public Task<int> InsertAsync(ItemMapping mapping, CancellationToken cancellationToken)
         {
+            if (InsertException is not null) throw InsertException;
             Inserted.Add(mapping);
             return Task.FromResult(42);
         }

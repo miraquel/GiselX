@@ -2,6 +2,7 @@ using System.Data;
 using Dapper;
 using GiselX.Domain;
 using GiselX.Repository.Interface;
+using Microsoft.Data.SqlClient;
 
 namespace GiselX.Repository;
 
@@ -21,7 +22,7 @@ public sealed class ItemMappingRepository(IDbConnection dbConnection, IDbTransac
             dbTransaction, cancellationToken: cancellationToken));
     }
 
-    public Task<int> InsertAsync(ItemMapping mapping, CancellationToken cancellationToken)
+    public async Task<int> InsertAsync(ItemMapping mapping, CancellationToken cancellationToken)
     {
         const string sql = """
             INSERT INTO ItemMapping
@@ -32,8 +33,15 @@ public sealed class ItemMappingRepository(IDbConnection dbConnection, IDbTransac
                 (@CompanyId, @GmkItemId, @GmkItemName, @DistributorItemId, @DistributorItemName, @IsActive,
                  @CreatedDate, @CreatedBy, @ModifiedDate, @ModifiedBy);
             """;
-        return dbConnection.ExecuteScalarAsync<int>(new CommandDefinition(sql, mapping, dbTransaction,
-            cancellationToken: cancellationToken));
+        try
+        {
+            return await dbConnection.ExecuteScalarAsync<int>(new CommandDefinition(sql, mapping, dbTransaction,
+                cancellationToken: cancellationToken));
+        }
+        catch (SqlException exception) when (exception.Number is 2601 or 2627)
+        {
+            throw new ItemMappingDuplicateException(exception);
+        }
     }
 
     public async Task UpdateAsync(ItemMapping mapping, CancellationToken cancellationToken)
@@ -48,8 +56,16 @@ public sealed class ItemMappingRepository(IDbConnection dbConnection, IDbTransac
                 ModifiedBy = @ModifiedBy
             WHERE Id = @Id AND CompanyId = @CompanyId;
             """;
-        var affected = await dbConnection.ExecuteAsync(new CommandDefinition(sql, mapping, dbTransaction,
-            cancellationToken: cancellationToken));
+        int affected;
+        try
+        {
+            affected = await dbConnection.ExecuteAsync(new CommandDefinition(sql, mapping, dbTransaction,
+                cancellationToken: cancellationToken));
+        }
+        catch (SqlException exception) when (exception.Number is 2601 or 2627)
+        {
+            throw new ItemMappingDuplicateException(exception);
+        }
         if (affected == 0) throw new InvalidOperationException("The item mapping was not found.");
     }
 
