@@ -120,7 +120,7 @@ public sealed class ItemMappingImportService(
     private static bool IsUnchanged(ItemMapping incoming, ItemMapping existing) =>
         string.Equals(incoming.GmkItemId.Trim(), existing.GmkItemId.Trim(), StringComparison.Ordinal) &&
         string.Equals(incoming.GmkItemName.Trim(), existing.GmkItemName.Trim(), StringComparison.Ordinal) &&
-        string.Equals(incoming.DistributorItemId.Trim(), existing.DistributorItemId.Trim(), StringComparison.Ordinal) &&
+        string.Equals(incoming.DistributorItemId.Trim(), existing.DistributorItemId.Trim(), StringComparison.OrdinalIgnoreCase) &&
         string.Equals(incoming.DistributorItemName.Trim(), existing.DistributorItemName.Trim(), StringComparison.Ordinal);
 
     private static ItemMappingImportResultDto ToResult(ItemMappingImportPreviewDto preview) => new()

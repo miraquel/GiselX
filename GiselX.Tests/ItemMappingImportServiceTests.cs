@@ -86,6 +86,24 @@ public sealed class ItemMappingImportServiceTests
         Assert.True(transaction.CommitCalled);
     }
 
+    [Fact]
+    public async Task ImportAsync_treats_case_only_distributor_item_id_change_as_unchanged()
+    {
+        var repository = new FakeRepository(
+            Mapping(8, "P0003", "4100039", "Cream Caramel", "Caramel Mix", true));
+        var transaction = new FakeTransaction();
+        var service = new ItemMappingImportService(new ItemMappingWorkbookParser(), repository, transaction);
+
+        var response = await service.ImportAsync(Workbook(
+            ("4100039", "Cream Caramel", "p0003", "Caramel Mix")), 7, true, "admin", default);
+
+        Assert.True(response.IsSuccess);
+        Assert.Equal(1, response.Data!.UnchangedRows);
+        Assert.Equal(0, response.Data.UpdatedRows);
+        Assert.Empty(repository.Upserted);
+        Assert.True(transaction.CommitCalled);
+    }
+
     private static (ItemMappingImportService Service, FakeRepository Repository, FakeTransaction Transaction) CreateService()
     {
         var repository = new FakeRepository();
