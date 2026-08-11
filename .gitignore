@@ -12,6 +12,8 @@ riderModule.iml
 # Agent & MCP tooling artifacts
 .serena/
 .playwright-mcp/
+.worktrees/
+.superpowers/
 
 # Generated output of scripts/gen_db_doc.py
 GiselX-Database-Documentation.xlsx
