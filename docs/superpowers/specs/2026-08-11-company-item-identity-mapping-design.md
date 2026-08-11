@@ -95,7 +95,7 @@ Import is a preview-and-confirm workflow. The preview reports new, updated, unch
 
 After confirmation, a valid workbook is applied transactionally:
 
-- an existing company mapping with the same normalized Distributor Item ID is updated;
+- an existing company mapping with the same normalized Distributor Item ID is updated while retaining its current active/inactive state;
 - a new Distributor Item ID is inserted as active;
 - unchanged rows remain unchanged;
 - mappings absent from the workbook remain unchanged.
