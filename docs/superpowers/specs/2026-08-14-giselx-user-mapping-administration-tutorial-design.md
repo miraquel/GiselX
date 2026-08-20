@@ -12,8 +12,8 @@ Create a polished, text-only PDF tutorial that teaches a GiselX administrator ho
 2. Configure a company-specific Stock workbook mapping.
 3. Create or import distributor-to-GMK Item mappings.
 4. Enable Item identity mapping for future Sellout and Stock uploads.
-5. Create an Administration role and assign the required permissions.
-6. Create a user and assign the Administration role.
+5. Create the exact `Administrator` role and assign the required permissions.
+6. Create a user and assign the `Administrator` role.
 7. Verify that the mappings and access configuration are ready for use.
 
 The guide will use the labels and navigation found in the current GiselX application. It will not contain screenshots, passwords, secrets, or invented production records.
@@ -71,9 +71,9 @@ Explain Active and Inactive states, search and sorting, and the rule that distri
 
 Direct the administrator back to **Edit Company**, select **Enable distributor-to-GMK item mapping for future Stock and Sales uploads**, save the company, and verify that all distributor item IDs expected in future files have active mappings before enabling the option.
 
-### 7. Create the Administration role
+### 7. Create the Administrator role
 
-Direct the user to **Admin > Roles**, select **Create New Role**, enter a name such as `Administration` and a clear description, then create the role.
+Direct the user to **Admin > Roles**, select **Create New Role**, enter the exact role name `Administrator` and a clear description, then create the role. The exact name is required because the current application uses it to enable administrator-wide data scope.
 
 On **Assign Permissions to Role**, instruct the administrator to assign permissions required for the intended administration scope. For this tutorial, the recommended set includes all permissions in these groups:
 
@@ -89,11 +89,15 @@ Optional groups such as Service Levels, Email Test, and Hangfire Dashboard will 
 
 Direct the user to **Admin > Users**, select **Add New Record**, and complete **Username**, **Email**, **First Name**, **Last Name**, **Password**, **Confirm Password**, optional **Phone Number**, and **Company**. Explain that the selected company controls the user's company context and that the password must comply with the application's password policy.
 
-### 9. Assign the Administration role
+### 9. Assign the Administrator role
 
-From the Users table, direct the administrator to select the **Assign Roles** action, select **Administration**, retain or clear other roles deliberately, select **Save Roles**, and verify that the role appears in the user's Role column.
+From the Users table, direct the administrator to select the **Assign Roles** action, select **Administrator**, retain or clear other roles deliberately, select **Save Roles**, and verify that the role appears in the user's Role column.
 
-### 10. Verification, troubleshooting, and final checklist
+### 10. Current Administrator data scope
+
+Include the latest workspace behavior: a user in the exact `Administrator` role can see records across distributors on **Sales Transaction**, **Stock**, and **Service Level** pages. Administrator tables include a distributor/company column, Stock supports distributor filtering, completed Stock upload choices include the distributor, and administrator downloads include a leading **Distributor** column with filenames using `All_Distributors`. Non-administrator users remain limited to their assigned company or uploader scope.
+
+### 11. Verification, troubleshooting, and final checklist
 
 Provide checks for:
 
@@ -101,9 +105,10 @@ Provide checks for:
 - Active Stock mapping exists for the intended company.
 - Required Item mappings exist and are Active.
 - Item identity mapping is enabled only after coverage is complete.
-- Administration role contains the intended permissions.
-- User is Active, belongs to the correct company, and displays the Administration role.
-- A sign-out/sign-in is performed after permission changes so updated claims are applied.
+- Administrator role contains the intended permissions.
+- User is Active, belongs to the correct company, and displays the Administrator role.
+- The user signs in again after role permission changes. Saving permissions refreshes security stamps for users in the role, so existing sessions may be invalidated.
+- Administrator pages show the distributor/company context introduced by the latest workspace update.
 
 Troubleshooting will cover missing menus due to permissions, invalid sample workbook structure, wrong worksheet or row numbers, unmapped required columns, duplicate or inactive Item mappings, failed bulk import validation, and a role that has been created but not assigned.
 
@@ -122,8 +127,8 @@ The final PDF is complete when:
 1. Every requested workflow is covered in numbered steps.
 2. Navigation and labels match the current source code.
 3. Sellout, Stock, and Item mapping concepts are clearly distinguished.
-4. Role creation, permission assignment, user creation, and role assignment are each independently verifiable.
+4. Administrator role creation, permission assignment, user creation, and role assignment are each independently verifiable.
 5. The PDF contains no screenshots and no sensitive credentials.
 6. The rendered pages have no clipped text, overlap, broken tables, unreadable symbols, or inconsistent headers and footers.
 7. Text extraction confirms that all expected sections are present.
-
+8. The current Administrator cross-company behavior is explained, including distributor columns, Stock filtering, upload-history labels, and administrator export behavior.
