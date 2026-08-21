@@ -327,6 +327,62 @@ namespace GiselX.Web.Context.Migrations
                     b.ToTable("ItemMapping");
                 });
 
+            modelBuilder.Entity("GiselX.Domain.PowerBiReport", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("int");
+
+                    b.Property<string>("EmbedUrl")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("nvarchar(2048)");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("ModifiedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<DateTime?>("ModifiedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId", "Name")
+                        .IsUnique()
+                        .HasDatabaseName("UX_PowerBiReport_CompanyId_Name");
+
+                    b.HasIndex("CompanyId", "IsActive", "DisplayOrder", "Name")
+                        .HasDatabaseName("IX_PowerBiReport_CompanyId_IsActive_DisplayOrder_Name");
+
+                    b.ToTable("PowerBiReport");
+                });
+
             modelBuilder.Entity("GiselX.Domain.SalesTransaction", b =>
                 {
                     b.Property<int>("Id")
@@ -1464,6 +1520,17 @@ namespace GiselX.Web.Context.Migrations
                     b.Navigation("Company");
                 });
 
+            modelBuilder.Entity("GiselX.Domain.PowerBiReport", b =>
+                {
+                    b.HasOne("GiselX.Domain.Company", "Company")
+                        .WithMany("PowerBiReports")
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Company");
+                });
+
             modelBuilder.Entity("GiselX.Domain.SalesTransaction", b =>
                 {
                     b.HasOne("GiselX.Domain.Company", "Company")
@@ -1718,6 +1785,8 @@ namespace GiselX.Web.Context.Migrations
                     b.Navigation("DistributorTemplateMappings");
 
                     b.Navigation("ItemMappings");
+
+                    b.Navigation("PowerBiReports");
 
                     b.Navigation("SalesTransaction");
 
