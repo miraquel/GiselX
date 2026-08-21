@@ -96,6 +96,8 @@ public sealed class ItemMappingResolverTests
         public Task<Company?> GetCompanyByIdAsync(int id, CancellationToken cancellationToken) => Task.FromResult(Company);
         public Task<GiselX.Domain.Common.PagedList<Company>> GetCompaniesAsync(GiselX.Domain.Common.PagedListRequest pagedListRequest, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<Company> UpdateCompanyAsync(Company company, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<IReadOnlyList<Company>> GetAllAsync(CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<Company>>([]);
         public Task<IEnumerable<Company>> GetAllWithContactEmailAsync(CancellationToken cancellationToken) => throw new NotSupportedException();
     }
 

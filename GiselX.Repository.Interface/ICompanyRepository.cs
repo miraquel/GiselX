@@ -10,5 +10,6 @@ public interface ICompanyRepository
     Task<Company?> GetCompanyByIdAsync(int id, CancellationToken cancellationToken);
     Task<PagedList<Company>> GetCompaniesAsync(PagedListRequest pagedListRequest, CancellationToken cancellationToken);
     Task<Company> UpdateCompanyAsync(Company company, CancellationToken cancellationToken);
+    Task<IReadOnlyList<Company>> GetAllAsync(CancellationToken cancellationToken);
     Task<IEnumerable<Company>> GetAllWithContactEmailAsync(CancellationToken cancellationToken);
 }

@@ -33,6 +33,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ISalesTransactionRepository, SalesTransactionRepository>();
         services.AddScoped<IStockRepository, StockRepository>();
         services.AddScoped<ICompanyRepository, CompanyRepository>();
+        services.AddScoped<IPowerBiReportRepository, PowerBiReportRepository>();
         services.AddScoped<IUploadCheckRepository, UploadCheckRepository>();
         services.AddScoped<IDistributorTemplateMappingRepository, DistributorTemplateMappingRepository>();
         services.AddScoped<IStockTemplateMappingRepository, StockTemplateMappingRepository>();
