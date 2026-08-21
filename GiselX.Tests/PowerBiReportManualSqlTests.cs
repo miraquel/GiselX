@@ -17,6 +17,11 @@ public sealed class PowerBiReportManualSqlTests
         Assert.DoesNotContain("NOT LIKE N'%1%'", sql, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("CK_PowerBiReport_DisplayOrder_NonNegative", sql, StringComparison.Ordinal);
         Assert.Contains("[DisplayOrder] >= 0", sql, StringComparison.Ordinal);
+        Assert.Contains("cc.is_disabled = 0", sql, StringComparison.Ordinal);
+        Assert.Contains("cc.is_not_trusted = 0", sql, StringComparison.Ordinal);
+        var migrationHistoryInsert = sql.IndexOf("INSERT INTO dbo.__EFMigrationsHistory", StringComparison.OrdinalIgnoreCase);
+        Assert.True(sql.IndexOf("cc.is_disabled = 0", StringComparison.Ordinal) < migrationHistoryInsert);
+        Assert.True(sql.IndexOf("cc.is_not_trusted = 0", StringComparison.Ordinal) < migrationHistoryInsert);
         Assert.Contains("c.is_identity <> 1", sql, StringComparison.Ordinal);
         Assert.Contains("sys.key_constraints", sql, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("PK_PowerBiReport", sql, StringComparison.Ordinal);

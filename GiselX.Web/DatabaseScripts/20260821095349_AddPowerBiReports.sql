@@ -105,7 +105,7 @@ BEGIN TRY
         ALTER TABLE dbo.PowerBiReport
             ADD CONSTRAINT CK_PowerBiReport_DisplayOrder_NonNegative
                 CHECK ([DisplayOrder] >= 0);
-    ELSE IF EXISTS
+    ELSE IF NOT EXISTS
     (
         SELECT 1
         FROM sys.check_constraints cc
@@ -116,9 +116,11 @@ BEGIN TRY
         ) normalised
         WHERE cc.parent_object_id = OBJECT_ID(N'dbo.PowerBiReport', N'U')
           AND cc.name = N'CK_PowerBiReport_DisplayOrder_NonNegative'
-          AND normalised.Definition <> N'displayorder>=0'
+          AND cc.is_disabled = 0
+          AND cc.is_not_trusted = 0
+          AND normalised.Definition = N'displayorder>=0'
     )
-        THROW 51209, 'CK_PowerBiReport_DisplayOrder_NonNegative must enforce DisplayOrder >= 0.', 1;
+        THROW 51209, 'CK_PowerBiReport_DisplayOrder_NonNegative must be enabled, trusted, and enforce DisplayOrder >= 0.', 1;
 
     IF NOT EXISTS
     (
