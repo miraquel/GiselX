@@ -12,6 +12,15 @@ public sealed class PowerBiReportManualSqlTests
         Assert.Contains("sp_getapplock", sql, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("OBJECT_ID(N'dbo.PowerBiReport'", sql, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("dc.definition", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("normalised.Definition NOT IN", sql, StringComparison.Ordinal);
+        Assert.Contains("N'convert[bit],1'", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("NOT LIKE N'%1%'", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("CK_PowerBiReport_DisplayOrder_NonNegative", sql, StringComparison.Ordinal);
+        Assert.Contains("[DisplayOrder] >= 0", sql, StringComparison.Ordinal);
+        Assert.Contains("c.is_identity <> 1", sql, StringComparison.Ordinal);
+        Assert.Contains("sys.key_constraints", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PK_PowerBiReport", sql, StringComparison.Ordinal);
+        Assert.Contains("i.is_primary_key = 1", sql, StringComparison.Ordinal);
         Assert.Contains("THROW", sql, StringComparison.OrdinalIgnoreCase);
     }
 

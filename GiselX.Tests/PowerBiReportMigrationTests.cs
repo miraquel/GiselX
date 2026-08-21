@@ -17,6 +17,8 @@ public sealed class PowerBiReportMigrationTests
         Assert.Contains("IX_PowerBiReport_CompanyId_IsActive_DisplayOrder_Name", migrationSource, StringComparison.Ordinal);
         Assert.Contains("onDelete: ReferentialAction.Restrict", migrationSource, StringComparison.Ordinal);
         Assert.Contains("defaultValue: true", migrationSource, StringComparison.Ordinal);
+        Assert.Contains("CK_PowerBiReport_DisplayOrder_NonNegative", migrationSource, StringComparison.Ordinal);
+        Assert.Contains("[DisplayOrder] >= 0", migrationSource, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -27,6 +29,9 @@ public sealed class PowerBiReportMigrationTests
         var createTable = Assert.Single(upOperations.OfType<CreateTableOperation>(), operation => operation.Name == "PowerBiReport");
 
         Assert.Contains(createTable.Columns, column => column.Name == "IsActive" && Equals(column.DefaultValue, true));
+        Assert.Contains(createTable.CheckConstraints, constraint =>
+            constraint.Name == "CK_PowerBiReport_DisplayOrder_NonNegative" &&
+            constraint.Sql == "[DisplayOrder] >= 0");
         Assert.Single(createTable.ForeignKeys, key =>
             key.PrincipalTable == "Company" && key.OnDelete == ReferentialAction.Restrict);
         Assert.Contains(upOperations.OfType<CreateIndexOperation>(), operation =>

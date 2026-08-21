@@ -107,6 +107,9 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
             entity.Property(value => value.CreatedBy).HasMaxLength(256).IsRequired();
             entity.Property(value => value.ModifiedDate).HasColumnType("datetime2");
             entity.Property(value => value.ModifiedBy).HasMaxLength(256);
+            entity.ToTable(table => table.HasCheckConstraint(
+                "CK_PowerBiReport_DisplayOrder_NonNegative",
+                "[DisplayOrder] >= 0"));
             entity.HasIndex(value => new { value.CompanyId, value.Name })
                 .IsUnique().HasDatabaseName("UX_PowerBiReport_CompanyId_Name");
             entity.HasIndex(value => new { value.CompanyId, value.IsActive, value.DisplayOrder, value.Name })

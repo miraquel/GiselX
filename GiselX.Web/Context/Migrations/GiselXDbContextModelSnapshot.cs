@@ -380,7 +380,10 @@ namespace GiselX.Web.Context.Migrations
                     b.HasIndex("CompanyId", "IsActive", "DisplayOrder", "Name")
                         .HasDatabaseName("IX_PowerBiReport_CompanyId_IsActive_DisplayOrder_Name");
 
-                    b.ToTable("PowerBiReport");
+                    b.ToTable("PowerBiReport", t =>
+                        {
+                            t.HasCheckConstraint("CK_PowerBiReport_DisplayOrder_NonNegative", "[DisplayOrder] >= 0");
+                        });
                 });
 
             modelBuilder.Entity("GiselX.Domain.SalesTransaction", b =>

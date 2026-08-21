@@ -36,6 +36,7 @@ namespace GiselX.Web.Context.Migrations
                         principalTable: "Company",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
+                    table.CheckConstraint("CK_PowerBiReport_DisplayOrder_NonNegative", "[DisplayOrder] >= 0");
                 });
 
             migrationBuilder.CreateIndex(

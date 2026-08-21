@@ -38,7 +38,9 @@ BEGIN TRY
             ModifiedDate datetime2 NULL,
             ModifiedBy nvarchar(256) NULL,
             CONSTRAINT FK_PowerBiReport_Company_CompanyId
-                FOREIGN KEY (CompanyId) REFERENCES dbo.Company(Id) ON DELETE NO ACTION
+                FOREIGN KEY (CompanyId) REFERENCES dbo.Company(Id) ON DELETE NO ACTION,
+            CONSTRAINT CK_PowerBiReport_DisplayOrder_NonNegative
+                CHECK ([DisplayOrder] >= 0)
         );
     END
     ELSE IF EXISTS
@@ -64,6 +66,60 @@ BEGIN TRY
     )
         THROW 51202, 'dbo.PowerBiReport exists but is not the expected report schema.', 1;
 
+    IF EXISTS
+    (
+        SELECT 1
+        FROM sys.columns c
+        WHERE c.object_id = OBJECT_ID(N'dbo.PowerBiReport', N'U')
+          AND c.name = N'Id'
+          AND c.is_identity <> 1
+    )
+        THROW 51207, 'dbo.PowerBiReport.Id must be an identity column.', 1;
+
+    IF NOT EXISTS
+    (
+        SELECT 1
+        FROM sys.key_constraints kc
+        INNER JOIN sys.indexes i ON i.object_id = kc.parent_object_id AND i.index_id = kc.unique_index_id
+        INNER JOIN sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id
+        INNER JOIN sys.columns c ON c.object_id = ic.object_id AND c.column_id = ic.column_id
+        WHERE kc.parent_object_id = OBJECT_ID(N'dbo.PowerBiReport', N'U')
+          AND kc.name = N'PK_PowerBiReport'
+          AND kc.type = N'PK'
+          AND i.is_primary_key = 1
+          AND ic.key_ordinal = 1
+          AND c.name = N'Id'
+          AND 1 = (SELECT COUNT(*) FROM sys.index_columns keyColumn
+                   WHERE keyColumn.object_id = i.object_id AND keyColumn.index_id = i.index_id
+                     AND keyColumn.key_ordinal > 0)
+    )
+        THROW 51208, 'dbo.PowerBiReport must have PK_PowerBiReport as its Id primary key.', 1;
+
+    IF NOT EXISTS
+    (
+        SELECT 1
+        FROM sys.check_constraints cc
+        WHERE cc.parent_object_id = OBJECT_ID(N'dbo.PowerBiReport', N'U')
+          AND cc.name = N'CK_PowerBiReport_DisplayOrder_NonNegative'
+    )
+        ALTER TABLE dbo.PowerBiReport
+            ADD CONSTRAINT CK_PowerBiReport_DisplayOrder_NonNegative
+                CHECK ([DisplayOrder] >= 0);
+    ELSE IF EXISTS
+    (
+        SELECT 1
+        FROM sys.check_constraints cc
+        CROSS APPLY
+        (
+            SELECT REPLACE(REPLACE(REPLACE(REPLACE(LOWER(cc.definition), N'[', N''), N']', N''), N'(', N''), N')', N''), N' ', N'')
+                AS Definition
+        ) normalised
+        WHERE cc.parent_object_id = OBJECT_ID(N'dbo.PowerBiReport', N'U')
+          AND cc.name = N'CK_PowerBiReport_DisplayOrder_NonNegative'
+          AND normalised.Definition <> N'displayorder>=0'
+    )
+        THROW 51209, 'CK_PowerBiReport_DisplayOrder_NonNegative must enforce DisplayOrder >= 0.', 1;
+
     IF NOT EXISTS
     (
         SELECT 1
@@ -80,9 +136,21 @@ BEGIN TRY
         SELECT 1
         FROM sys.default_constraints dc
         INNER JOIN sys.columns c ON c.object_id = dc.parent_object_id AND c.column_id = dc.parent_column_id
+        CROSS APPLY
+        (
+            SELECT LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(dc.definition, N'(', N''), N')', N''), N' ', N''), CHAR(9), N''), CHAR(13) + CHAR(10), N''))
+                AS Definition
+        ) normalised
         WHERE dc.parent_object_id = OBJECT_ID(N'dbo.PowerBiReport', N'U')
           AND c.name = N'IsActive'
-          AND dc.definition NOT LIKE N'%1%'
+          AND normalised.Definition NOT IN
+          (
+              N'1',
+              N'convertbit,1',
+              N'convert[bit],1',
+              N'cast1asbit',
+              N'cast1as[bit]'
+          )
     )
         THROW 51206, 'dbo.PowerBiReport.IsActive must default to true.', 1;
 
