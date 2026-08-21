@@ -27,6 +27,7 @@ public sealed class PowerBiPublishUrlValidatorTests
     [InlineData("https://app.powerbi.com/view")]
     [InlineData("https://app.powerbi.com/view?r=")]
     [InlineData("https://app.powerbi.com/view?r=abc#fragment")]
+    [InlineData("https://app.powerbi.com:444/view?r=abc")]
     public void TryNormalize_rejects_non_public_or_unsafe_values(string? value)
     {
         Assert.False(PowerBiPublishUrlValidator.TryNormalize(value, out var normalized, out var error));

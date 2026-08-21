@@ -13,6 +13,7 @@ public static class PowerBiPublishUrlValidator
             !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
             return Fail("The report URL must be an absolute HTTPS URL.", out error);
         if (!string.Equals(uri.Host, "app.powerbi.com", StringComparison.OrdinalIgnoreCase) ||
+            uri.Port != 443 ||
             !string.IsNullOrEmpty(uri.UserInfo))
             return Fail("The report URL must use app.powerbi.com.", out error);
         if (!string.Equals(uri.AbsolutePath.TrimEnd('/'), "/view", StringComparison.OrdinalIgnoreCase))
