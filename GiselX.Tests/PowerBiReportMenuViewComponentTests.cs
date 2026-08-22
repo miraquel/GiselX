@@ -47,9 +47,10 @@ public sealed class PowerBiReportMenuViewComponentTests
     }
 
     [Fact]
-    public async Task InvokeAsync_returns_an_empty_menu_when_the_service_response_is_unsuccessful()
+    public async Task InvokeAsync_discards_stale_data_when_the_service_response_is_unsuccessful()
     {
-        var service = MenuService.Returning([], errors: ["sensitive service failure"]);
+        var staleItems = new[] { new PowerBiReportMenuItemDto(99, "Stale Dashboard") };
+        var service = MenuService.Returning(staleItems, errors: ["sensitive service failure"]);
         var component = CreateComponent(service);
 
         Assert.Empty(MenuModel(await component.InvokeAsync()));
