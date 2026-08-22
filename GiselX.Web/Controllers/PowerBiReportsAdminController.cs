@@ -55,6 +55,7 @@ public sealed class PowerBiReportsAdminController(IPowerBiReportService service)
             DisplayOrder = model.DisplayOrder,
             IsActive = model.IsActive
         }, Username, token);
+        if (response.StatusCode == StatusCodes.Status404NotFound) return NotFound();
         if (!response.IsSuccess)
         {
             AddFailureErrors(response, "Unable to save the Power BI report.");
@@ -66,15 +67,15 @@ public sealed class PowerBiReportsAdminController(IPowerBiReportService service)
     }
 
     [HttpPost, ValidateAntiForgeryToken]
-    public async Task<IActionResult> Activate(int id, CancellationToken token) =>
-        await UpdateStateAsync(id, true, token);
+    public async Task<IActionResult> Activate(int id, int? companyId, CancellationToken token) =>
+        await UpdateStateAsync(id, true, companyId, token);
 
     [HttpPost, ValidateAntiForgeryToken]
-    public async Task<IActionResult> Deactivate(int id, CancellationToken token) =>
-        await UpdateStateAsync(id, false, token);
+    public async Task<IActionResult> Deactivate(int id, int? companyId, CancellationToken token) =>
+        await UpdateStateAsync(id, false, companyId, token);
 
     [HttpGet]
-    public async Task<IActionResult> Delete(int id, CancellationToken token)
+    public async Task<IActionResult> Delete(int id, int? companyId, CancellationToken token)
     {
         var response = await service.GetAdminAsync(id, token);
         if (response.Data is null) return NotFound();
@@ -82,6 +83,7 @@ public sealed class PowerBiReportsAdminController(IPowerBiReportService service)
         return View(new PowerBiReportDeleteViewModel
         {
             Id = response.Data.Id,
+            CompanyId = companyId ?? response.Data.CompanyId,
             CompanyName = response.Data.CompanyName,
             ReportName = response.Data.Name,
             EmbedUrl = response.Data.EmbedUrl
@@ -89,7 +91,7 @@ public sealed class PowerBiReportsAdminController(IPowerBiReportService service)
     }
 
     [HttpPost, ActionName("Delete"), ValidateAntiForgeryToken]
-    public async Task<IActionResult> DeleteConfirmed(int id, CancellationToken token)
+    public async Task<IActionResult> DeleteConfirmed(int id, int? companyId, CancellationToken token)
     {
         var response = await service.DeleteAsync(id, token);
         if (response.StatusCode == StatusCodes.Status404NotFound) return NotFound();
@@ -97,7 +99,7 @@ public sealed class PowerBiReportsAdminController(IPowerBiReportService service)
             TempData["StatusMessage"] = response.Message;
         else
             TempData["ErrorMessage"] = FailureMessage(response, "Unable to delete the Power BI report.");
-        return RedirectToAction(nameof(Index));
+        return RedirectToAction(nameof(Index), new { companyId });
     }
 
     [HttpGet]
@@ -112,7 +114,7 @@ public sealed class PowerBiReportsAdminController(IPowerBiReportService service)
 
     private string Username => ControllerContext.HttpContext?.User.Identity?.Name ?? "unknown";
 
-    private async Task<IActionResult> UpdateStateAsync(int id, bool isActive, CancellationToken token)
+    private async Task<IActionResult> UpdateStateAsync(int id, bool isActive, int? companyId, CancellationToken token)
     {
         var response = await service.SetActiveAsync(id, isActive, Username, token);
         if (response.StatusCode == StatusCodes.Status404NotFound) return NotFound();
@@ -120,7 +122,7 @@ public sealed class PowerBiReportsAdminController(IPowerBiReportService service)
             TempData["StatusMessage"] = response.Message;
         else
             TempData["ErrorMessage"] = FailureMessage(response, "Unable to update the Power BI report.");
-        return RedirectToAction(nameof(Index));
+        return RedirectToAction(nameof(Index), new { companyId });
     }
 
     private async Task<PowerBiReportEditViewModel> WithCompaniesAsync(PowerBiReportEditViewModel model,

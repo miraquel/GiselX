@@ -52,10 +52,10 @@
                         <td class="text-end text-nowrap">
                             <a asp-action="Preview" asp-route-id="@report.Id" class="btn btn-sm btn-outline-info">Preview</a>
                             <a asp-action="Edit" asp-route-id="@report.Id" class="btn btn-sm btn-outline-primary">Edit</a>
-                            <form asp-action="@(report.IsActive ? "Deactivate" : "Activate")" asp-route-id="@report.Id" method="post" class="d-inline">
+                            <form asp-action="@(report.IsActive ? "Deactivate" : "Activate")" asp-route-id="@report.Id" asp-route-companyId="@Model.CompanyId" method="post" class="d-inline">
                                 <button type="submit" class="btn btn-sm btn-outline-secondary">@(report.IsActive ? "Deactivate" : "Activate")</button>
                             </form>
-                            <a asp-action="Delete" asp-route-id="@report.Id" class="btn btn-sm btn-outline-danger">Delete</a>
+                            <a asp-action="Delete" asp-route-id="@report.Id" asp-route-companyId="@Model.CompanyId" class="btn btn-sm btn-outline-danger">Delete</a>
                         </td>
                     </tr>
                 }

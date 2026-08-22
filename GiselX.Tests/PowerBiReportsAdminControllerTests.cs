@@ -1,11 +1,14 @@
 using System.Reflection;
+using System.Security.Claims;
 using GiselX.Service.Dto;
 using GiselX.Service.Dto.Common;
 using GiselX.Service.Interface;
 using GiselX.Web.Controllers;
 using GiselX.Web.Models;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ViewFeatures;
 
 namespace GiselX.Tests;
 
@@ -67,6 +70,63 @@ public sealed class PowerBiReportsAdminControllerTests
     }
 
     [Fact]
+    public async Task Save_existing_report_missing_returns_not_found_without_model_errors()
+    {
+        var service = new FakePowerBiReportService
+        {
+            SaveResponse = new ServiceResponse<int>
+            {
+                StatusCode = StatusCodes.Status404NotFound,
+                Errors = ["The Power BI report was not found."]
+            }
+        };
+        var controller = CreateController(service);
+
+        var result = await controller.Save(EditModel(id: 19), default);
+
+        Assert.IsType<NotFoundResult>(result);
+        Assert.Empty(controller.ModelState);
+        Assert.Equal(19, service.SaveDto!.Id);
+    }
+
+    [Fact]
+    public async Task Save_create_forwards_the_full_dto_username_and_company_filter()
+    {
+        var service = new FakePowerBiReportService();
+        var controller = CreateController(service);
+        var model = EditModel(id: null);
+
+        var result = await controller.Save(model, default);
+
+        var redirect = Assert.IsType<RedirectToActionResult>(result);
+        Assert.Equal(nameof(PowerBiReportsAdminController.Index), redirect.ActionName);
+        Assert.Equal(7, redirect.RouteValues!["companyId"]);
+        Assert.Null(service.SaveDto!.Id);
+        Assert.Equal(7, service.SaveDto.CompanyId);
+        Assert.Equal("Sales", service.SaveDto.Name);
+        Assert.Equal("https://app.powerbi.com/view?r=sales", service.SaveDto.EmbedUrl);
+        Assert.Equal(12, service.SaveDto.DisplayOrder);
+        Assert.False(service.SaveDto.IsActive);
+        Assert.Equal("admin", service.SaveUsername);
+    }
+
+    [Fact]
+    public async Task Save_edit_forwards_the_existing_id_and_redirects_to_its_company_filter()
+    {
+        var service = new FakePowerBiReportService();
+        var controller = CreateController(service);
+        var model = EditModel(id: 29);
+
+        var result = await controller.Save(model, default);
+
+        var redirect = Assert.IsType<RedirectToActionResult>(result);
+        Assert.Equal(nameof(PowerBiReportsAdminController.Index), redirect.ActionName);
+        Assert.Equal(7, redirect.RouteValues!["companyId"]);
+        Assert.Equal(29, service.SaveDto!.Id);
+        Assert.Equal("admin", service.SaveUsername);
+    }
+
+    [Fact]
     public void Save_is_post_only_and_validates_antiforgery()
     {
         var method = typeof(PowerBiReportsAdminController).GetMethod(nameof(PowerBiReportsAdminController.Save))!;
@@ -121,12 +181,119 @@ public sealed class PowerBiReportsAdminControllerTests
         Assert.Equal(404, service.AdminLookupId);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task State_change_forwards_id_state_username_and_company_filter(bool isActive)
+    {
+        var service = new FakePowerBiReportService();
+        var controller = CreateController(service);
+
+        var result = isActive
+            ? await controller.Activate(23, 7, default)
+            : await controller.Deactivate(23, 7, default);
+
+        var redirect = Assert.IsType<RedirectToActionResult>(result);
+        Assert.Equal(nameof(PowerBiReportsAdminController.Index), redirect.ActionName);
+        Assert.Equal(7, redirect.RouteValues!["companyId"]);
+        Assert.Equal((23, isActive, "admin"), service.SetActiveCall);
+    }
+
+    [Fact]
+    public async Task Activate_missing_report_returns_not_found_after_forwarding_the_exact_state_change()
+    {
+        var service = new FakePowerBiReportService
+        {
+            SetActiveResponse = new ServiceResponse { StatusCode = StatusCodes.Status404NotFound }
+        };
+        var controller = CreateController(service);
+
+        var result = await controller.Activate(31, 7, default);
+
+        Assert.IsType<NotFoundResult>(result);
+        Assert.Equal((31, true, "admin"), service.SetActiveCall);
+    }
+
+    [Fact]
+    public async Task Delete_forwards_id_and_preserves_the_company_filter_on_redirect()
+    {
+        var service = new FakePowerBiReportService();
+        var controller = CreateController(service);
+
+        var result = await controller.DeleteConfirmed(37, 7, default);
+
+        var redirect = Assert.IsType<RedirectToActionResult>(result);
+        Assert.Equal(nameof(PowerBiReportsAdminController.Index), redirect.ActionName);
+        Assert.Equal(7, redirect.RouteValues!["companyId"]);
+        Assert.Equal(37, service.DeletedId);
+    }
+
+    [Fact]
+    public async Task Delete_missing_report_returns_not_found_after_forwarding_the_exact_id()
+    {
+        var service = new FakePowerBiReportService
+        {
+            DeleteResponse = new ServiceResponse { StatusCode = StatusCodes.Status404NotFound }
+        };
+        var controller = CreateController(service);
+
+        var result = await controller.DeleteConfirmed(41, 7, default);
+
+        Assert.IsType<NotFoundResult>(result);
+        Assert.Equal(41, service.DeletedId);
+    }
+
+    [Fact]
+    public async Task Delete_get_passes_the_company_filter_to_the_cancel_view_model()
+    {
+        var service = new FakePowerBiReportService
+        {
+            AdminReport = new PowerBiReportDto { Id = 43, CompanyId = 7, CompanyName = "Distributor", Name = "Sales" }
+        };
+        var controller = CreateController(service);
+
+        var result = Assert.IsType<ViewResult>(await controller.Delete(43, 7, default));
+
+        var model = Assert.IsType<PowerBiReportDeleteViewModel>(result.Model);
+        Assert.Equal(7, model.CompanyId);
+    }
+
+    private static PowerBiReportEditViewModel EditModel(int? id) => new()
+    {
+        Id = id,
+        CompanyId = 7,
+        Name = "Sales",
+        EmbedUrl = "https://app.powerbi.com/view?r=sales",
+        DisplayOrder = 12,
+        IsActive = false
+    };
+
+    private static PowerBiReportsAdminController CreateController(FakePowerBiReportService service)
+    {
+        var httpContext = new DefaultHttpContext
+        {
+            User = new ClaimsPrincipal(new ClaimsIdentity(
+                [new Claim(ClaimTypes.Name, "admin")], "TestAuthentication"))
+        };
+        return new PowerBiReportsAdminController(service)
+        {
+            ControllerContext = new ControllerContext { HttpContext = httpContext },
+            TempData = new TempDataDictionary(httpContext, new InMemoryTempDataProvider())
+        };
+    }
+
     private sealed class FakePowerBiReportService : IPowerBiReportService
     {
         public IReadOnlyList<CompanyOptionDto> CompanyOptions { get; init; } = [];
         public PowerBiReportDto? AdminReport { get; init; }
         public ServiceResponse<int> SaveResponse { get; init; } = new() { Data = 1 };
+        public ServiceResponse SetActiveResponse { get; init; } = new();
+        public ServiceResponse DeleteResponse { get; init; } = new();
         public bool SaveCalled { get; private set; }
+        public SavePowerBiReportDto? SaveDto { get; private set; }
+        public string? SaveUsername { get; private set; }
+        public (int Id, bool IsActive, string Username)? SetActiveCall { get; private set; }
+        public int? DeletedId { get; private set; }
         public int? AdminLookupId { get; private set; }
         public bool ViewerLookupCalled { get; private set; }
 
@@ -151,13 +318,22 @@ public sealed class PowerBiReportsAdminControllerTests
         public Task<ServiceResponse<int>> SaveAsync(SavePowerBiReportDto dto, string username, CancellationToken token)
         {
             SaveCalled = true;
+            SaveDto = dto;
+            SaveUsername = username;
             return Task.FromResult(SaveResponse);
         }
 
-        public Task<ServiceResponse> SetActiveAsync(int id, bool isActive, string username, CancellationToken token) =>
-            Task.FromResult(new ServiceResponse());
+        public Task<ServiceResponse> SetActiveAsync(int id, bool isActive, string username, CancellationToken token)
+        {
+            SetActiveCall = (id, isActive, username);
+            return Task.FromResult(SetActiveResponse);
+        }
 
-        public Task<ServiceResponse> DeleteAsync(int id, CancellationToken token) => Task.FromResult(new ServiceResponse());
+        public Task<ServiceResponse> DeleteAsync(int id, CancellationToken token)
+        {
+            DeletedId = id;
+            return Task.FromResult(DeleteResponse);
+        }
 
         public Task<ServiceResponse<IReadOnlyList<PowerBiReportMenuItemDto>>> ListMenuAsync(CancellationToken token) =>
             throw new NotSupportedException();
@@ -167,5 +343,11 @@ public sealed class PowerBiReportsAdminControllerTests
             ViewerLookupCalled = true;
             throw new NotSupportedException();
         }
+    }
+
+    private sealed class InMemoryTempDataProvider : ITempDataProvider
+    {
+        public IDictionary<string, object> LoadTempData(HttpContext context) => new Dictionary<string, object>();
+        public void SaveTempData(HttpContext context, IDictionary<string, object> values) { }
     }
 }

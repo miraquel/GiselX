@@ -36,6 +36,7 @@ public sealed record PowerBiReportAdminIndexViewModel(
 public sealed class PowerBiReportDeleteViewModel
 {
     public int Id { get; init; }
+    public int? CompanyId { get; init; }
     public string CompanyName { get; init; } = string.Empty;
     public string ReportName { get; init; } = string.Empty;
     public string EmbedUrl { get; init; } = string.Empty;
