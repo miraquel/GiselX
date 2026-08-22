@@ -1,0 +1,33 @@
+.power-bi-frame-container {
+    min-height: 70vh;
+    position: relative;
+}
+
+.power-bi-frame {
+    border: 0;
+    display: block;
+    height: 70vh;
+    min-height: 70vh;
+    width: 100%;
+}
+
+.power-bi-loading {
+    align-items: center;
+    background: rgba(var(--bs-body-bg-rgb), 0.8);
+    display: flex;
+    inset: 0;
+    justify-content: center;
+    position: absolute;
+    z-index: 1;
+}
+
+@media (max-width: 575.98px) {
+    .power-bi-frame-container,
+    .power-bi-frame {
+        min-height: 55vh;
+    }
+
+    .power-bi-frame {
+        height: 55vh;
+    }
+}

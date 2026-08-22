@@ -1,0 +1,35 @@
+@model GiselX.Service.Dto.PowerBiReportViewerDto
+@{
+    ViewData["title"] = Model.Name;
+}
+
+@section styles {
+    <link rel="stylesheet" href="~/css/power-bi-reports.css" asp-append-version="true" />
+}
+
+<div class="card power-bi-report-viewer">
+    <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+        <h4 class="card-title mb-0">@Model.Name</h4>
+        <button id="power-bi-fullscreen" type="button" class="btn btn-outline-primary">
+            <i class="ri-fullscreen-line me-1" aria-hidden="true"></i>Open full screen
+        </button>
+    </div>
+    <div id="power-bi-container" class="power-bi-frame-container">
+        <div id="power-bi-loading" class="power-bi-loading" role="status">
+            <span class="spinner-border text-primary" aria-hidden="true"></span>
+            <span class="visually-hidden">Loading report</span>
+        </div>
+        <iframe id="power-bi-frame" class="power-bi-frame" src="@Model.EmbedUrl" title="@Model.Name"
+                loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="fullscreen" allowfullscreen>
+        </iframe>
+    </div>
+    <div class="card-body pt-3">
+        <p class="mb-0">
+            If the report does not load, <a href="@Model.EmbedUrl" target="_blank" rel="noopener noreferrer">open it in a new tab</a>.
+        </p>
+    </div>
+</div>
+
+@section scripts {
+    <script src="~/js/power-bi-reports.js" asp-append-version="true"></script>
+}
