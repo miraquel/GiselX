@@ -29,5 +29,6 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ItemMappingWorkbookParser>();
         services.AddScoped<IItemMappingImportService, ItemMappingImportService>();
         services.AddScoped<IItemMappingResolver, ItemMappingResolver>();
+        services.AddScoped<IPowerBiReportService, PowerBiReportService>();
     }
 }
