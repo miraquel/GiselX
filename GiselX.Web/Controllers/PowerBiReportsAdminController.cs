@@ -83,7 +83,7 @@ public sealed class PowerBiReportsAdminController(IPowerBiReportService service)
         return View(new PowerBiReportDeleteViewModel
         {
             Id = response.Data.Id,
-            CompanyId = companyId ?? response.Data.CompanyId,
+            CompanyId = companyId,
             CompanyName = response.Data.CompanyName,
             ReportName = response.Data.Name,
             EmbedUrl = response.Data.EmbedUrl

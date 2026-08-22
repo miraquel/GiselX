@@ -258,6 +258,25 @@ public sealed class PowerBiReportsAdminControllerTests
         Assert.Equal(7, model.CompanyId);
     }
 
+    [Fact]
+    public async Task Delete_unfiltered_flow_keeps_null_for_cancel_and_success_redirect()
+    {
+        var service = new FakePowerBiReportService
+        {
+            AdminReport = new PowerBiReportDto { Id = 47, CompanyId = 7, CompanyName = "Distributor", Name = "Sales" }
+        };
+        var controller = CreateController(service);
+
+        var deleteView = Assert.IsType<ViewResult>(await controller.Delete(47, null, default));
+        var deleteModel = Assert.IsType<PowerBiReportDeleteViewModel>(deleteView.Model);
+        var deleteResult = await controller.DeleteConfirmed(47, null, default);
+
+        Assert.Null(deleteModel.CompanyId);
+        var redirect = Assert.IsType<RedirectToActionResult>(deleteResult);
+        Assert.True(redirect.RouteValues!.TryGetValue("companyId", out var companyId));
+        Assert.Null(companyId);
+    }
+
     private static PowerBiReportEditViewModel EditModel(int? id) => new()
     {
         Id = id,
