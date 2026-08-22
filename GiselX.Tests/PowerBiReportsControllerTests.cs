@@ -29,6 +29,18 @@ public sealed class PowerBiReportsControllerTests
     }
 
     [Fact]
+    public void View_has_a_required_integer_route_that_cannot_invoke_the_service_for_non_numeric_ids()
+    {
+        var route = Assert.Single(typeof(PowerBiReportsController)
+            .GetMethod(nameof(PowerBiReportsController.View),
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly)!
+            .GetCustomAttributes<HttpGetAttribute>());
+
+        Assert.Equal("/PowerBiReports/View/{id:int}", route.Template);
+        Assert.DoesNotContain("{id?}", route.Template, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task View_returns_not_found_for_missing_inactive_or_other_company_report()
     {
         var controller = new PowerBiReportsController(new ViewerService(data: null, statusCode: 404));
@@ -48,6 +60,67 @@ public sealed class PowerBiReportsControllerTests
         Assert.Same(dto, result.Model);
         Assert.Equal(42, service.ViewerId);
         Assert.Equal(token, service.ViewerToken);
+    }
+
+    [Fact]
+    public void Viewer_view_uses_encoded_model_attributes_safe_fallback_and_versioned_assets()
+    {
+        var view = ReadSource("GiselX.Web", "Views", "PowerBiReports", "View.cshtml");
+
+        Assert.Contains("@model GiselX.Service.Dto.PowerBiReportViewerDto", view, StringComparison.Ordinal);
+        Assert.Contains("src=\"@Model.EmbedUrl\"", view, StringComparison.Ordinal);
+        Assert.Contains("title=\"@Model.Name\"", view, StringComparison.Ordinal);
+        Assert.DoesNotContain("Html.Raw", view, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("target=\"_blank\" rel=\"noopener noreferrer\"", view, StringComparison.Ordinal);
+        Assert.Contains("id=\"power-bi-fullscreen-status\"", view, StringComparison.Ordinal);
+        Assert.Contains("role=\"status\"", view, StringComparison.Ordinal);
+        Assert.Contains("aria-live=\"polite\"", view, StringComparison.Ordinal);
+        Assert.Contains("~/css/power-bi-reports.css\" asp-append-version=\"true\"", view, StringComparison.Ordinal);
+        Assert.Contains("~/js/power-bi-reports.js\" asp-append-version=\"true\"", view, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Viewer_styles_fill_the_viewport_in_fullscreen_after_mobile_sizing()
+    {
+        var styles = ReadSource("GiselX.Web", "wwwroot", "css", "power-bi-reports.css");
+
+        Assert.Contains("#power-bi-container:fullscreen", styles, StringComparison.Ordinal);
+        Assert.Contains("#power-bi-container:fullscreen .power-bi-frame", styles, StringComparison.Ordinal);
+        Assert.Contains("background: var(--bs-body-bg)", styles, StringComparison.Ordinal);
+        Assert.Contains("width: 100vw", styles, StringComparison.Ordinal);
+        Assert.Contains("height: 100vh", styles, StringComparison.Ordinal);
+        Assert.Contains("min-height: 100vh", styles, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Viewer_script_hides_unsupported_fullscreen_and_reports_rejections_accessibly()
+    {
+        var script = ReadSource("GiselX.Web", "wwwroot", "js", "power-bi-reports.js");
+
+        Assert.Contains("const supportsFullscreen = Boolean(container?.requestFullscreen)", script, StringComparison.Ordinal);
+        Assert.Contains("fullscreenButton?.classList.add('d-none')", script, StringComparison.Ordinal);
+        Assert.Contains("try {", script, StringComparison.Ordinal);
+        Assert.Contains("catch", script, StringComparison.Ordinal);
+        Assert.Contains("fullscreenStatus.textContent", script, StringComparison.Ordinal);
+        Assert.Contains("document.fullscreenElement === container", script, StringComparison.Ordinal);
+        Assert.Contains("document.exitFullscreen", script, StringComparison.Ordinal);
+        Assert.Contains("fullscreenchange", script, StringComparison.Ordinal);
+    }
+
+    private static string ReadSource(params string[] pathParts)
+    {
+        var path = Path.Combine([FindSolutionRoot(), .. pathParts]);
+        Assert.True(File.Exists(path), $"Expected source file at '{path}'.");
+        return File.ReadAllText(path);
+    }
+
+    private static string FindSolutionRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "GiselX.sln")))
+            directory = directory.Parent;
+
+        return directory?.FullName ?? throw new DirectoryNotFoundException("Could not locate GiselX.sln.");
     }
 
     private sealed class ViewerService(PowerBiReportViewerDto? data, int statusCode) : IPowerBiReportService

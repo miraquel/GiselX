@@ -7,7 +7,7 @@ namespace GiselX.Web.Controllers;
 [Authorize]
 public sealed class PowerBiReportsController(IPowerBiReportService service) : Controller
 {
-    [HttpGet]
+    [HttpGet("/PowerBiReports/View/{id:int}")]
     public async Task<IActionResult> View(int id, CancellationToken token)
     {
         var response = await service.GetViewerAsync(id, token);

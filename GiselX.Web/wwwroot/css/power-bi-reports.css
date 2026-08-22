@@ -31,3 +31,16 @@
         height: 55vh;
     }
 }
+
+#power-bi-container:fullscreen {
+    background: var(--bs-body-bg);
+    height: 100vh;
+    min-height: 100vh;
+    width: 100vw;
+}
+
+#power-bi-container:fullscreen .power-bi-frame {
+    height: 100vh;
+    min-height: 100vh;
+    width: 100vw;
+}
