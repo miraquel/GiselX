@@ -2,8 +2,11 @@ using System.Collections;
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using GiselX.Domain;
 using GiselX.Repository;
+using GiselX.Repository.Interface;
+using Microsoft.Data.SqlClient;
 
 namespace GiselX.Tests;
 
@@ -124,6 +127,37 @@ public sealed class PowerBiReportRepositoryContractTests
         AssertParameter(connection, "ModifiedBy", report.ModifiedBy);
     }
 
+    [Theory]
+    [InlineData(2601)]
+    [InlineData(2627)]
+    public async Task InsertAsync_translates_only_the_power_bi_company_name_unique_index(int errorNumber)
+    {
+        var (repository, connection, transaction) = CreatePowerBiRepository();
+        using var cancellation = new CancellationTokenSource();
+        var sqlException = CreateSqlException(errorNumber,
+            "Duplicate key conflict on UX_PowerBiReport_CompanyId_Name.");
+        connection.CommandException = sqlException;
+
+        var exception = await Assert.ThrowsAsync<PowerBiReportDuplicateNameException>(() =>
+            repository.InsertAsync(Report(), cancellation.Token));
+
+        Assert.Same(sqlException, exception.InnerException);
+        AssertCommandScope(connection, transaction, cancellation.Token);
+    }
+
+    [Fact]
+    public async Task InsertAsync_does_not_translate_a_unique_violation_for_an_unrelated_index()
+    {
+        var (repository, connection, _) = CreatePowerBiRepository();
+        var sqlException = CreateSqlException(2601, "Duplicate key conflict on UX_OtherEntity_Name.");
+        connection.CommandException = sqlException;
+
+        var exception = await Assert.ThrowsAsync<SqlException>(() =>
+            repository.InsertAsync(Report(), CancellationToken.None));
+
+        Assert.Same(sqlException, exception);
+    }
+
     [Fact]
     public async Task UpdateAsync_emits_each_report_value_and_returns_true_for_an_affected_row()
     {
@@ -157,6 +191,36 @@ public sealed class PowerBiReportRepositoryContractTests
         connection.RowsAffected = 0;
 
         Assert.False(await repository.UpdateAsync(Report(), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task UpdateAsync_translates_the_power_bi_company_name_unique_index()
+    {
+        var (repository, connection, transaction) = CreatePowerBiRepository();
+        using var cancellation = new CancellationTokenSource();
+        var sqlException = CreateSqlException(2601,
+            "Duplicate key conflict on UX_PowerBiReport_CompanyId_Name.");
+        connection.CommandException = sqlException;
+
+        var exception = await Assert.ThrowsAsync<PowerBiReportDuplicateNameException>(() =>
+            repository.UpdateAsync(Report(), cancellation.Token));
+
+        Assert.Same(sqlException, exception.InnerException);
+        AssertCommandScope(connection, transaction, cancellation.Token);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_does_not_translate_an_unrelated_database_error()
+    {
+        var (repository, connection, _) = CreatePowerBiRepository();
+        var sqlException = CreateSqlException(547,
+            "The UPDATE statement conflicted with a foreign key constraint UX_PowerBiReport_CompanyId_Name.");
+        connection.CommandException = sqlException;
+
+        var exception = await Assert.ThrowsAsync<SqlException>(() =>
+            repository.UpdateAsync(Report(), CancellationToken.None));
+
+        Assert.Same(sqlException, exception);
     }
 
     [Fact]
@@ -271,6 +335,39 @@ public sealed class PowerBiReportRepositoryContractTests
         Assert.Equal(expected, actual);
     }
 
+    private static SqlException CreateSqlException(int number, string message)
+    {
+        var errorConstructor = typeof(SqlError).GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic)
+            .Where(constructor => constructor.GetParameters().Any(parameter => parameter.ParameterType == typeof(int)))
+            .OrderBy(constructor => constructor.GetParameters().Length)
+            .First();
+        var error = (SqlError)errorConstructor.Invoke(errorConstructor.GetParameters()
+            .Select(parameter => ConstructorArgument(parameter, number, message)).ToArray());
+        var errors = (SqlErrorCollection)Activator.CreateInstance(typeof(SqlErrorCollection), nonPublic: true)!;
+        typeof(SqlErrorCollection).GetMethod("Add", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(errors, [error]);
+
+        var factory = typeof(SqlException).GetMethods(BindingFlags.Static | BindingFlags.NonPublic)
+            .Where(method => method.Name == "CreateException")
+            .Where(method => method.GetParameters().FirstOrDefault()?.ParameterType == typeof(SqlErrorCollection))
+            .OrderBy(method => method.GetParameters().Length)
+            .First();
+        return (SqlException)factory.Invoke(null, factory.GetParameters().Select(parameter =>
+            parameter.ParameterType == typeof(SqlErrorCollection) ? errors : DefaultArgument(parameter.ParameterType))
+            .ToArray())!;
+    }
+
+    private static object? ConstructorArgument(ParameterInfo parameter, int number, string message) => parameter.Name switch
+    {
+        "infoNumber" or "number" => number,
+        "errorMessage" or "message" => message,
+        _ => DefaultArgument(parameter.ParameterType)
+    };
+
+    private static object? DefaultArgument(Type type) => type == typeof(string)
+        ? string.Empty
+        : type.IsValueType ? Activator.CreateInstance(type) : null;
+
     private static string ReadRepository() => File.ReadAllText(Path.Combine(
         AppContext.BaseDirectory,
         "..", "..", "..", "..", "GiselX.Repository", "PowerBiReportRepository.cs"));
@@ -284,6 +381,7 @@ public sealed class PowerBiReportRepositoryContractTests
         public CancellationToken LastCancellationToken { get; private set; }
         public int RowsAffected { get; set; }
         public object? ScalarResult { get; set; }
+        public Exception? CommandException { get; set; }
 
         [AllowNull] public override string ConnectionString { get; set; } = string.Empty;
         public override string Database => "Recording";
@@ -329,21 +427,27 @@ public sealed class PowerBiReportRepositoryContractTests
         public override int ExecuteNonQuery()
         {
             connection.Record(this, CancellationToken.None);
+            if (connection.CommandException is not null) throw connection.CommandException;
             return connection.RowsAffected;
         }
         public override Task<int> ExecuteNonQueryAsync(CancellationToken cancellationToken)
         {
             connection.Record(this, cancellationToken);
+            if (connection.CommandException is not null)
+                return Task.FromException<int>(connection.CommandException);
             return Task.FromResult(connection.RowsAffected);
         }
         public override object? ExecuteScalar()
         {
             connection.Record(this, CancellationToken.None);
+            if (connection.CommandException is not null) throw connection.CommandException;
             return connection.ScalarResult;
         }
         public override Task<object?> ExecuteScalarAsync(CancellationToken cancellationToken)
         {
             connection.Record(this, cancellationToken);
+            if (connection.CommandException is not null)
+                return Task.FromException<object?>(connection.CommandException);
             return Task.FromResult(connection.ScalarResult);
         }
         public override void Prepare() { }

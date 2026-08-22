@@ -2,6 +2,7 @@ using System.Data;
 using Dapper;
 using GiselX.Domain;
 using GiselX.Repository.Interface;
+using Microsoft.Data.SqlClient;
 
 namespace GiselX.Repository;
 
@@ -81,7 +82,7 @@ public sealed class PowerBiReportRepository(IDbConnection dbConnection, IDbTrans
             cancellationToken: token));
     }
 
-    public Task<int> InsertAsync(PowerBiReport report, CancellationToken token)
+    public async Task<int> InsertAsync(PowerBiReport report, CancellationToken token)
     {
         const string sql = """
             INSERT INTO PowerBiReport
@@ -90,7 +91,15 @@ public sealed class PowerBiReportRepository(IDbConnection dbConnection, IDbTrans
             VALUES
                 (@CompanyId, @Name, @EmbedUrl, @DisplayOrder, @IsActive, @CreatedDate, @CreatedBy, @ModifiedDate, @ModifiedBy);
             """;
-        return dbConnection.ExecuteScalarAsync<int>(new CommandDefinition(sql, report, dbTransaction, cancellationToken: token));
+        try
+        {
+            return await dbConnection.ExecuteScalarAsync<int>(new CommandDefinition(sql, report, dbTransaction,
+                cancellationToken: token));
+        }
+        catch (SqlException exception) when (IsCompanyNameDuplicate(exception))
+        {
+            throw new PowerBiReportDuplicateNameException(exception);
+        }
     }
 
     public async Task<bool> UpdateAsync(PowerBiReport report, CancellationToken token)
@@ -106,7 +115,15 @@ public sealed class PowerBiReportRepository(IDbConnection dbConnection, IDbTrans
                 ModifiedBy = @ModifiedBy
             WHERE Id = @Id;
             """;
-        return await dbConnection.ExecuteAsync(new CommandDefinition(sql, report, dbTransaction, cancellationToken: token)) > 0;
+        try
+        {
+            return await dbConnection.ExecuteAsync(new CommandDefinition(sql, report, dbTransaction,
+                cancellationToken: token)) > 0;
+        }
+        catch (SqlException exception) when (IsCompanyNameDuplicate(exception))
+        {
+            throw new PowerBiReportDuplicateNameException(exception);
+        }
     }
 
     public async Task<bool> SetActiveAsync(int id, bool isActive, string modifiedBy, DateTime modifiedDate,
@@ -130,4 +147,8 @@ public sealed class PowerBiReportRepository(IDbConnection dbConnection, IDbTrans
         return await dbConnection.ExecuteAsync(new CommandDefinition(sql, new { Id = id }, dbTransaction,
             cancellationToken: token)) > 0;
     }
+
+    private static bool IsCompanyNameDuplicate(SqlException exception) =>
+        exception.Number is 2601 or 2627 &&
+        exception.Message.Contains("UX_PowerBiReport_CompanyId_Name", StringComparison.Ordinal);
 }

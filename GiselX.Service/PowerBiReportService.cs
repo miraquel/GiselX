@@ -95,8 +95,15 @@ public sealed class PowerBiReportService(
             Apply(dto, report, name, normalizedUrl);
             report.ModifiedBy = username;
             report.ModifiedDate = now;
-            if (!await repository.UpdateAsync(report, token))
-                return NotFound<int>();
+            try
+            {
+                if (!await repository.UpdateAsync(report, token))
+                    return NotFound<int>();
+            }
+            catch (PowerBiReportDuplicateNameException)
+            {
+                return DuplicateNameResponse();
+            }
             id = report.Id;
         }
         else
@@ -111,7 +118,14 @@ public sealed class PowerBiReportService(
                 CreatedBy = username,
                 CreatedDate = now
             };
-            id = await repository.InsertAsync(report, token);
+            try
+            {
+                id = await repository.InsertAsync(report, token);
+            }
+            catch (PowerBiReportDuplicateNameException)
+            {
+                return DuplicateNameResponse();
+            }
         }
 
         dbTransaction.Commit();
@@ -192,6 +206,10 @@ public sealed class PowerBiReportService(
         {
             errors.Add(urlError);
         }
+        else if (normalizedUrl.Length > 2048)
+        {
+            errors.Add("Report URL must not exceed 2,048 characters after normalization.");
+        }
 
         return errors;
     }
@@ -221,6 +239,9 @@ public sealed class PowerBiReportService(
     };
 
     private static ServiceResponse<T> Invalid<T>(params string[] errors) => Invalid<T>((IEnumerable<string>)errors);
+
+    private static ServiceResponse<int> DuplicateNameResponse() =>
+        Invalid<int>("A Power BI report with this name already exists for the company.");
 
     private static ServiceResponse<T> Invalid<T>(IEnumerable<string> errors) => new()
     {

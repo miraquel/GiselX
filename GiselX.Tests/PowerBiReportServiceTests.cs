@@ -137,6 +137,26 @@ public sealed class PowerBiReportServiceTests
     }
 
     [Fact]
+    public async Task SaveAsync_rejects_url_that_expands_beyond_2048_characters_during_normalization()
+    {
+        var repository = new FakePowerBiReportRepository();
+        var transaction = new FakeTransaction();
+        var service = CreateService(repository, transaction);
+        var url = "https://app.powerbi.com/view?r=" + new string('\u00e9', 340);
+
+        var response = await service.SaveAsync(new SavePowerBiReportDto
+        {
+            CompanyId = 7, Name = "Sales", EmbedUrl = url, DisplayOrder = 10
+        }, "admin", default);
+
+        Assert.Equal(StatusCodes.Status400BadRequest, response.StatusCode);
+        Assert.Contains(response.Errors, error => error.Contains("2,048", StringComparison.Ordinal));
+        Assert.Null(repository.Inserted);
+        Assert.Null(repository.Updated);
+        Assert.Equal(0, transaction.CommitCount);
+    }
+
+    [Fact]
     public async Task SaveAsync_rejects_unknown_company_without_committing()
     {
         var repository = new FakePowerBiReportRepository();
@@ -232,6 +252,65 @@ public sealed class PowerBiReportServiceTests
         var response = await service.SaveAsync(dto, "admin", default);
 
         Assert.Equal(StatusCodes.Status404NotFound, response.StatusCode);
+        Assert.Equal(0, transaction.CommitCount);
+    }
+
+    [Fact]
+    public async Task SaveAsync_update_returns_not_found_without_committing_when_update_affects_no_row()
+    {
+        var repository = new FakePowerBiReportRepository
+        {
+            AdminById = new PowerBiReport
+            {
+                Id = 4, CompanyId = 7, Name = "Old", EmbedUrl = "https://app.powerbi.com/view?r=old",
+                CreatedBy = "first", CreatedDate = DateTime.UtcNow
+            },
+            UpdateResult = false
+        };
+        var transaction = new FakeTransaction();
+        var service = CreateService(repository, transaction);
+
+        var response = await service.SaveAsync(new SavePowerBiReportDto
+        {
+            Id = 4, CompanyId = 7, Name = "New", EmbedUrl = "https://app.powerbi.com/view?r=new",
+            DisplayOrder = 20
+        }, "admin", default);
+
+        Assert.Equal(StatusCodes.Status404NotFound, response.StatusCode);
+        Assert.Equal(0, transaction.CommitCount);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SaveAsync_translates_concurrent_duplicate_name_conflict_without_committing(bool update)
+    {
+        var repository = new FakePowerBiReportRepository
+        {
+            AdminById = update
+                ? new PowerBiReport
+                {
+                    Id = 4, CompanyId = 7, Name = "Old", EmbedUrl = "https://app.powerbi.com/view?r=old",
+                    CreatedBy = "first", CreatedDate = DateTime.UtcNow
+                }
+                : null,
+            MutationException = new PowerBiReportDuplicateNameException()
+        };
+        var transaction = new FakeTransaction();
+        var service = CreateService(repository, transaction);
+        var dto = new SavePowerBiReportDto
+        {
+            Id = update ? 4 : null,
+            CompanyId = 7,
+            Name = "Sales",
+            EmbedUrl = "https://app.powerbi.com/view?r=abc",
+            DisplayOrder = 10
+        };
+
+        var response = await service.SaveAsync(dto, "admin", default);
+
+        Assert.Equal(StatusCodes.Status400BadRequest, response.StatusCode);
+        Assert.Contains(response.Errors, error => error.Contains("already exists", StringComparison.OrdinalIgnoreCase));
         Assert.Equal(0, transaction.CommitCount);
     }
 
@@ -366,6 +445,7 @@ public sealed class PowerBiReportServiceTests
         public bool UpdateResult { get; init; } = true;
         public bool StateChangeResult { get; init; }
         public bool DeleteResult { get; init; }
+        public Exception? MutationException { get; init; }
         public int? ListedCompanyId { get; private set; }
         public (int Id, int CompanyId)? ViewerScope { get; private set; }
         public (int CompanyId, string Name, int? ExcludeId)? DuplicateScope { get; private set; }
@@ -406,12 +486,14 @@ public sealed class PowerBiReportServiceTests
 
         public Task<int> InsertAsync(PowerBiReport report, CancellationToken token)
         {
+            if (MutationException is not null) throw MutationException;
             Inserted = report;
             return Task.FromResult(101);
         }
 
         public Task<bool> UpdateAsync(PowerBiReport report, CancellationToken token)
         {
+            if (MutationException is not null) throw MutationException;
             Updated = report;
             return Task.FromResult(UpdateResult);
         }
