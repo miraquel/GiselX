@@ -72,11 +72,18 @@ public sealed class PowerBiReportsControllerTests
         Assert.Contains("title=\"@Model.Name\"", view, StringComparison.Ordinal);
         Assert.DoesNotContain("Html.Raw", view, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("target=\"_blank\" rel=\"noopener noreferrer\"", view, StringComparison.Ordinal);
+        Assert.Contains("id=\"power-bi-viewer\"", view, StringComparison.Ordinal);
         Assert.Contains("id=\"power-bi-fullscreen-status\"", view, StringComparison.Ordinal);
         Assert.Contains("role=\"status\"", view, StringComparison.Ordinal);
         Assert.Contains("aria-live=\"polite\"", view, StringComparison.Ordinal);
         Assert.Contains("~/css/power-bi-reports.css\" asp-append-version=\"true\"", view, StringComparison.Ordinal);
         Assert.Contains("~/js/power-bi-reports.js\" asp-append-version=\"true\"", view, StringComparison.Ordinal);
+
+        var viewerStart = view.IndexOf("id=\"power-bi-viewer\"", StringComparison.Ordinal);
+        Assert.True(viewerStart < view.IndexOf("id=\"power-bi-fullscreen\"", StringComparison.Ordinal));
+        Assert.True(viewerStart < view.IndexOf("id=\"power-bi-fullscreen-status\"", StringComparison.Ordinal));
+        Assert.True(viewerStart < view.IndexOf("id=\"power-bi-container\"", StringComparison.Ordinal));
+        Assert.True(viewerStart < view.IndexOf("target=\"_blank\"", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -84,8 +91,8 @@ public sealed class PowerBiReportsControllerTests
     {
         var styles = ReadSource("GiselX.Web", "wwwroot", "css", "power-bi-reports.css");
 
-        Assert.Contains("#power-bi-container:fullscreen", styles, StringComparison.Ordinal);
-        Assert.Contains("#power-bi-container:fullscreen .power-bi-frame", styles, StringComparison.Ordinal);
+        Assert.Contains("#power-bi-viewer:fullscreen", styles, StringComparison.Ordinal);
+        Assert.Contains("#power-bi-viewer:fullscreen .power-bi-frame", styles, StringComparison.Ordinal);
         Assert.Contains("background: var(--bs-body-bg)", styles, StringComparison.Ordinal);
         Assert.Contains("width: 100vw", styles, StringComparison.Ordinal);
         Assert.Contains("height: 100vh", styles, StringComparison.Ordinal);
@@ -97,14 +104,25 @@ public sealed class PowerBiReportsControllerTests
     {
         var script = ReadSource("GiselX.Web", "wwwroot", "js", "power-bi-reports.js");
 
-        Assert.Contains("const supportsFullscreen = Boolean(container?.requestFullscreen)", script, StringComparison.Ordinal);
+        Assert.Contains("const supportsFullscreen = Boolean(viewer?.requestFullscreen)", script, StringComparison.Ordinal);
         Assert.Contains("fullscreenButton?.classList.add('d-none')", script, StringComparison.Ordinal);
         Assert.Contains("try {", script, StringComparison.Ordinal);
         Assert.Contains("catch", script, StringComparison.Ordinal);
         Assert.Contains("fullscreenStatus.textContent", script, StringComparison.Ordinal);
-        Assert.Contains("document.fullscreenElement === container", script, StringComparison.Ordinal);
+        Assert.Contains("document.fullscreenElement === viewer", script, StringComparison.Ordinal);
         Assert.Contains("document.exitFullscreen", script, StringComparison.Ordinal);
         Assert.Contains("fullscreenchange", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Viewer_script_moves_focus_into_fullscreen_and_restores_it_on_exit()
+    {
+        var script = ReadSource("GiselX.Web", "wwwroot", "js", "power-bi-reports.js");
+
+        Assert.Contains("let focusBeforeFullscreen = null", script, StringComparison.Ordinal);
+        Assert.Contains("focusBeforeFullscreen = document.activeElement", script, StringComparison.Ordinal);
+        Assert.Contains("fullscreenButton?.focus()", script, StringComparison.Ordinal);
+        Assert.Contains("focusBeforeFullscreen?.focus()", script, StringComparison.Ordinal);
     }
 
     private static string ReadSource(params string[] pathParts)
