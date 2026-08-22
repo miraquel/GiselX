@@ -42,8 +42,12 @@ public sealed class PowerBiReportsAdminControllerTests
         Assert.False(service.SaveCalled);
     }
 
-    [Fact]
-    public async Task Save_service_error_adds_model_error_and_does_not_redirect()
+    [Theory]
+    [InlineData(nameof(PowerBiReportEditViewModel.CompanyId))]
+    [InlineData(nameof(PowerBiReportEditViewModel.Name))]
+    [InlineData(nameof(PowerBiReportEditViewModel.EmbedUrl))]
+    [InlineData(nameof(PowerBiReportEditViewModel.DisplayOrder))]
+    public async Task Save_service_validation_errors_map_to_their_asp_validation_fields(string field)
     {
         var service = new FakePowerBiReportService
         {
@@ -51,7 +55,7 @@ public sealed class PowerBiReportsAdminControllerTests
             SaveResponse = new ServiceResponse<int>
             {
                 StatusCode = 400,
-                Errors = ["A report with this name already exists for the company."]
+                ValidationErrors = [new ServiceValidationError(field, "Invalid field value.")]
             }
         };
         var controller = new PowerBiReportsAdminController(service);
@@ -65,8 +69,8 @@ public sealed class PowerBiReportsAdminControllerTests
         var result = Assert.IsType<ViewResult>(await controller.Save(model, default));
 
         Assert.Equal("Edit", result.ViewName);
-        Assert.Contains(controller.ModelState[string.Empty]!.Errors,
-            error => error.ErrorMessage.Contains("already exists", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal("Invalid field value.", Assert.Single(controller.ModelState[field]!.Errors).ErrorMessage);
+        Assert.False(controller.ModelState.ContainsKey(string.Empty));
     }
 
     [Fact]

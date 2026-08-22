@@ -80,9 +80,10 @@ public sealed class PowerBiReportService(
             return Invalid<int>(errors);
 
         if (!(await companyRepository.GetAllAsync(token)).Any(company => company.Id == dto.CompanyId))
-            return Invalid<int>("The selected company does not exist.");
+            return Invalid<int>(FieldError(nameof(SavePowerBiReportDto.CompanyId),
+                "The selected company does not exist."));
         if (await repository.NameExistsAsync(dto.CompanyId, name, dto.Id, token))
-            return Invalid<int>("A Power BI report with this name already exists for the company.");
+            return DuplicateNameResponse();
 
         var now = DateTime.UtcNow;
         int id;
@@ -154,16 +155,6 @@ public sealed class PowerBiReportService(
         return new ServiceResponse { Message = "Power BI report deleted successfully." };
     }
 
-    public async Task<ServiceResponse<IReadOnlyList<PowerBiReportMenuItemDto>>> ListMenuAsync(CancellationToken token)
-    {
-        var reports = await repository.ListActiveByCompanyAsync(await CurrentCompanyIdAsync(), token);
-        return new ServiceResponse<IReadOnlyList<PowerBiReportMenuItemDto>>
-        {
-            Data = reports.Select(report => new PowerBiReportMenuItemDto(report.Id, report.Name)).ToList(),
-            Message = "Power BI report menu retrieved successfully."
-        };
-    }
-
     public async Task<ServiceResponse<PowerBiReportViewerDto?>> GetViewerAsync(int id, CancellationToken token)
     {
         var report = await repository.GetActiveByIdAndCompanyAsync(id, await CurrentCompanyIdAsync(), token);
@@ -188,27 +179,36 @@ public sealed class PowerBiReportService(
         return user.CompanyId;
     }
 
-    private static List<string> Validate(SavePowerBiReportDto dto, string name, out string normalizedUrl)
+    private static List<ServiceValidationError> Validate(SavePowerBiReportDto dto, string name,
+        out string normalizedUrl)
     {
-        var errors = new List<string>();
-        if (dto.CompanyId <= 0) errors.Add("Company is required.");
-        if (string.IsNullOrEmpty(name)) errors.Add("Report name is required.");
-        if (name.Length > 150) errors.Add("Report name must not exceed 150 characters.");
-        if (dto.DisplayOrder < 0) errors.Add("Display order must be non-negative.");
+        var errors = new List<ServiceValidationError>();
+        if (dto.CompanyId <= 0)
+            errors.Add(FieldError(nameof(SavePowerBiReportDto.CompanyId), "Company is required."));
+        if (string.IsNullOrEmpty(name))
+            errors.Add(FieldError(nameof(SavePowerBiReportDto.Name), "Report name is required."));
+        if (name.Length > 150)
+            errors.Add(FieldError(nameof(SavePowerBiReportDto.Name),
+                "Report name must not exceed 150 characters."));
+        if (dto.DisplayOrder < 0)
+            errors.Add(FieldError(nameof(SavePowerBiReportDto.DisplayOrder),
+                "Display order must be non-negative."));
 
         var candidateUrl = dto.EmbedUrl?.Trim();
         if (candidateUrl?.Length > 2048)
         {
             normalizedUrl = string.Empty;
-            errors.Add("Report URL must not exceed 2,048 characters.");
+            errors.Add(FieldError(nameof(SavePowerBiReportDto.EmbedUrl),
+                "Report URL must not exceed 2,048 characters."));
         }
         else if (!PowerBiPublishUrlValidator.TryNormalize(candidateUrl, out normalizedUrl, out var urlError))
         {
-            errors.Add(urlError);
+            errors.Add(FieldError(nameof(SavePowerBiReportDto.EmbedUrl), urlError));
         }
         else if (normalizedUrl.Length > 2048)
         {
-            errors.Add("Report URL must not exceed 2,048 characters after normalization.");
+            errors.Add(FieldError(nameof(SavePowerBiReportDto.EmbedUrl),
+                "Report URL must not exceed 2,048 characters after normalization."));
         }
 
         return errors;
@@ -241,7 +241,25 @@ public sealed class PowerBiReportService(
     private static ServiceResponse<T> Invalid<T>(params string[] errors) => Invalid<T>((IEnumerable<string>)errors);
 
     private static ServiceResponse<int> DuplicateNameResponse() =>
-        Invalid<int>("A Power BI report with this name already exists for the company.");
+        Invalid<int>(FieldError(nameof(SavePowerBiReportDto.Name),
+            "A Power BI report with this name already exists for the company."));
+
+    private static ServiceValidationError FieldError(string key, string message) => new(key, message);
+
+    private static ServiceResponse<T> Invalid<T>(params ServiceValidationError[] errors) =>
+        Invalid<T>((IEnumerable<ServiceValidationError>)errors);
+
+    private static ServiceResponse<T> Invalid<T>(IEnumerable<ServiceValidationError> errors)
+    {
+        var validationErrors = errors.ToList();
+        return new ServiceResponse<T>
+        {
+            Errors = validationErrors.Select(error => error.Message).ToList(),
+            ValidationErrors = validationErrors,
+            Message = "The Power BI report is invalid.",
+            StatusCode = StatusCodes.Status400BadRequest
+        };
+    }
 
     private static ServiceResponse<T> Invalid<T>(IEnumerable<string> errors) => new()
     {

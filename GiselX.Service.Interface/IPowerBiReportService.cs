@@ -12,6 +12,5 @@ public interface IPowerBiReportService
     Task<ServiceResponse<int>> SaveAsync(SavePowerBiReportDto dto, string username, CancellationToken token);
     Task<ServiceResponse> SetActiveAsync(int id, bool isActive, string username, CancellationToken token);
     Task<ServiceResponse> DeleteAsync(int id, CancellationToken token);
-    Task<ServiceResponse<IReadOnlyList<PowerBiReportMenuItemDto>>> ListMenuAsync(CancellationToken token);
     Task<ServiceResponse<PowerBiReportViewerDto?>> GetViewerAsync(int id, CancellationToken token);
 }

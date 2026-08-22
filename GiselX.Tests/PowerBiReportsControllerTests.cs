@@ -87,6 +87,23 @@ public sealed class PowerBiReportsControllerTests
     }
 
     [Fact]
+    public void Viewer_view_exposes_accessible_retry_of_the_validated_url_inside_the_fullscreen_subtree()
+    {
+        var view = ReadSource("GiselX.Web", "Views", "PowerBiReports", "View.cshtml");
+
+        Assert.Contains("id=\"power-bi-retry\"", view, StringComparison.Ordinal);
+        Assert.Contains("aria-controls=\"power-bi-frame\"", view, StringComparison.Ordinal);
+        Assert.Contains("data-report-url=\"@Model.EmbedUrl\"", view, StringComparison.Ordinal);
+        Assert.Contains("id=\"power-bi-loading-label\"", view, StringComparison.Ordinal);
+        Assert.Contains("id=\"power-bi-load-status\"", view, StringComparison.Ordinal);
+        Assert.Contains("role=\"status\" aria-live=\"polite\"", view, StringComparison.Ordinal);
+        Assert.DoesNotContain("Html.Raw", view, StringComparison.OrdinalIgnoreCase);
+
+        var viewerStart = view.IndexOf("id=\"power-bi-viewer\"", StringComparison.Ordinal);
+        Assert.True(viewerStart < view.IndexOf("id=\"power-bi-retry\"", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Viewer_styles_fill_the_viewport_in_fullscreen_after_mobile_sizing()
     {
         var styles = ReadSource("GiselX.Web", "wwwroot", "css", "power-bi-reports.css");
@@ -123,6 +140,22 @@ public sealed class PowerBiReportsControllerTests
         Assert.Contains("focusBeforeFullscreen = document.activeElement", script, StringComparison.Ordinal);
         Assert.Contains("fullscreenButton?.focus()", script, StringComparison.Ordinal);
         Assert.Contains("focusBeforeFullscreen?.focus()", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Viewer_script_retry_resets_loading_accessibility_state_and_reloads_only_the_server_url()
+    {
+        var script = ReadSource("GiselX.Web", "wwwroot", "js", "power-bi-reports.js");
+
+        Assert.Contains("const retryButton = document.getElementById('power-bi-retry')", script,
+            StringComparison.Ordinal);
+        Assert.Contains("const reportUrl = frame?.dataset.reportUrl", script, StringComparison.Ordinal);
+        Assert.Contains("retryButton?.addEventListener('click'", script, StringComparison.Ordinal);
+        Assert.Contains("loading?.classList.remove('d-none')", script, StringComparison.Ordinal);
+        Assert.Contains("loadingLabel.textContent = 'Reloading report'", script, StringComparison.Ordinal);
+        Assert.Contains("loadStatus.textContent = 'Reloading report.'", script, StringComparison.Ordinal);
+        Assert.Contains("frame.src = reportUrl", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("innerHTML", script, StringComparison.Ordinal);
     }
 
     private static string ReadSource(params string[] pathParts)

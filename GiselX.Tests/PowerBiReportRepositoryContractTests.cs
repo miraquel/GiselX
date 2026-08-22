@@ -6,6 +6,7 @@ using System.Reflection;
 using GiselX.Domain;
 using GiselX.Repository;
 using GiselX.Repository.Interface;
+using Microsoft.Data.Sqlite;
 using Microsoft.Data.SqlClient;
 
 namespace GiselX.Tests;
@@ -28,16 +29,18 @@ public sealed class PowerBiReportRepositoryContractTests
     }
 
     [Fact]
-    public async Task ListActiveByCompanyAsync_emits_company_active_filter_and_menu_order_with_scope()
+    public async Task Menu_list_emits_company_active_filter_and_order_without_an_explicit_transaction()
     {
-        var (repository, connection, transaction) = CreatePowerBiRepository();
+        var connection = new RecordingDbConnection();
+        var repository = new PowerBiReportMenuRepository(connection);
         using var cancellation = new CancellationTokenSource();
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => repository.ListActiveByCompanyAsync(8, cancellation.Token));
 
         Assert.Contains("WHERE CompanyId = @CompanyId AND IsActive = 1", connection.LastCommandText);
         Assert.Contains("ORDER BY DisplayOrder, Name", connection.LastCommandText);
-        AssertCommandScope(connection, transaction, cancellation.Token);
+        Assert.Null(connection.LastTransaction);
+        Assert.Equal(cancellation.Token, connection.LastCancellationToken);
         AssertParameter(connection, "CompanyId", 8);
     }
 
@@ -49,10 +52,46 @@ public sealed class PowerBiReportRepositoryContractTests
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => repository.ListAdminAsync(null, cancellation.Token));
 
-        Assert.Contains("WHERE (@CompanyId IS NULL OR CompanyId = @CompanyId)", connection.LastCommandText);
-        Assert.Contains("ORDER BY CompanyId, DisplayOrder, Name", connection.LastCommandText);
+        Assert.Contains("INNER JOIN Company", connection.LastCommandText);
+        Assert.Contains("WHERE (@CompanyId IS NULL OR report.CompanyId = @CompanyId)", connection.LastCommandText);
+        Assert.Contains("ORDER BY company.Name, report.DisplayOrder, report.Name, report.Id", connection.LastCommandText);
         AssertCommandScope(connection, transaction, cancellation.Token);
         AssertParameter(connection, "CompanyId", null);
+    }
+
+    [Fact]
+    public async Task ListAdminAsync_orders_unfiltered_rows_by_company_name_then_order_name_and_id()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var transaction = await connection.BeginTransactionAsync();
+        await ExecuteSqlAsync(connection, transaction, """
+            CREATE TABLE Company (Id INTEGER PRIMARY KEY, Name TEXT NOT NULL);
+            CREATE TABLE PowerBiReport (
+                Id INTEGER PRIMARY KEY,
+                CompanyId INTEGER NOT NULL,
+                Name TEXT NOT NULL,
+                EmbedUrl TEXT NOT NULL,
+                DisplayOrder INTEGER NOT NULL,
+                IsActive INTEGER NOT NULL,
+                CreatedDate TEXT NOT NULL,
+                CreatedBy TEXT NOT NULL,
+                ModifiedDate TEXT NULL,
+                ModifiedBy TEXT NULL);
+            INSERT INTO Company (Id, Name) VALUES (2, 'Zulu'), (10, 'Alpha');
+            INSERT INTO PowerBiReport
+                (Id, CompanyId, Name, EmbedUrl, DisplayOrder, IsActive, CreatedDate, CreatedBy)
+            VALUES
+                (101, 2, 'First', 'https://app.powerbi.com/view?r=101', 0, 1, '2026-08-22', 'admin'),
+                (104, 10, 'Alpha report', 'https://app.powerbi.com/view?r=104', 1, 1, '2026-08-22', 'admin'),
+                (103, 10, 'Beta report', 'https://app.powerbi.com/view?r=103', 5, 1, '2026-08-22', 'admin'),
+                (102, 10, 'Beta report', 'https://app.powerbi.com/view?r=102', 5, 1, '2026-08-22', 'admin');
+            """);
+        var repository = new PowerBiReportRepository(connection, transaction);
+
+        var reports = await repository.ListAdminAsync(null, CancellationToken.None);
+
+        Assert.Equal([104, 102, 103, 101], reports.Select(report => report.Id));
     }
 
     [Fact]
@@ -333,6 +372,14 @@ public sealed class PowerBiReportRepositoryContractTests
     {
         Assert.True(connection.LastParameters.TryGetValue(name, out var actual), $"Parameter {name} was not recorded.");
         Assert.Equal(expected, actual);
+    }
+
+    private static async Task ExecuteSqlAsync(SqliteConnection connection, DbTransaction transaction, string sql)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = (SqliteTransaction)transaction;
+        command.CommandText = sql;
+        await command.ExecuteNonQueryAsync();
     }
 
     private static SqlException CreateSqlException(int number, string message)

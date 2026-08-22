@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 
 namespace GiselX.Web.Controllers;
 
-public sealed class PowerBiReportMenuViewComponent(IPowerBiReportService service,
+public sealed class PowerBiReportMenuViewComponent(IPowerBiReportMenuService service,
     ILogger<PowerBiReportMenuViewComponent> logger) : ViewComponent
 {
     public async Task<IViewComponentResult> InvokeAsync()

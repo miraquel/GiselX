@@ -12,25 +12,12 @@ public sealed class PowerBiReportRepository(IDbConnection dbConnection, IDbTrans
     public async Task<IReadOnlyList<PowerBiReport>> ListAdminAsync(int? companyId, CancellationToken token)
     {
         const string sql = """
-            SELECT Id, CompanyId, Name, EmbedUrl, DisplayOrder, IsActive,
-                   CreatedDate, CreatedBy, ModifiedDate, ModifiedBy
-            FROM PowerBiReport
-            WHERE (@CompanyId IS NULL OR CompanyId = @CompanyId)
-            ORDER BY CompanyId, DisplayOrder, Name;
-            """;
-        var reports = await dbConnection.QueryAsync<PowerBiReport>(new CommandDefinition(sql, new { CompanyId = companyId },
-            dbTransaction, cancellationToken: token));
-        return reports.ToList();
-    }
-
-    public async Task<IReadOnlyList<PowerBiReport>> ListActiveByCompanyAsync(int companyId, CancellationToken token)
-    {
-        const string sql = """
-            SELECT Id, CompanyId, Name, EmbedUrl, DisplayOrder, IsActive,
-                   CreatedDate, CreatedBy, ModifiedDate, ModifiedBy
-            FROM PowerBiReport
-            WHERE CompanyId = @CompanyId AND IsActive = 1
-            ORDER BY DisplayOrder, Name;
+            SELECT report.Id, report.CompanyId, report.Name, report.EmbedUrl, report.DisplayOrder, report.IsActive,
+                   report.CreatedDate, report.CreatedBy, report.ModifiedDate, report.ModifiedBy
+            FROM PowerBiReport AS report
+            INNER JOIN Company AS company ON company.Id = report.CompanyId
+            WHERE (@CompanyId IS NULL OR report.CompanyId = @CompanyId)
+            ORDER BY company.Name, report.DisplayOrder, report.Name, report.Id;
             """;
         var reports = await dbConnection.QueryAsync<PowerBiReport>(new CommandDefinition(sql, new { CompanyId = companyId },
             dbTransaction, cancellationToken: token));

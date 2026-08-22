@@ -17,25 +17,6 @@ namespace GiselX.Tests;
 public sealed class PowerBiReportServiceTests
 {
     [Fact]
-    public async Task ListMenuAsync_uses_authenticated_users_company_and_returns_active_ordered_items()
-    {
-        var repository = new FakePowerBiReportRepository
-        {
-            Active =
-            [
-                new PowerBiReport { Id = 3, CompanyId = 7, Name = "Sales", DisplayOrder = 2 },
-                new PowerBiReport { Id = 8, CompanyId = 7, Name = "Stock", DisplayOrder = 4 }
-            ]
-        };
-        var service = CreateService(repository, userCompanyId: 7);
-
-        var response = await service.ListMenuAsync(default);
-
-        Assert.Equal(7, repository.ListedCompanyId);
-        Assert.Equal(["Sales", "Stock"], response.Data!.Select(item => item.Name));
-    }
-
-    [Fact]
     public async Task GetViewerAsync_cannot_forward_a_company_id_from_the_caller()
     {
         var repository = new FakePowerBiReportRepository();
@@ -71,15 +52,17 @@ public sealed class PowerBiReportServiceTests
 
         Assert.Equal(400, response.StatusCode);
         Assert.Contains(response.Errors, error => error.Contains("app.powerbi.com", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(response.ValidationErrors,
+            error => error.Key == nameof(SavePowerBiReportDto.EmbedUrl));
         Assert.Equal(0, transaction.CommitCount);
     }
 
     [Theory]
-    [InlineData(0, "Sales", "https://app.powerbi.com/view?r=abc", 10, "Company")]
-    [InlineData(7, " ", "https://app.powerbi.com/view?r=abc", 10, "name")]
-    [InlineData(7, "Sales", "https://app.powerbi.com/view?r=abc", -1, "order")]
+    [InlineData(0, "Sales", "https://app.powerbi.com/view?r=abc", 10, "Company", nameof(SavePowerBiReportDto.CompanyId))]
+    [InlineData(7, " ", "https://app.powerbi.com/view?r=abc", 10, "name", nameof(SavePowerBiReportDto.Name))]
+    [InlineData(7, "Sales", "https://app.powerbi.com/view?r=abc", -1, "order", nameof(SavePowerBiReportDto.DisplayOrder))]
     public async Task SaveAsync_rejects_invalid_fields_without_mutation(
-        int companyId, string name, string embedUrl, int displayOrder, string expectedError)
+        int companyId, string name, string embedUrl, int displayOrder, string expectedError, string expectedKey)
     {
         var repository = new FakePowerBiReportRepository();
         var transaction = new FakeTransaction();
@@ -95,6 +78,7 @@ public sealed class PowerBiReportServiceTests
 
         Assert.Equal(StatusCodes.Status400BadRequest, response.StatusCode);
         Assert.Contains(response.Errors, error => error.Contains(expectedError, StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(response.ValidationErrors, error => error.Key == expectedKey);
         Assert.Null(repository.Inserted);
         Assert.Null(repository.Updated);
         Assert.Equal(0, transaction.CommitCount);
@@ -115,6 +99,7 @@ public sealed class PowerBiReportServiceTests
 
         Assert.Equal(StatusCodes.Status400BadRequest, response.StatusCode);
         Assert.Contains(response.Errors, error => error.Contains("150", StringComparison.Ordinal));
+        Assert.Contains(response.ValidationErrors, error => error.Key == nameof(SavePowerBiReportDto.Name));
     }
 
     [Fact]
@@ -132,6 +117,7 @@ public sealed class PowerBiReportServiceTests
 
         Assert.Equal(StatusCodes.Status400BadRequest, response.StatusCode);
         Assert.Contains(response.Errors, error => error.Contains("2,048", StringComparison.Ordinal));
+        Assert.Contains(response.ValidationErrors, error => error.Key == nameof(SavePowerBiReportDto.EmbedUrl));
         Assert.Null(repository.Inserted);
         Assert.Equal(0, transaction.CommitCount);
     }
@@ -151,6 +137,7 @@ public sealed class PowerBiReportServiceTests
 
         Assert.Equal(StatusCodes.Status400BadRequest, response.StatusCode);
         Assert.Contains(response.Errors, error => error.Contains("2,048", StringComparison.Ordinal));
+        Assert.Contains(response.ValidationErrors, error => error.Key == nameof(SavePowerBiReportDto.EmbedUrl));
         Assert.Null(repository.Inserted);
         Assert.Null(repository.Updated);
         Assert.Equal(0, transaction.CommitCount);
@@ -168,6 +155,7 @@ public sealed class PowerBiReportServiceTests
 
         Assert.Equal(StatusCodes.Status400BadRequest, response.StatusCode);
         Assert.Contains(response.Errors, error => error.Contains("company", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(response.ValidationErrors, error => error.Key == nameof(SavePowerBiReportDto.CompanyId));
         Assert.Null(repository.Inserted);
         Assert.Equal(0, transaction.CommitCount);
     }
@@ -185,6 +173,7 @@ public sealed class PowerBiReportServiceTests
 
         Assert.Equal(400, response.StatusCode);
         Assert.Contains(response.Errors, error => error.Contains("already exists", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(response.ValidationErrors, error => error.Key == nameof(SavePowerBiReportDto.Name));
         Assert.Equal((7, "Sales", (int?)null), repository.DuplicateScope);
         Assert.Equal(0, transaction.CommitCount);
     }
@@ -311,6 +300,7 @@ public sealed class PowerBiReportServiceTests
 
         Assert.Equal(StatusCodes.Status400BadRequest, response.StatusCode);
         Assert.Contains(response.Errors, error => error.Contains("already exists", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(response.ValidationErrors, error => error.Key == nameof(SavePowerBiReportDto.Name));
         Assert.Equal(0, transaction.CommitCount);
     }
 

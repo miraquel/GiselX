@@ -145,6 +145,16 @@ public sealed class PowerBiReportsAdminController(IPowerBiReportService service)
 
     private void AddFailureErrors(ServiceResponse response, string fallback)
     {
+        var validationErrors = response.ValidationErrors
+            .Where(error => !string.IsNullOrWhiteSpace(error.Message))
+            .Distinct()
+            .ToList();
+        if (validationErrors.Count > 0)
+        {
+            foreach (var error in validationErrors) ModelState.AddModelError(error.Key, error.Message);
+            return;
+        }
+
         var errors = response.Errors.Where(error => !string.IsNullOrWhiteSpace(error))
             .Distinct(StringComparer.Ordinal).ToList();
         if (errors.Count > 0)

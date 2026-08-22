@@ -5,7 +5,6 @@ namespace GiselX.Repository.Interface;
 public interface IPowerBiReportRepository
 {
     Task<IReadOnlyList<PowerBiReport>> ListAdminAsync(int? companyId, CancellationToken token);
-    Task<IReadOnlyList<PowerBiReport>> ListActiveByCompanyAsync(int companyId, CancellationToken token);
     Task<PowerBiReport?> GetAdminByIdAsync(int id, CancellationToken token);
     Task<PowerBiReport?> GetActiveByIdAndCompanyAsync(int id, int companyId, CancellationToken token);
     Task<bool> NameExistsAsync(int companyId, string name, int? excludeId, CancellationToken token);
