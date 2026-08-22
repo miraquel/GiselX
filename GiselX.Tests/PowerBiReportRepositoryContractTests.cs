@@ -32,7 +32,7 @@ public sealed class PowerBiReportRepositoryContractTests
     public async Task Menu_list_emits_company_active_filter_and_order_without_an_explicit_transaction()
     {
         var connection = new RecordingDbConnection();
-        var repository = new PowerBiReportMenuRepository(connection);
+        var repository = new PowerBiReportMenuRepository(new MenuConnectionFactory(connection));
         using var cancellation = new CancellationTokenSource();
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => repository.ListActiveByCompanyAsync(8, cancellation.Token));
@@ -40,7 +40,9 @@ public sealed class PowerBiReportRepositoryContractTests
         Assert.Contains("WHERE CompanyId = @CompanyId AND IsActive = 1", connection.LastCommandText);
         Assert.Contains("ORDER BY DisplayOrder, Name", connection.LastCommandText);
         Assert.Null(connection.LastTransaction);
+        Assert.Equal(cancellation.Token, connection.LastOpenCancellationToken);
         Assert.Equal(cancellation.Token, connection.LastCancellationToken);
+        Assert.True(connection.IsDisposed);
         AssertParameter(connection, "CompanyId", 8);
     }
 
@@ -429,6 +431,8 @@ public sealed class PowerBiReportRepositoryContractTests
         public int RowsAffected { get; set; }
         public object? ScalarResult { get; set; }
         public Exception? CommandException { get; set; }
+        public CancellationToken LastOpenCancellationToken { get; private set; }
+        public bool IsDisposed { get; private set; }
 
         [AllowNull] public override string ConnectionString { get; set; } = string.Empty;
         public override string Database => "Recording";
@@ -439,6 +443,16 @@ public sealed class PowerBiReportRepositoryContractTests
         public override void ChangeDatabase(string databaseName) { }
         public override void Close() { }
         public override void Open() { }
+        public override Task OpenAsync(CancellationToken cancellationToken)
+        {
+            LastOpenCancellationToken = cancellationToken;
+            return Task.CompletedTask;
+        }
+        protected override void Dispose(bool disposing)
+        {
+            IsDisposed = true;
+            base.Dispose(disposing);
+        }
         protected override DbTransaction BeginDbTransaction(IsolationLevel isolationLevel) => throw new NotSupportedException();
         protected override DbCommand CreateDbCommand() => new RecordingDbCommand(this);
 
@@ -450,6 +464,11 @@ public sealed class PowerBiReportRepositoryContractTests
             LastTransaction = command.Transaction;
             LastCancellationToken = cancellationToken;
         }
+    }
+
+    private sealed class MenuConnectionFactory(DbConnection connection) : IPowerBiReportMenuConnectionFactory
+    {
+        public DbConnection CreateConnection() => connection;
     }
 
     private sealed class RecordingDbTransaction(DbConnection connection) : DbTransaction

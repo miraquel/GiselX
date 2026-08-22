@@ -28,9 +28,9 @@ public sealed class PowerBiReportMenuViewComponent(IPowerBiReportMenuService ser
         {
             throw;
         }
-        catch (Exception)
+        catch (Exception exception)
         {
-            logger.LogWarning("Power BI report navigation is unavailable.");
+            logger.LogWarning(exception, "Power BI report navigation is unavailable.");
             return View(Array.Empty<PowerBiReportMenuItemDto>());
         }
     }

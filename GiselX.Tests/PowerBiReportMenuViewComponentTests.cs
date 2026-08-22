@@ -5,6 +5,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Security.Claims;
 using GiselX.Domain;
 using GiselX.Repository;
+using GiselX.Repository.Interface;
 using GiselX.Service;
 using GiselX.Service.Dto;
 using GiselX.Service.Dto.Common;
@@ -17,6 +18,8 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.AspNetCore.Mvc.ViewComponents;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
@@ -68,17 +71,87 @@ public sealed class PowerBiReportMenuViewComponentTests
     [Fact]
     public async Task InvokeAsync_returns_an_empty_menu_when_the_service_throws()
     {
-        var service = MenuService.Throwing(new InvalidOperationException("sensitive exception detail"));
-        var component = CreateComponent(service);
+        var exception = new InvalidOperationException("sensitive exception detail");
+        var service = MenuService.Throwing(exception);
+        var logger = new CapturingLogger<PowerBiReportMenuViewComponent>();
+        var component = CreateComponent(service, logger: logger);
 
         Assert.Empty(MenuModel(await component.InvokeAsync()));
+        Assert.Equal(LogLevel.Warning, logger.Level);
+        Assert.Same(exception, logger.Exception);
     }
 
     [Fact]
     public async Task Component_activation_does_not_open_the_database_and_open_failure_isolated_to_an_empty_menu()
     {
-        var connection = new ThrowingOpenDbConnection();
-        var username = "user@example.test";
+        var openException = new InvalidOperationException("Database open failed.");
+        var connection = new MenuDbConnection(openException: openException);
+        var logger = new CapturingLogger<PowerBiReportMenuViewComponent>();
+        var component = CreateRepositoryBackedComponent(connection, logger);
+
+        Assert.Equal(0, connection.OpenCount);
+
+        Assert.Empty(MenuModel(await component.InvokeAsync()));
+        Assert.Equal(1, connection.OpenCount);
+        Assert.True(connection.IsDisposed);
+        Assert.Same(openException, logger.Exception);
+    }
+
+    [Fact]
+    public async Task InvokeAsync_isolates_a_dedicated_connection_query_failure_and_logs_the_exception()
+    {
+        var queryException = new InvalidOperationException("Database query failed.");
+        var connection = new MenuDbConnection(queryException: queryException);
+        var logger = new CapturingLogger<PowerBiReportMenuViewComponent>();
+        var component = CreateRepositoryBackedComponent(connection, logger);
+
+        Assert.Empty(MenuModel(await component.InvokeAsync()));
+        Assert.True(connection.IsDisposed);
+        Assert.Same(queryException, logger.Exception);
+    }
+
+    [Fact]
+    public async Task InvokeAsync_rethrows_a_dedicated_query_cancellation_when_the_request_is_canceled()
+    {
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        var cancellationException = new OperationCanceledException(cancellation.Token);
+        var connection = new MenuDbConnection(queryException: cancellationException);
+        var component = CreateRepositoryBackedComponent(connection,
+            NullLogger<PowerBiReportMenuViewComponent>.Instance, cancellation.Token);
+
+        var exception = await Assert.ThrowsAsync<OperationCanceledException>(() => component.InvokeAsync());
+
+        Assert.Same(cancellationException, exception);
+        Assert.True(connection.IsDisposed);
+    }
+
+    [Fact]
+    public async Task InvokeAsync_does_not_use_the_request_connection_with_a_pending_local_transaction()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var requestConnection = new MenuDbConnection();
+        var menuConnection = new MenuDbConnection(rows:
+        [
+            new PowerBiReport
+            {
+                Id = 11,
+                CompanyId = 7,
+                Name = "Sales Dashboard",
+                EmbedUrl = "https://app.powerbi.com/view?r=sales",
+                IsActive = true
+            }
+        ]);
+        var connectionFactory = new MenuConnectionFactory(() => menuConnection);
+        var services = new ServiceCollection();
+        services.AddGiselXRepository();
+        services.AddScoped<IDbConnection>(_ => requestConnection);
+        services.AddScoped<IPowerBiReportMenuConnectionFactory>(_ => connectionFactory);
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        using var requestTransaction = scope.ServiceProvider.GetRequiredService<IDbTransaction>();
+        var repository = scope.ServiceProvider.GetRequiredService<IPowerBiReportMenuRepository>();
+        const string username = "user@example.test";
         var user = new AppIdentityUser
         {
             Id = "user-1",
@@ -87,19 +160,23 @@ public sealed class PowerBiReportMenuViewComponentTests
             CompanyId = 7
         };
         var service = new PowerBiReportMenuService(
-            new PowerBiReportMenuRepository(connection),
+            repository,
             new UserClaimDto { Username = username },
             CreateUserManager(user));
         var component = new PowerBiReportMenuViewComponent(service,
             NullLogger<PowerBiReportMenuViewComponent>.Instance)
         {
-            ViewComponentContext = ViewComponentContext(authenticated: true, requestAborted: default)
+            ViewComponentContext = ViewComponentContext(authenticated: true, requestAborted: cancellation.Token)
         };
 
-        Assert.Equal(0, connection.OpenCount);
+        var model = MenuModel(await component.InvokeAsync());
 
-        Assert.Empty(MenuModel(await component.InvokeAsync()));
-        Assert.Equal(1, connection.OpenCount);
+        Assert.Equal(0, requestConnection.TransactionConflictCount);
+        Assert.Equal(1, menuConnection.OpenCount);
+        Assert.Equal(cancellation.Token, menuConnection.OpenCancellationToken);
+        Assert.Equal(cancellation.Token, menuConnection.QueryCancellationToken);
+        Assert.True(menuConnection.IsDisposed);
+        Assert.Equal([new PowerBiReportMenuItemDto(11, "Sales Dashboard")], model);
     }
 
     [Fact]
@@ -135,12 +212,35 @@ public sealed class PowerBiReportMenuViewComponentTests
     }
 
     private static PowerBiReportMenuViewComponent CreateComponent(MenuService service, bool authenticated = true,
-        CancellationToken requestAborted = default)
+        CancellationToken requestAborted = default, ILogger<PowerBiReportMenuViewComponent>? logger = null)
     {
         var component = new PowerBiReportMenuViewComponent(service,
-            NullLogger<PowerBiReportMenuViewComponent>.Instance)
+            logger ?? NullLogger<PowerBiReportMenuViewComponent>.Instance)
         {
             ViewComponentContext = ViewComponentContext(authenticated, requestAborted)
+        };
+        return component;
+    }
+
+    private static PowerBiReportMenuViewComponent CreateRepositoryBackedComponent(MenuDbConnection connection,
+            ILogger<PowerBiReportMenuViewComponent> logger, CancellationToken requestAborted = default)
+    {
+        const string username = "user@example.test";
+        var user = new AppIdentityUser
+        {
+            Id = "user-1",
+            UserName = username,
+            NormalizedUserName = username.ToUpperInvariant(),
+            CompanyId = 7
+        };
+        var connectionFactory = new MenuConnectionFactory(() => connection);
+        var service = new PowerBiReportMenuService(
+            new PowerBiReportMenuRepository(connectionFactory),
+            new UserClaimDto { Username = username },
+            CreateUserManager(user));
+        var component = new PowerBiReportMenuViewComponent(service, logger)
+        {
+            ViewComponentContext = ViewComponentContext(authenticated: true, requestAborted: requestAborted)
         };
         return component;
     }
@@ -196,6 +296,21 @@ public sealed class PowerBiReportMenuViewComponentTests
 
     }
 
+    private sealed class CapturingLogger<T> : ILogger<T>
+    {
+        public LogLevel? Level { get; private set; }
+        public Exception? Exception { get; private set; }
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            Level = logLevel;
+            Exception = exception;
+        }
+    }
+
     private sealed class SingleUserStore(AppIdentityUser user) : IUserStore<AppIdentityUser>
     {
         public void Dispose() { }
@@ -222,32 +337,101 @@ public sealed class PowerBiReportMenuViewComponentTests
                 StringComparison.OrdinalIgnoreCase) ? user : null);
     }
 
-    private sealed class ThrowingOpenDbConnection : DbConnection
+    private sealed class MenuDbConnection(
+        Exception? openException = null,
+        Exception? queryException = null,
+        IReadOnlyList<PowerBiReport>? rows = null) : DbConnection
     {
+        private ConnectionState _state = ConnectionState.Closed;
+        private bool _hasPendingLocalTransaction;
+
         public int OpenCount { get; private set; }
+        public int TransactionConflictCount { get; private set; }
+        public bool IsDisposed { get; private set; }
+        public CancellationToken OpenCancellationToken { get; private set; }
+        public CancellationToken QueryCancellationToken { get; private set; }
         [AllowNull] public override string ConnectionString { get; set; } = string.Empty;
-        public override string Database => "Throwing";
-        public override string DataSource => "Throwing";
+        public override string Database => "Menu";
+        public override string DataSource => "Menu";
         public override string ServerVersion => "1";
-        public override ConnectionState State => ConnectionState.Closed;
+        public override ConnectionState State => _state;
         public override void ChangeDatabase(string databaseName) { }
-        public override void Close() { }
+        public override void Close() => _state = ConnectionState.Closed;
         public override void Open()
         {
             OpenCount++;
-            throw new InvalidOperationException("Database open failed.");
+            if (openException is not null) throw openException;
+            _state = ConnectionState.Open;
         }
         public override Task OpenAsync(CancellationToken cancellationToken)
         {
             OpenCount++;
-            return Task.FromException(new InvalidOperationException("Database open failed."));
+            OpenCancellationToken = cancellationToken;
+            if (openException is not null) return Task.FromException(openException);
+            _state = ConnectionState.Open;
+            return Task.CompletedTask;
         }
-        protected override DbTransaction BeginDbTransaction(IsolationLevel isolationLevel) =>
-            throw new NotSupportedException();
-        protected override DbCommand CreateDbCommand() => new ThrowingOpenDbCommand(this);
+        protected override DbTransaction BeginDbTransaction(IsolationLevel isolationLevel)
+        {
+            _hasPendingLocalTransaction = true;
+            return new MenuDbTransaction(this);
+        }
+        protected override DbCommand CreateDbCommand() => new MenuDbCommand(this);
+
+        protected override void Dispose(bool disposing)
+        {
+            IsDisposed = true;
+            base.Dispose(disposing);
+        }
+
+        public DbDataReader ExecuteReader(DbCommand command, CancellationToken cancellationToken)
+        {
+            QueryCancellationToken = cancellationToken;
+            if (_hasPendingLocalTransaction && command.Transaction is null)
+            {
+                TransactionConflictCount++;
+                throw new InvalidOperationException(
+                    "ExecuteReader requires the command to have a transaction when the connection assigned to the command is in a pending local transaction.");
+            }
+            if (queryException is not null) throw queryException;
+
+            var table = new DataTable();
+            table.Columns.Add("Id", typeof(int));
+            table.Columns.Add("CompanyId", typeof(int));
+            table.Columns.Add("Name", typeof(string));
+            table.Columns.Add("EmbedUrl", typeof(string));
+            table.Columns.Add("DisplayOrder", typeof(int));
+            table.Columns.Add("IsActive", typeof(bool));
+            table.Columns.Add("CreatedDate", typeof(DateTime));
+            table.Columns.Add("CreatedBy", typeof(string));
+            table.Columns.Add("ModifiedDate", typeof(DateTime));
+            table.Columns.Add("ModifiedBy", typeof(string));
+            foreach (var report in rows ?? [])
+            {
+                table.Rows.Add(report.Id, report.CompanyId, report.Name, report.EmbedUrl, report.DisplayOrder,
+                    report.IsActive, report.CreatedDate, report.CreatedBy, report.ModifiedDate ?? (object)DBNull.Value,
+                    report.ModifiedBy ?? (object)DBNull.Value);
+            }
+
+            return table.CreateDataReader();
+        }
     }
 
-    private sealed class ThrowingOpenDbCommand(DbConnection connection) : DbCommand
+    private sealed class MenuConnectionFactory(Func<DbConnection> createConnection)
+        : IPowerBiReportMenuConnectionFactory
+    {
+        public DbConnection CreateConnection() => createConnection();
+    }
+
+    private sealed class MenuDbTransaction(DbConnection connection) : DbTransaction
+    {
+        public override IsolationLevel IsolationLevel => IsolationLevel.ReadCommitted;
+        protected override DbConnection DbConnection => connection;
+        public override void Commit() { }
+        public override void Rollback() { }
+    }
+
+    private sealed class MenuDbCommand(MenuDbConnection connection) : DbCommand
     {
         [AllowNull] public override string CommandText { get; set; } = string.Empty;
         public override int CommandTimeout { get; set; }
@@ -263,7 +447,9 @@ public sealed class PowerBiReportMenuViewComponentTests
         public override void Prepare() { }
         protected override DbParameter CreateDbParameter() => new TestDbParameter();
         protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior) =>
-            throw new NotSupportedException();
+            connection.ExecuteReader(this, CancellationToken.None);
+        protected override Task<DbDataReader> ExecuteDbDataReaderAsync(CommandBehavior behavior,
+            CancellationToken cancellationToken) => Task.FromResult(connection.ExecuteReader(this, cancellationToken));
     }
 
     private sealed class TestDbParameter : DbParameter

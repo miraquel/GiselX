@@ -1,11 +1,11 @@
-using System.Data;
 using Dapper;
 using GiselX.Domain;
 using GiselX.Repository.Interface;
 
 namespace GiselX.Repository;
 
-public sealed class PowerBiReportMenuRepository(IDbConnection dbConnection) : IPowerBiReportMenuRepository
+public sealed class PowerBiReportMenuRepository(IPowerBiReportMenuConnectionFactory connectionFactory)
+    : IPowerBiReportMenuRepository
 {
     public async Task<IReadOnlyList<PowerBiReport>> ListActiveByCompanyAsync(int companyId, CancellationToken token)
     {
@@ -16,7 +16,9 @@ public sealed class PowerBiReportMenuRepository(IDbConnection dbConnection) : IP
             WHERE CompanyId = @CompanyId AND IsActive = 1
             ORDER BY DisplayOrder, Name;
             """;
-        var reports = await dbConnection.QueryAsync<PowerBiReport>(new CommandDefinition(
+        await using var connection = connectionFactory.CreateConnection();
+        await connection.OpenAsync(token);
+        var reports = await connection.QueryAsync<PowerBiReport>(new CommandDefinition(
             sql, new { CompanyId = companyId }, cancellationToken: token));
         return reports.ToList();
     }
