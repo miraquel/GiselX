@@ -145,6 +145,46 @@ public sealed class SelloutWorkbookParserTests
         Assert.Empty(result.IgnoredSummaryRowNumbers);
     }
 
+    [Fact]
+    public void Parse_fills_grouped_values_down_from_vertical_merged_cells()
+    {
+        var cells = CoreCells((3, "2026-08-03"), dataRow: 3)
+            .Concat(
+            [
+                (4, 3, "P2"), (4, 4, "Second Product"), (4, 7, "3"), (4, 8, "CTN")
+            ])
+            .ToArray();
+        var workbook = ClosedXmlSelloutWorkbookInspectorTests.BuildWorkbookWithMergedCells(
+            "Data", cells, "A3:A4", "B3:B4", "E3:E4", "F3:F4");
+
+        var result = new SelloutWorkbookParser().Parse(workbook, Mapping(3));
+
+        Assert.Equal(2, result.Rows.Count);
+        Assert.All(result.Rows, row => Assert.True(row.IsValid));
+        var second = result.Rows.Single(row => row.SourceRowNumber == 4);
+        Assert.Equal("C1", second.CustomerId);
+        Assert.Equal("Customer", second.CustomerName);
+        Assert.Equal("INV-1", second.InvoiceNo);
+        Assert.Equal(new DateTime(2026, 8, 3), second.InvoiceDate);
+    }
+
+    [Fact]
+    public void Parse_ignores_in_row_subtotal_that_merges_across_mapped_identity_columns()
+    {
+        var cells = CoreCells((3, "2026-08-03"), dataRow: 3)
+            .Append((4, 2, "Total Customer"))
+            .Append((4, 7, "2"))
+            .Concat(CoreCells((5, "2026-08-04"), dataRow: 5))
+            .ToArray();
+        var workbook = ClosedXmlSelloutWorkbookInspectorTests.BuildWorkbookWithMergedCells(
+            "Data", cells, "B4:F4");
+
+        var result = new SelloutWorkbookParser().Parse(workbook, Mapping(3));
+
+        Assert.Equal([3, 5], result.Rows.Select(row => row.SourceRowNumber));
+        Assert.Equal([4], result.IgnoredSummaryRowNumbers);
+    }
+
     private static SelloutParseResult Parse(
         (int Row, int Column, string Value)[] cells,
         int firstDataRow = 3) => new SelloutWorkbookParser().Parse(

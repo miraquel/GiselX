@@ -27,7 +27,9 @@ public static partial class SelloutHeaderNormalizer
         return string.Join(SignatureSeparator, normalized);
     }
 
-    public static IReadOnlyList<string> ValidateHeaders(IEnumerable<string?> headers)
+    public static IReadOnlyList<string> ValidateHeaders(
+        IEnumerable<string?> headers,
+        IReadOnlySet<int>? allowedBlankColumns = null)
     {
         var normalized = headers.Select(Normalize).ToList();
         while (normalized.Count > 0 && normalized[^1].Length == 0)
@@ -38,7 +40,7 @@ public static partial class SelloutHeaderNormalizer
         var errors = new List<string>();
         foreach (var item in normalized.Select((value, index) => new { value, index }))
         {
-            if (item.value.Length == 0)
+            if (item.value.Length == 0 && !(allowedBlankColumns?.Contains(item.index + 1) ?? false))
             {
                 errors.Add($"Header column {item.index + 1} is blank.");
             }

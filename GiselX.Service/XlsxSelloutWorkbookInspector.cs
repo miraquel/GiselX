@@ -65,15 +65,22 @@ public sealed class XlsxSelloutWorkbookInspector : ISelloutWorkbookInspector
             }
 
             var sharedStrings = ReadSharedStrings(archive);
-            var rows = ReadRows(archive, selected.Path, sharedStrings);
-            rows.TryGetValue(headerRowNumber, out var headerCells);
-            headerCells ??= [];
+            var worksheet = ReadWorksheetData(archive, selected.Path, sharedStrings);
+            var rows = ExpandVerticalMergedValues(worksheet, firstDataRowNumber);
+            worksheet.Rows.TryGetValue(headerRowNumber, out var headerCells);
+            headerCells ??= new Dictionary<int, string>();
             var width = headerCells.Count == 0 ? 0 : headerCells.Keys.Max();
             result.Headers = Enumerable.Range(1, width)
                 .Select(column => headerCells.GetValueOrDefault(column, string.Empty)).ToList();
             result.NormalizedHeaders = result.Headers.Select(SelloutHeaderNormalizer.Normalize).ToList();
             result.HeaderSignature = SelloutHeaderNormalizer.CreateSignature(result.Headers);
-            result.Errors.AddRange(SelloutHeaderNormalizer.ValidateHeaders(result.Headers));
+            var mergedHeaderContinuationColumns = worksheet.MergedRanges
+                .Where(range => range.FirstRow == headerRowNumber && range.LastColumn > range.FirstColumn)
+                .SelectMany(range => Enumerable.Range(range.FirstColumn + 1, range.LastColumn - range.FirstColumn))
+                .ToHashSet();
+            result.Errors.AddRange(SelloutHeaderNormalizer.ValidateHeaders(
+                result.Headers,
+                mergedHeaderContinuationColumns));
             if (result.Headers.Count == 0)
             {
                 result.Errors.Add($"No headers were found on row {headerRowNumber}.");
@@ -137,14 +144,24 @@ public sealed class XlsxSelloutWorkbookInspector : ISelloutWorkbookInspector
 
     internal static IReadOnlyDictionary<int, IReadOnlyDictionary<int, string>> ReadWorksheet(
         byte[] workbook,
-        string worksheetName)
+        string worksheetName,
+        int firstDataRowNumber = 1)
     {
         using var stream = new MemoryStream(workbook, writable: false);
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
         var sheet = ReadSheets(archive).FirstOrDefault(item => string.Equals(item.Name, worksheetName, StringComparison.Ordinal))
             ?? throw new InvalidDataException($"Worksheet '{worksheetName}' was not found.");
-        return ReadRows(archive, sheet.Path, ReadSharedStrings(archive))
-            .ToDictionary(row => row.Key, row => (IReadOnlyDictionary<int, string>)row.Value);
+        var worksheet = ReadWorksheetData(archive, sheet.Path, ReadSharedStrings(archive));
+        return ExpandVerticalMergedValues(worksheet, firstDataRowNumber);
+    }
+
+    internal static WorksheetData ReadWorksheetData(byte[] workbook, string worksheetName)
+    {
+        using var stream = new MemoryStream(workbook, writable: false);
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
+        var sheet = ReadSheets(archive).FirstOrDefault(item => string.Equals(item.Name, worksheetName, StringComparison.Ordinal))
+            ?? throw new InvalidDataException($"Worksheet '{worksheetName}' was not found.");
+        return ReadWorksheetData(archive, sheet.Path, ReadSharedStrings(archive));
     }
 
     private static List<WorksheetDefinition> ReadSheets(ZipArchive archive)
@@ -180,7 +197,7 @@ public sealed class XlsxSelloutWorkbookInspector : ISelloutWorkbookInspector
             .ToList();
     }
 
-    private static SortedDictionary<int, Dictionary<int, string>> ReadRows(
+    private static WorksheetData ReadWorksheetData(
         ZipArchive archive,
         string path,
         IReadOnlyList<string> sharedStrings)
@@ -205,7 +222,53 @@ public sealed class XlsxSelloutWorkbookInspector : ISelloutWorkbookInspector
             }
             rows[rowNumber] = cells;
         }
-        return rows;
+
+        var mergedRanges = document.Descendants(Spreadsheet + "mergeCell")
+            .Select(element => ParseRange((string?)element.Attribute("ref")))
+            .Where(range => range is not null)
+            .Cast<MergedRange>()
+            .ToList();
+        return new WorksheetData(
+            rows.ToDictionary(row => row.Key, row => (IReadOnlyDictionary<int, string>)row.Value),
+            mergedRanges);
+    }
+
+    internal static IReadOnlyDictionary<int, IReadOnlyDictionary<int, string>> ExpandVerticalMergedValues(
+        WorksheetData worksheet,
+        int firstDataRowNumber)
+    {
+        var rows = worksheet.Rows.ToDictionary(
+            row => row.Key,
+            row => new Dictionary<int, string>(row.Value));
+
+        foreach (var range in worksheet.MergedRanges.Where(range =>
+                     range.FirstRow >= firstDataRowNumber && range.LastRow > range.FirstRow))
+        {
+            if (!rows.TryGetValue(range.FirstRow, out var anchorRow) ||
+                !anchorRow.TryGetValue(range.FirstColumn, out var anchorValue) ||
+                string.IsNullOrWhiteSpace(anchorValue))
+            {
+                continue;
+            }
+
+            for (var rowNumber = range.FirstRow + 1; rowNumber <= range.LastRow; rowNumber++)
+            {
+                if (!rows.TryGetValue(rowNumber, out var row))
+                {
+                    row = [];
+                    rows[rowNumber] = row;
+                }
+
+                if (string.IsNullOrWhiteSpace(row.GetValueOrDefault(range.FirstColumn)))
+                {
+                    row[range.FirstColumn] = anchorValue;
+                }
+            }
+        }
+
+        return rows.ToDictionary(
+            row => row.Key,
+            row => (IReadOnlyDictionary<int, string>)row.Value);
     }
 
     private static string ReadCellValue(XElement cell, IReadOnlyList<string> sharedStrings)
@@ -238,6 +301,30 @@ public sealed class XlsxSelloutWorkbookInspector : ISelloutWorkbookInspector
         return result;
     }
 
+    private static MergedRange? ParseRange(string? reference)
+    {
+        var parts = (reference ?? string.Empty).Split(':', StringSplitOptions.TrimEntries);
+        if (parts.Length != 2 || !TryParseCellReference(parts[0], out var firstRow, out var firstColumn) ||
+            !TryParseCellReference(parts[1], out var lastRow, out var lastColumn))
+        {
+            return null;
+        }
+
+        return new MergedRange(
+            Math.Min(firstRow, lastRow),
+            Math.Max(firstRow, lastRow),
+            Math.Min(firstColumn, lastColumn),
+            Math.Max(firstColumn, lastColumn));
+    }
+
+    private static bool TryParseCellReference(string reference, out int row, out int column)
+    {
+        column = ParseColumnNumber(reference);
+        row = 0;
+        var rowText = new string(reference.SkipWhile(char.IsAsciiLetter).ToArray());
+        return column > 0 && int.TryParse(rowText, NumberStyles.None, CultureInfo.InvariantCulture, out row) && row > 0;
+    }
+
     private static string NormalizeWorksheetPath(string target)
     {
         var path = target.Replace('\\', '/').TrimStart('/');
@@ -252,4 +339,10 @@ public sealed class XlsxSelloutWorkbookInspector : ISelloutWorkbookInspector
     }
 
     private sealed record WorksheetDefinition(string Name, string Path);
+
+    internal sealed record WorksheetData(
+        IReadOnlyDictionary<int, IReadOnlyDictionary<int, string>> Rows,
+        IReadOnlyList<MergedRange> MergedRanges);
+
+    internal sealed record MergedRange(int FirstRow, int LastRow, int FirstColumn, int LastColumn);
 }

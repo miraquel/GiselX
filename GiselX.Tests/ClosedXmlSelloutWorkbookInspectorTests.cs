@@ -11,6 +11,12 @@ public sealed class ClosedXmlSelloutWorkbookInspectorTests
     internal static byte[] BuildWorkbook(string worksheetName, params (int Row, int Column, string Value)[] cells) =>
         CreateWorkbook(Sheet(worksheetName, cells));
 
+    internal static byte[] BuildWorkbookWithMergedCells(
+        string worksheetName,
+        (int Row, int Column, string Value)[] cells,
+        params string[] mergedRanges) =>
+        CreateWorkbook(new SheetDefinition(worksheetName, cells, mergedRanges));
+
     [Fact]
     public async Task Inspect_reads_configured_sheet_header_and_sample_rows()
     {
@@ -56,6 +62,24 @@ public sealed class ClosedXmlSelloutWorkbookInspectorTests
             .InspectAsync(workbook, "Data", 1, 2);
 
         Assert.Contains(result.Errors, error => error.Contains("duplicated", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task Inspect_allows_blank_header_cells_covered_by_a_horizontal_merge()
+    {
+        var workbook = BuildWorkbookWithMergedCells("Data",
+        [
+            (1, 1, "Invoice Date"),
+            (1, 4, "Product ID"),
+            (2, 1, "2026-08-03"),
+            (2, 4, "P-01")
+        ], "A1:C1");
+
+        var result = await new XlsxSelloutWorkbookInspector().InspectAsync(workbook, "Data", 1, 2);
+
+        Assert.Equal(["Invoice Date", "", "", "Product ID"], result.Headers);
+        Assert.Equal(["INVOICE DATE", "", "", "PRODUCT ID"], result.NormalizedHeaders);
+        Assert.Empty(result.Errors);
     }
 
     [Fact]
@@ -139,14 +163,21 @@ public sealed class ClosedXmlSelloutWorkbookInspectorTests
                         group.OrderBy(cell => cell.Column).Select(cell => new XElement(main + "c",
                             new XAttribute("r", CellReference(cell.Row, cell.Column)), new XAttribute("t", "inlineStr"),
                             new XElement(main + "is", new XElement(main + "t", new XAttribute(XNamespace.Xml + "space", "preserve"), cell.Value))))));
-                WriteEntry(archive, $"xl/worksheets/sheet{index + 1}.xml", new XDocument(new XElement(main + "worksheet", new XElement(main + "sheetData", rows))));
+                var worksheet = new XElement(main + "worksheet",
+                    new XElement(main + "sheetData", rows),
+                    sheet.MergedRanges.Count == 0
+                        ? null
+                        : new XElement(main + "mergeCells",
+                            new XAttribute("count", sheet.MergedRanges.Count),
+                            sheet.MergedRanges.Select(range => new XElement(main + "mergeCell", new XAttribute("ref", range)))));
+                WriteEntry(archive, $"xl/worksheets/sheet{index + 1}.xml", new XDocument(worksheet));
             }
         }
 
         return stream.ToArray();
     }
 
-    private static SheetDefinition Sheet(string name, params (int Row, int Column, string Value)[] cells) => new(name, cells);
+    private static SheetDefinition Sheet(string name, params (int Row, int Column, string Value)[] cells) => new(name, cells, []);
 
     private static XDocument Relationships(params (string Id, string Type, string Target)[] items)
     {
@@ -173,7 +204,10 @@ public sealed class ClosedXmlSelloutWorkbookInspectorTests
         return $"{name}{row}";
     }
 
-    private sealed record SheetDefinition(string Name, IReadOnlyList<(int Row, int Column, string Value)> Cells);
+    private sealed record SheetDefinition(
+        string Name,
+        IReadOnlyList<(int Row, int Column, string Value)> Cells,
+        IReadOnlyList<string> MergedRanges);
 
     private static DistributorTemplateMappingDto Mapping(
         int id,

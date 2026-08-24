@@ -1,4 +1,5 @@
 using GiselX.Common.Constants;
+using GiselX.Domain;
 using GiselX.Service.Dto;
 using GiselX.Service.Dto.Common;
 using GiselX.Service.Interface;
@@ -26,7 +27,11 @@ public sealed class DistributorTemplateMappingsController(
     }
 
     [HttpGet]
-    public IActionResult Create(int companyId) => View("Edit", new DistributorTemplateMappingEditViewModel { CompanyId = companyId });
+    public IActionResult Create(int companyId) => View("Edit", new DistributorTemplateMappingEditViewModel
+    {
+        CompanyId = companyId,
+        Columns = BuildCanonicalRows([])
+    });
 
     [HttpGet]
     public async Task<IActionResult> Edit(int id, int companyId, CancellationToken cancellationToken)
@@ -38,12 +43,7 @@ public sealed class DistributorTemplateMappingsController(
         {
             Id = value.Id, CompanyId = value.CompanyId, Name = value.Name, WorksheetName = value.WorksheetName,
             HeaderRowNumber = value.HeaderRowNumber, FirstDataRowNumber = value.FirstDataRowNumber,
-            Columns = value.Columns.Select(column => new DistributorTemplateColumnEditViewModel
-            {
-                SourceColumnNumber = column.SourceColumnNumber,
-                SourceHeader = column.SourceHeader,
-                CanonicalField = column.CanonicalField
-            }).ToList()
+            Columns = BuildCanonicalRows(value.Columns)
         });
     }
 
@@ -52,7 +52,7 @@ public sealed class DistributorTemplateMappingsController(
         int firstDataRowNumber, CancellationToken cancellationToken)
     {
         if (sampleFile is null || sampleFile.Length == 0) return BadRequest("A sample .xlsx file is required.");
-        await using var input = sampleFile.OpenReadStream();
+        await using var input = sampleFile!.OpenReadStream();
         using var memory = new MemoryStream();
         await input.CopyToAsync(memory, cancellationToken);
         return Json(await inspector.InspectAsync(memory.ToArray(), worksheetName, headerRowNumber, firstDataRowNumber, cancellationToken));
@@ -64,7 +64,7 @@ public sealed class DistributorTemplateMappingsController(
     {
         if (sampleFile is null || sampleFile.Length == 0) ModelState.AddModelError("sampleFile", "A sample .xlsx file is required.");
         if (!ModelState.IsValid) return View("Edit", model);
-        await using var input = sampleFile.OpenReadStream();
+        await using var input = sampleFile!.OpenReadStream();
         using var memory = new MemoryStream();
         await input.CopyToAsync(memory, cancellationToken);
         var preview = await inspector.InspectAsync(memory.ToArray(), model.WorksheetName, model.HeaderRowNumber, model.FirstDataRowNumber, cancellationToken);
@@ -73,15 +73,19 @@ public sealed class DistributorTemplateMappingsController(
             foreach (var error in preview.Errors) ModelState.AddModelError(string.Empty, error);
             return View("Edit", model);
         }
-        var assignments = model.Columns.Where(column => column.CanonicalField.HasValue)
-            .Where(column => column.SourceColumnNumber > 0)
-            .Where(column => column.SourceColumnNumber <= preview.Headers.Count)
-            .Select(column => new DistributorTemplateColumnDto
+        var assignments = model.Columns
+            .Where(column => column.CanonicalField.HasValue)
+            .Where(column => column.SourceColumnNumber > 0 && column.SourceColumnNumber <= preview.Headers.Count)
+            .Select(column =>
             {
-                SourceColumnNumber = column.SourceColumnNumber,
-                CanonicalField = column.CanonicalField!.Value
+                column.SourceHeader = preview.Headers[column.SourceColumnNumber - 1];
+                return new DistributorTemplateColumnDto
+                {
+                    SourceColumnNumber = column.SourceColumnNumber,
+                    SourceHeader = column.SourceHeader,
+                    CanonicalField = column.CanonicalField!.Value
+                };
             }).ToList();
-        foreach (var column in assignments) column.SourceHeader = preview.Headers[column.SourceColumnNumber - 1];
         var response = await mappingService.SaveAsync(new SaveDistributorTemplateMappingDto
         {
             Id = model.Id, CompanyId = model.CompanyId, Name = model.Name, WorksheetName = preview.WorksheetName ?? string.Empty,
@@ -120,5 +124,26 @@ public sealed class DistributorTemplateMappingsController(
         else
             TempData["ErrorMessage"] = string.Join(" ", response.Errors);
         return RedirectToAction(nameof(Index), new { companyId });
+    }
+
+    private static List<DistributorTemplateColumnEditViewModel> BuildCanonicalRows(
+        IEnumerable<DistributorTemplateColumnDto> mappedColumns)
+    {
+        var mappedByField = mappedColumns
+            .GroupBy(column => column.CanonicalField)
+            .ToDictionary(group => group.Key, group => group.First());
+
+        return Enum.GetValues<SelloutCanonicalField>()
+            .Select(field =>
+            {
+                mappedByField.TryGetValue(field, out var mapped);
+                return new DistributorTemplateColumnEditViewModel
+                {
+                    CanonicalField = field,
+                    SourceColumnNumber = mapped?.SourceColumnNumber ?? 0,
+                    SourceHeader = mapped?.SourceHeader ?? string.Empty
+                };
+            })
+            .ToList();
     }
 }

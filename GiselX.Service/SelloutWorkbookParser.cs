@@ -20,7 +20,8 @@ public sealed class SelloutWorkbookParser
 
     public SelloutParseResult Parse(byte[] workbook, DistributorTemplateMappingDto mapping)
     {
-        var rows = XlsxSelloutWorkbookInspector.ReadWorksheet(workbook, mapping.WorksheetName);
+        var worksheet = XlsxSelloutWorkbookInspector.ReadWorksheetData(workbook, mapping.WorksheetName);
+        var rows = XlsxSelloutWorkbookInspector.ExpandVerticalMergedValues(worksheet, mapping.FirstDataRowNumber);
         var staged = new List<SelloutStaging>();
         var allErrors = new List<SelloutStagingErrorDto>();
         var sourceRows = rows
@@ -29,7 +30,15 @@ public sealed class SelloutWorkbookParser
                 !string.IsNullOrWhiteSpace(row.Value.GetValueOrDefault(column.SourceColumnNumber))))
             .OrderBy(row => row.Key)
             .ToList();
-        var ignoredSummaryRows = FindTrailingSummaryRows(sourceRows, mapping);
+        var structurallyMergedSummaryRows = sourceRows
+            .Where(row => IsStructurallyMergedSummaryRow(row.Key, worksheet.MergedRanges, mapping))
+            .Select(row => row.Key)
+            .ToHashSet();
+        var remainingRows = sourceRows
+            .Where(row => !structurallyMergedSummaryRows.Contains(row.Key))
+            .ToList();
+        var ignoredSummaryRows = FindTrailingSummaryRows(remainingRows, mapping).ToHashSet();
+        ignoredSummaryRows.UnionWith(structurallyMergedSummaryRows);
 
         foreach (var source in sourceRows)
         {
@@ -95,6 +104,19 @@ public sealed class SelloutWorkbookParser
         }
 
         return ignored;
+    }
+
+    private static bool IsStructurallyMergedSummaryRow(
+        int rowNumber,
+        IReadOnlyList<XlsxSelloutWorkbookInspector.MergedRange> mergedRanges,
+        DistributorTemplateMappingDto mapping)
+    {
+        return mergedRanges
+            .Where(range => range.FirstRow == rowNumber && range.LastRow == rowNumber &&
+                            range.LastColumn > range.FirstColumn)
+            .Any(range => mapping.Columns.Count(column =>
+                column.SourceColumnNumber >= range.FirstColumn &&
+                column.SourceColumnNumber <= range.LastColumn) >= 2);
     }
 
     private static bool IsSummaryRow(

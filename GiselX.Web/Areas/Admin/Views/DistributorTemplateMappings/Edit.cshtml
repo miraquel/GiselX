@@ -1,4 +1,5 @@
 @using GiselX.Domain
+@using GiselX.Service
 @model GiselX.Web.Models.DistributorTemplateMappingEditViewModel
 @{ ViewData["Title"] = Model.Id.HasValue ? "Edit Distributor Mapping" : "Add Distributor Mapping"; Layout = "_ContentNavbarLayout"; }
 <div class="card"><div class="card-header"><h5>@ViewData["Title"]</h5></div><div class="card-body">
@@ -10,19 +11,60 @@
     <div class="col-md-4 mb-3"><label asp-for="HeaderRowNumber" class="form-label"></label><input asp-for="HeaderRowNumber" class="form-control" min="1"/></div>
     <div class="col-md-4 mb-3"><label asp-for="FirstDataRowNumber" class="form-label"></label><input asp-for="FirstDataRowNumber" class="form-control" min="2"/></div></div>
     <button type="button" class="btn btn-info" id="inspect">Inspect sample</button>
-    <div class="table-responsive mt-3"><table class="table" id="columns"><thead><tr><th>Column</th><th>Source header</th><th>Canonical field</th></tr></thead><tbody>
+    <div class="table-responsive mt-3"><table class="table" id="columns"><thead><tr><th>Canonical field</th><th>Source header</th></tr></thead><tbody>
     @for (var i = 0; i < Model.Columns.Count; i++)
     {
         <tr>
-            <td>@Model.Columns[i].SourceColumnNumber<input asp-for="Columns[i].SourceColumnNumber" type="hidden" /></td>
-            <td>@Model.Columns[i].SourceHeader</td>
-            <td><select asp-for="Columns[i].CanonicalField" asp-items="Html.GetEnumSelectList<SelloutCanonicalField>()" class="form-select"><option value="">Ignore</option></select></td>
+            <td>
+                @Model.Columns[i].CanonicalField
+                @if (Model.Columns[i].CanonicalField is { } canonicalField && SelloutCanonicalFieldCatalog.RequiredFields.Contains(canonicalField))
+                {
+                    <span class="badge bg-label-danger ms-1">Required</span>
+                }
+                <input asp-for="Columns[i].CanonicalField" type="hidden" />
+            </td>
+            <td>
+                <select asp-for="Columns[i].SourceColumnNumber" class="form-select source-header-select" data-canonical-value="@((int?)Model.Columns[i].CanonicalField)">
+                    <option value="0">Not mapped</option>
+                    @if (Model.Columns[i].SourceColumnNumber > 0)
+                    {
+                        <option value="@Model.Columns[i].SourceColumnNumber" data-header="@Model.Columns[i].SourceHeader">@Model.Columns[i].SourceColumnNumber — @Model.Columns[i].SourceHeader</option>
+                    }
+                </select>
+                <input asp-for="Columns[i].SourceHeader" type="hidden" class="source-header-value" />
+            </td>
         </tr>
     }
     </tbody></table></div>
     <button class="btn btn-primary" type="submit">Save Mapping</button> <a asp-controller="Companies" asp-action="Edit" asp-route-id="@Model.CompanyId" class="btn btn-secondary">Cancel</a>
 </form></div></div>
 <script>
+const canonicalFields = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(
+    Enum.GetValues<SelloutCanonicalField>().Select(field => new
+    {
+        value = (int)field,
+        name = field.ToString(),
+        required = SelloutCanonicalFieldCatalog.RequiredFields.Contains(field)
+    })));
+const encode = value => { const span = document.createElement('span'); span.textContent = value ?? ''; return span.innerHTML; };
+const updateSourceHeaderValue = select => {
+ const option = select.options[select.selectedIndex];
+ select.closest('td').querySelector('.source-header-value').value = option?.dataset.header ?? '';
+};
+const refreshSourceAvailability = () => {
+ const selects = [...document.querySelectorAll('.source-header-select')];
+ const selected = new Set(selects.map(select => select.value).filter(value => value !== '0'));
+ selects.forEach(select => [...select.options].forEach(option => {
+   option.disabled = option.value !== '0' && option.value !== select.value && selected.has(option.value);
+ }));
+};
+const wireSourceSelects = () => {
+ document.querySelectorAll('.source-header-select').forEach(select => select.addEventListener('change', () => {
+   updateSourceHeaderValue(select); refreshSourceAvailability();
+ }));
+ refreshSourceAvailability();
+};
+wireSourceSelects();
 document.getElementById('inspect').onclick = async () => {
  const form = document.getElementById('mappingForm'), data = new FormData();
  data.append('sampleFile', document.getElementById('sampleFile').files[0]); data.append('worksheetName', form.WorksheetName.value);
@@ -30,8 +72,16 @@ document.getElementById('inspect').onclick = async () => {
  data.append('__RequestVerificationToken', form.querySelector('[name=__RequestVerificationToken]').value);
  const response = await fetch('@Url.Action("Inspect")', {method:'POST', body:data}); const p = await response.json();
  if (p.errors?.length) { alert(p.errors.join('\n')); return; } form.WorksheetName.value = p.worksheetName;
- const fields = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Enum.GetNames<SelloutCanonicalField>()));
- const encodeHeader = value => { const span = document.createElement('span'); span.textContent = value ?? ''; return span.innerHTML; };
- document.querySelector('#columns tbody').innerHTML = p.headers.map((h,i) => `<tr><td>${i+1}<input type="hidden" name="Columns[${i}].SourceColumnNumber" value="${i+1}"></td><td>${encodeHeader(h)}</td><td><select class="form-select" name="Columns[${i}].CanonicalField"><option value="">Ignore</option>${fields.map((f,n)=>`<option value="${n}">${f}</option>`).join('')}</select></td></tr>`).join('');
+ const previous = new Map([...document.querySelectorAll('.source-header-select')]
+   .map(select => [select.dataset.canonicalValue, select.value]));
+ const headers = p.headers.map((header, index) => ({number: index + 1, header}))
+   .filter(item => item.header?.trim());
+ document.querySelector('#columns tbody').innerHTML = canonicalFields.map((field, index) => {
+   const selected = previous.get(String(field.value)) ?? '0';
+   const options = headers.map(item => `<option value="${item.number}" data-header="${encode(item.header)}" ${String(item.number) === selected ? 'selected' : ''}>${item.number} — ${encode(item.header)}</option>`).join('');
+   return `<tr><td>${encode(field.name)}${field.required ? '<span class="badge bg-label-danger ms-1">Required</span>' : ''}<input type="hidden" name="Columns[${index}].CanonicalField" value="${field.value}"></td><td><select class="form-select source-header-select" data-canonical-value="${field.value}" name="Columns[${index}].SourceColumnNumber"><option value="0">Not mapped</option>${options}</select><input type="hidden" class="source-header-value" name="Columns[${index}].SourceHeader" value=""></td></tr>`;
+ }).join('');
+ wireSourceSelects();
+ document.querySelectorAll('.source-header-select').forEach(updateSourceHeaderValue);
 };
 </script>

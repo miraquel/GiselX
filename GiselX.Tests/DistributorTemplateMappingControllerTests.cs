@@ -38,6 +38,19 @@ public sealed class DistributorTemplateMappingControllerTests
     }
 
     [Fact]
+    public void Create_IncludesEveryCanonicalFieldAsAnUnmappedRow()
+    {
+        var controller = CreateController(new CapturingMappingService());
+
+        var result = controller.Create(2);
+
+        var view = Assert.IsType<ViewResult>(result);
+        var model = Assert.IsType<DistributorTemplateMappingEditViewModel>(view.Model);
+        Assert.Equal(Enum.GetValues<SelloutCanonicalField>(), model.Columns.Select(column => column.CanonicalField!.Value));
+        Assert.All(model.Columns, column => Assert.Equal(0, column.SourceColumnNumber));
+    }
+
+    [Fact]
     public async Task Delete_RedirectsToCompanyMappingListWithServiceMessage()
     {
         var service = new CapturingMappingService();
@@ -108,13 +121,17 @@ public sealed class DistributorTemplateMappingControllerTests
 
         var view = Assert.IsType<ViewResult>(result);
         var model = Assert.IsType<DistributorTemplateMappingEditViewModel>(view.Model);
-        var column = Assert.Single(model.Columns);
+        Assert.Equal(Enum.GetValues<SelloutCanonicalField>().Length, model.Columns.Count);
+        var column = model.Columns.Single(column => column.CanonicalField == SelloutCanonicalField.InvoiceNo);
+        Assert.Equal(4, column.SourceColumnNumber);
         Assert.Equal("Invoice Number", column.SourceHeader);
         Assert.Equal(SelloutCanonicalField.InvoiceNo, column.CanonicalField);
+        Assert.Equal(0, model.Columns.Single(column =>
+            column.CanonicalField == SelloutCanonicalField.CustomerId).SourceColumnNumber);
     }
 
     [Fact]
-    public async Task Binding_AllowsIgnoredColumnBeforeMappedColumn()
+    public async Task Binding_AllowsUnmappedCanonicalFieldBeforeMappedCanonicalField()
     {
         var services = new ServiceCollection().AddLogging().AddMvcCore().Services.BuildServiceProvider();
         var metadataProvider = services.GetRequiredService<IModelMetadataProvider>();
@@ -123,10 +140,10 @@ public sealed class DistributorTemplateMappingControllerTests
         var binder = binderFactory.CreateBinder(new ModelBinderFactoryContext { Metadata = metadata });
         var form = new FormCollection(new Dictionary<string, StringValues>
         {
-            ["Columns[0].SourceColumnNumber"] = "1",
-            ["Columns[0].CanonicalField"] = "",
+            ["Columns[0].SourceColumnNumber"] = "0",
+            ["Columns[0].CanonicalField"] = "0",
             ["Columns[1].SourceColumnNumber"] = "2",
-            ["Columns[1].CanonicalField"] = "0"
+            ["Columns[1].CanonicalField"] = "1"
         });
         var httpContext = new DefaultHttpContext { RequestServices = services };
         var actionContext = new ActionContext(httpContext, new RouteData(), new ActionDescriptor(),
@@ -140,11 +157,14 @@ public sealed class DistributorTemplateMappingControllerTests
         var model = Assert.IsType<DistributorTemplateMappingEditViewModel>(bindingContext.Result.Model);
         Assert.Equal(0, actionContext.ModelState.ErrorCount);
         Assert.Equal(2, model.Columns.Count);
-        Assert.Equal(SelloutCanonicalField.CustomerId, model.Columns[1].CanonicalField);
+        Assert.Equal(SelloutCanonicalField.CustomerId, model.Columns[0].CanonicalField);
+        Assert.Equal(0, model.Columns[0].SourceColumnNumber);
+        Assert.Equal(SelloutCanonicalField.CustomerName, model.Columns[1].CanonicalField);
+        Assert.Equal(2, model.Columns[1].SourceColumnNumber);
     }
 
     [Fact]
-    public async Task Save_IgnoresPlaceholderColumnAndForwardsMappedColumns()
+    public async Task Save_IgnoresUnmappedCanonicalRowsAndForwardsMappedRows()
     {
         var mappingService = new CapturingMappingService();
         var controller = CreateController(mappingService);
@@ -157,18 +177,15 @@ public sealed class DistributorTemplateMappingControllerTests
             FirstDataRowNumber = 5,
             Columns =
             [
-                new DistributorTemplateColumnEditViewModel
-                {
-                    SourceColumnNumber = 1
-                },
-                Column(2, SelloutCanonicalField.CustomerId),
-                Column(3, SelloutCanonicalField.CustomerName),
-                Column(4, SelloutCanonicalField.ProductId),
-                Column(5, SelloutCanonicalField.ProductName),
-                Column(6, SelloutCanonicalField.InvoiceNo),
-                Column(7, SelloutCanonicalField.InvoiceDate),
-                Column(8, SelloutCanonicalField.InvoiceQty),
-                Column(9, SelloutCanonicalField.InvoiceUnit)
+                Column(SelloutCanonicalField.CustomerAlias, 0),
+                Column(SelloutCanonicalField.CustomerId, 2),
+                Column(SelloutCanonicalField.CustomerName, 3),
+                Column(SelloutCanonicalField.ProductId, 4),
+                Column(SelloutCanonicalField.ProductName, 5),
+                Column(SelloutCanonicalField.InvoiceNo, 6),
+                Column(SelloutCanonicalField.InvoiceDate, 7),
+                Column(SelloutCanonicalField.InvoiceQty, 8),
+                Column(SelloutCanonicalField.InvoiceUnit, 9)
             ]
         };
         await using var workbook = new MemoryStream([1]);
@@ -183,7 +200,7 @@ public sealed class DistributorTemplateMappingControllerTests
         Assert.Equal(2, saved.Columns[0].SourceColumnNumber);
     }
 
-    private static DistributorTemplateColumnEditViewModel Column(int sourceColumnNumber, SelloutCanonicalField field) =>
+    private static DistributorTemplateColumnEditViewModel Column(SelloutCanonicalField field, int sourceColumnNumber) =>
         new() { SourceColumnNumber = sourceColumnNumber, CanonicalField = field };
 
     private static DistributorTemplateMappingsController CreateController(CapturingMappingService mappingService)
