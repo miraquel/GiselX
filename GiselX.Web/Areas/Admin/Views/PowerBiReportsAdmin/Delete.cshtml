@@ -1,0 +1,19 @@
+@model GiselX.Web.Models.PowerBiReportDeleteViewModel
+
+@{
+    ViewData["Title"] = "Delete Power BI Report";
+    Layout = "_ContentNavbarLayout";
+}
+
+<div class="card">
+    <div class="card-header"><h5 class="mb-0">Delete Power BI Report</h5></div>
+    <div class="card-body">
+        <p>Delete <strong>@Model.ReportName</strong> for <strong>@Model.CompanyName</strong>?</p>
+        <p class="text-muted mb-4">This removes the report configuration only. It does not delete anything in Power BI.</p>
+        <dl class="row"><dt class="col-sm-3">Public URL</dt><dd class="col-sm-9 text-break">@Model.EmbedUrl</dd></dl>
+        <form asp-action="Delete" asp-route-id="@Model.Id" asp-route-companyId="@Model.CompanyId" method="post">
+            <button type="submit" class="btn btn-danger">Delete report</button>
+            <a asp-action="Index" asp-route-companyId="@Model.CompanyId" class="btn btn-secondary">Cancel</a>
+        </form>
+    </div>
+</div>

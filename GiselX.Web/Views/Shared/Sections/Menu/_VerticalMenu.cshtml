@@ -66,6 +66,8 @@
     </li>
     }
 
+    @await Component.InvokeAsync("PowerBiReportMenu")
+
     <!-- Example: Keep only a few essential menus below, remove unused ones -->
     <li class="menu-header mt-7">
       <span class="menu-header-text">Settings</span>
@@ -77,7 +79,7 @@
       </a>
     </li>
     
-    @if (User.HasClaim(c => c is { Type: "permission", Value: PermissionConstants.Users.Index or PermissionConstants.Roles.Index }))
+    @if (User.HasClaim(c => c is { Type: "permission", Value: PermissionConstants.Users.Index or PermissionConstants.Roles.Index }) || User.IsInRole("Administrator"))
     {
       <li class="menu-header mt-7">
         <span class="menu-header-text">Admin</span>
@@ -116,6 +118,15 @@
       <a asp-area="Admin" asp-controller="EmailTest" asp-action="Index" class="menu-link">
         <i class="menu-icon tf-icons ri-mail-send-line"></i>
         <div>Email Test</div>
+      </a>
+    </li>
+    }
+    @if (User.IsInRole("Administrator"))
+    {
+    <li class='menu-item@(currentPage.StartsWith("/Admin/PowerBiReportsAdmin") ? " active" : "")'>
+      <a asp-area="Admin" asp-controller="PowerBiReportsAdmin" asp-action="Index" class="menu-link">
+        <i class="menu-icon tf-icons ri-bar-chart-box-line"></i>
+        <div>Manage Power BI Reports</div>
       </a>
     </li>
     }

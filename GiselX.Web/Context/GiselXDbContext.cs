@@ -25,6 +25,8 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
 
     public virtual DbSet<ItemMapping> ItemMapping { get; set; }
 
+    public virtual DbSet<PowerBiReport> PowerBiReport { get; set; }
+
     public virtual DbSet<DistributorTemplateMapping> DistributorTemplateMapping { get; set; }
 
     public virtual DbSet<DistributorTemplateColumn> DistributorTemplateColumn { get; set; }
@@ -94,6 +96,26 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
             entity.Property(e => e.ModifiedDate).HasColumnType("datetime2");
             entity.HasOne(e => e.Company).WithMany(e => e.ItemMappings)
                 .HasForeignKey(e => e.CompanyId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<PowerBiReport>(entity =>
+        {
+            entity.Property(value => value.Name).HasMaxLength(150).IsRequired();
+            entity.Property(value => value.EmbedUrl).HasMaxLength(2048).IsRequired();
+            entity.Property(value => value.IsActive).HasDefaultValue(true);
+            entity.Property(value => value.CreatedDate).HasColumnType("datetime2");
+            entity.Property(value => value.CreatedBy).HasMaxLength(256).IsRequired();
+            entity.Property(value => value.ModifiedDate).HasColumnType("datetime2");
+            entity.Property(value => value.ModifiedBy).HasMaxLength(256);
+            entity.ToTable(table => table.HasCheckConstraint(
+                "CK_PowerBiReport_DisplayOrder_NonNegative",
+                "[DisplayOrder] >= 0"));
+            entity.HasIndex(value => new { value.CompanyId, value.Name })
+                .IsUnique().HasDatabaseName("UX_PowerBiReport_CompanyId_Name");
+            entity.HasIndex(value => new { value.CompanyId, value.IsActive, value.DisplayOrder, value.Name })
+                .HasDatabaseName("IX_PowerBiReport_CompanyId_IsActive_DisplayOrder_Name");
+            entity.HasOne(value => value.Company).WithMany(company => company.PowerBiReports)
+                .HasForeignKey(value => value.CompanyId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<DistributorTemplateMapping>(entity =>

@@ -1,0 +1,66 @@
+@model GiselX.Web.Models.PowerBiReportAdminIndexViewModel
+
+@{
+    ViewData["Title"] = "Manage Power BI Reports";
+    Layout = "_ContentNavbarLayout";
+}
+
+<div class="card">
+    <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+        <div>
+            <h5 class="mb-1">Manage Power BI Reports</h5>
+            <small class="text-muted">Configure public Power BI Publish-to-web reports for each company.</small>
+        </div>
+        <a asp-action="Create" asp-route-companyId="@Model.CompanyId" class="btn btn-primary">Add report</a>
+    </div>
+    <div class="card-body">
+        @if (TempData["StatusMessage"] is string statusMessage)
+        {
+            <div class="alert alert-success" role="alert">@statusMessage</div>
+        }
+        @if (TempData["ErrorMessage"] is string errorMessage)
+        {
+            <div class="alert alert-danger" role="alert">@errorMessage</div>
+        }
+        <form asp-action="Index" method="get" class="row g-2 align-items-end mb-3">
+            <div class="col-sm-6 col-md-4">
+                <label for="companyId" class="form-label">Company</label>
+                <select id="companyId" name="companyId" class="form-select">
+                    <option value="">All companies</option>
+                    @foreach (var company in Model.Companies)
+                    {
+                        <option value="@company.Id" selected="@(Model.CompanyId == company.Id)">@company.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="col-sm-auto"><button type="submit" class="btn btn-outline-primary">Filter</button></div>
+        </form>
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead><tr><th>Company</th><th>Menu/page name</th><th>Display order</th><th>State</th><th>Updated</th><th class="text-end">Actions</th></tr></thead>
+                <tbody>
+                @if (Model.Reports.Count == 0)
+                {
+                    <tr><td colspan="6" class="text-muted">No Power BI reports are configured.</td></tr>
+                }
+                @foreach (var report in Model.Reports)
+                {
+                    <tr>
+                        <td>@report.CompanyName</td><td>@report.Name</td><td>@report.DisplayOrder</td>
+                        <td><span class="badge @(report.IsActive ? "bg-success" : "bg-secondary")">@(report.IsActive ? "Active" : "Inactive")</span></td>
+                        <td><small>@(report.ModifiedDate?.ToString("u") ?? report.CreatedDate.ToString("u"))</small></td>
+                        <td class="text-end text-nowrap">
+                            <a asp-action="Preview" asp-route-id="@report.Id" class="btn btn-sm btn-outline-info">Preview</a>
+                            <a asp-action="Edit" asp-route-id="@report.Id" class="btn btn-sm btn-outline-primary">Edit</a>
+                            <form asp-action="@(report.IsActive ? "Deactivate" : "Activate")" asp-route-id="@report.Id" asp-route-companyId="@Model.CompanyId" method="post" class="d-inline">
+                                <button type="submit" class="btn btn-sm btn-outline-secondary">@(report.IsActive ? "Deactivate" : "Activate")</button>
+                            </form>
+                            <a asp-action="Delete" asp-route-id="@report.Id" asp-route-companyId="@Model.CompanyId" class="btn btn-sm btn-outline-danger">Delete</a>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

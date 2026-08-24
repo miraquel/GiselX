@@ -27,12 +27,15 @@ public static class ServiceCollectionExtensions
 
             return dbConnection.BeginTransaction();
         });
-        
+
         // Register repositories
         services.AddScoped<IServiceLevelRepository, ServiceLevelRepository>();
         services.AddScoped<ISalesTransactionRepository, SalesTransactionRepository>();
         services.AddScoped<IStockRepository, StockRepository>();
         services.AddScoped<ICompanyRepository, CompanyRepository>();
+        services.AddScoped<IPowerBiReportMenuConnectionFactory, PowerBiReportMenuConnectionFactory>();
+        services.AddScoped<IPowerBiReportMenuRepository, PowerBiReportMenuRepository>();
+        services.AddScoped<IPowerBiReportRepository, PowerBiReportRepository>();
         services.AddScoped<IUploadCheckRepository, UploadCheckRepository>();
         services.AddScoped<IDistributorTemplateMappingRepository, DistributorTemplateMappingRepository>();
         services.AddScoped<IStockTemplateMappingRepository, StockTemplateMappingRepository>();

@@ -1,0 +1,44 @@
+@model GiselX.Service.Dto.PowerBiReportViewerDto
+@{
+    ViewData["title"] = Model.Name;
+}
+
+@section styles {
+    <link rel="stylesheet" href="~/css/power-bi-reports.css" asp-append-version="true" />
+}
+
+<div id="power-bi-viewer" class="card power-bi-report-viewer">
+    <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+        <h4 class="card-title mb-0">@Model.Name</h4>
+        <div class="d-flex flex-wrap gap-2">
+            <button id="power-bi-retry" type="button" class="btn btn-outline-secondary"
+                    aria-controls="power-bi-frame">
+                <i class="ri-refresh-line me-1" aria-hidden="true"></i>Retry loading report
+            </button>
+            <button id="power-bi-fullscreen" type="button" class="btn btn-outline-primary" aria-pressed="false">
+                <i class="ri-fullscreen-line me-1" aria-hidden="true"></i><span class="power-bi-fullscreen-label">Open full screen</span>
+            </button>
+        </div>
+        <div id="power-bi-fullscreen-status" class="visually-hidden" role="status" aria-live="polite"></div>
+        <div id="power-bi-load-status" class="visually-hidden" role="status" aria-live="polite"></div>
+    </div>
+    <div id="power-bi-container" class="power-bi-frame-container">
+        <div id="power-bi-loading" class="power-bi-loading" role="status" aria-live="polite">
+            <span class="spinner-border text-primary" aria-hidden="true"></span>
+            <span id="power-bi-loading-label" class="visually-hidden">Loading report</span>
+        </div>
+        <iframe id="power-bi-frame" class="power-bi-frame" src="@Model.EmbedUrl"
+                data-report-url="@Model.EmbedUrl" title="@Model.Name"
+                loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="fullscreen" allowfullscreen>
+        </iframe>
+    </div>
+    <div class="card-body pt-3">
+        <p class="mb-0">
+            If the report does not load, <a href="@Model.EmbedUrl" target="_blank" rel="noopener noreferrer">open it in a new tab</a>.
+        </p>
+    </div>
+</div>
+
+@section scripts {
+    <script src="~/js/power-bi-reports.js" asp-append-version="true"></script>
+}

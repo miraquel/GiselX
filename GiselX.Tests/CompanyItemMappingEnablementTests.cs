@@ -155,6 +155,8 @@ public class CompanyItemMappingEnablementTests
             UpdatedCompany = company;
             return Task.FromResult(company);
         }
+        public Task<IReadOnlyList<Company>> GetAllAsync(CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<Company>>([]);
         public Task<IEnumerable<Company>> GetAllWithContactEmailAsync(CancellationToken cancellationToken) =>
             Task.FromResult<IEnumerable<Company>>([]);
     }

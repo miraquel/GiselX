@@ -1,0 +1,14 @@
+@model IReadOnlyList<GiselX.Service.Dto.PowerBiReportMenuItemDto>
+@{
+    var currentId = ViewContext.RouteData.Values["controller"]?.ToString() == "PowerBiReports"
+        && int.TryParse(ViewContext.RouteData.Values["id"]?.ToString(), out var id) ? id : (int?)null;
+}
+@foreach (var report in Model)
+{
+    <li class="menu-item@(currentId == report.Id ? " active" : "")">
+        <a asp-area="" asp-controller="PowerBiReports" asp-action="View" asp-route-id="@report.Id" class="menu-link">
+            <i class="menu-icon tf-icons ri-bar-chart-box-line"></i>
+            <div>@report.Name</div>
+        </a>
+    </li>
+}
