@@ -20,8 +20,8 @@ public sealed class SelloutWorkbookParser
 
     public SelloutParseResult Parse(byte[] workbook, DistributorTemplateMappingDto mapping)
     {
-        var worksheet = XlsxSelloutWorkbookInspector.ReadWorksheetData(workbook, mapping.WorksheetName);
-        var rows = XlsxSelloutWorkbookInspector.ExpandVerticalMergedValues(worksheet, mapping.FirstDataRowNumber);
+        var worksheet = XlsxWorkbookInspector.ReadWorksheetData(workbook, mapping.WorksheetName);
+        var rows = XlsxWorkbookInspector.ExpandVerticalMergedValues(worksheet, mapping.FirstDataRowNumber);
         var staged = new List<SelloutStaging>();
         var allErrors = new List<SelloutStagingErrorDto>();
         var sourceRows = rows
@@ -123,7 +123,7 @@ public sealed class SelloutWorkbookParser
 
     private static bool IsStructurallyMergedSummaryRow(
         int rowNumber,
-        IReadOnlyList<XlsxSelloutWorkbookInspector.MergedRange> mergedRanges,
+        IReadOnlyList<XlsxWorkbookInspector.MergedRange> mergedRanges,
         DistributorTemplateMappingDto mapping)
     {
         return mergedRanges

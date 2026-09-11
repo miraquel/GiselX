@@ -125,9 +125,9 @@ public sealed class StockTemplateMappingControllerTests
 
     private sealed class Inspector : IStockWorkbookInspector
     {
-        public Task<SelloutWorkbookPreviewDto> InspectAsync(byte[] workbook, string? worksheetName,
+        public Task<WorkbookPreviewDto> InspectAsync(byte[] workbook, string? worksheetName,
             int headerRowNumber, int firstDataRowNumber, CancellationToken cancellationToken = default) =>
-            Task.FromResult(new SelloutWorkbookPreviewDto
+            Task.FromResult(new WorkbookPreviewDto
             {
                 WorksheetName = "Data", HeaderSignature = "SIGNATURE", Headers = ["Ignore", "Product"]
             });

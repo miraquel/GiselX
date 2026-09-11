@@ -5,11 +5,11 @@ namespace GiselX.Service;
 
 public sealed class XlsxStockWorkbookInspector : IStockWorkbookInspector
 {
-    private readonly XlsxSelloutWorkbookInspector _inner = new();
+    private readonly XlsxWorkbookInspector _inspector = new();
 
-    public Task<SelloutWorkbookPreviewDto> InspectAsync(byte[] workbook, string? worksheetName,
+    public Task<WorkbookPreviewDto> InspectAsync(byte[] workbook, string? worksheetName,
         int headerRowNumber, int firstDataRowNumber, CancellationToken cancellationToken = default) =>
-        _inner.InspectAsync(workbook, worksheetName, headerRowNumber, firstDataRowNumber, cancellationToken);
+        _inspector.InspectAsync(workbook, worksheetName, headerRowNumber, firstDataRowNumber, cancellationToken);
 
     /// <summary>
     /// Matches every active mapping against the worksheet it points at. A workbook may hold several
@@ -40,7 +40,7 @@ public sealed class XlsxStockWorkbookInspector : IStockWorkbookInspector
                 continue;
             }
 
-            rejections.Add($"{mapping.Name}: {XlsxSelloutWorkbookInspector.DescribeRejection(preview, mapping.HeaderSignature)}");
+            rejections.Add($"{mapping.Name}: {XlsxWorkbookInspector.DescribeRejection(preview, mapping.HeaderSignature)}");
         }
 
         var result = new StockMappingDetectionResultDto

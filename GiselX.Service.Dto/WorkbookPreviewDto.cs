@@ -1,6 +1,6 @@
 namespace GiselX.Service.Dto;
 
-public sealed class SelloutWorkbookPreviewDto
+public sealed class WorkbookPreviewDto
 {
     public List<string> WorksheetNames { get; set; } = [];
     public string? WorksheetName { get; set; }

@@ -2,7 +2,12 @@ using System.Text.RegularExpressions;
 
 namespace GiselX.Service;
 
-public static partial class SelloutHeaderNormalizer
+/// <summary>
+/// Normalizes workbook header rows and builds the signature a template mapping is matched against. Shared
+/// by both upload pipelines: the Stock inspector runs through the Sellout one, so a header written the
+/// same way must normalize the same way whichever kind of workbook it came from.
+/// </summary>
+public static partial class WorkbookHeaderNormalizer
 {
     internal const char SignatureSeparator = '\u001F';
 

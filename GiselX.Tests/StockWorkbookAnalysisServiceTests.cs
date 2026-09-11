@@ -194,7 +194,7 @@ public sealed class StockWorkbookAnalysisServiceTests
                     IgnoredWorksheetNames = ignoredWorksheetNames.ToList()
                 }
                 : new StockMappingDetectionResultDto { Errors = ["No active Stock mapping exactly matches this workbook."] });
-        public Task<SelloutWorkbookPreviewDto> InspectAsync(byte[] workbook, string? worksheetName, int headerRowNumber,
+        public Task<WorkbookPreviewDto> InspectAsync(byte[] workbook, string? worksheetName, int headerRowNumber,
             int firstDataRowNumber, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 

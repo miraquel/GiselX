@@ -346,6 +346,6 @@ public sealed class ClosedXmlSelloutWorkbookInspectorTests
             HeaderRowNumber = headerRow,
             FirstDataRowNumber = headerRow + 1,
             IsActive = active,
-            HeaderSignature = SelloutHeaderNormalizer.CreateSignature(headers)
+            HeaderSignature = WorkbookHeaderNormalizer.CreateSignature(headers)
         };
 }

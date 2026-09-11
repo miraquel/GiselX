@@ -20,7 +20,7 @@ public sealed class StockWorkbookParser
     /// </summary>
     public StockParseResult Parse(byte[] workbook, StockTemplateMappingDto mapping, string? worksheetName = null)
     {
-        var rows = XlsxSelloutWorkbookInspector.ReadWorksheet(workbook, worksheetName ?? mapping.WorksheetName);
+        var rows = XlsxWorkbookInspector.ReadWorksheet(workbook, worksheetName ?? mapping.WorksheetName);
         var staged = new List<StockStagingRowDto>();
         var allErrors = new List<StockStagingErrorDto>();
         var sourceRows = rows
