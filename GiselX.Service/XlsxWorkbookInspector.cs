@@ -378,4 +378,61 @@ public sealed class XlsxWorkbookInspector
         IReadOnlyList<MergedRange> MergedRanges);
 
     internal sealed record MergedRange(int FirstRow, int LastRow, int FirstColumn, int LastColumn);
+
+    /// <summary>
+    /// Resolves each mapped column to the workbook column that carries its header, rather than to the
+    /// position recorded when the mapping was created. This is the rescue rule: a workbook that gained an
+    /// unmapped column, or whose columns were reordered, no longer matches the stored signature even
+    /// though every column the mapping needs is still present and still labelled the same way.
+    ///
+    /// Returns the map from each mapping column's recorded position to the position it was found at, or
+    /// null when a header is absent — <paramref name="missingHeader"/> then names the one that decided it.
+    /// A worksheet cannot carry the same normalized header twice, because ValidateHeaders rejects that
+    /// before detection runs, so a header that is present resolves to exactly one column.
+    /// </summary>
+    internal static Dictionary<int, int>? ResolveColumnsByHeader(
+        WorkbookPreviewDto preview,
+        IEnumerable<(int SourceColumnNumber, string SourceHeader)> columns,
+        out string? missingHeader)
+    {
+        missingHeader = null;
+        var required = columns.ToList();
+
+        // A mapping that maps no column has nothing to identify a workbook by, so it must never be
+        // rescued: an empty requirement list would otherwise be satisfied by every workbook alike.
+        if (required.Count == 0) return null;
+
+        var columnNumberByHeader = new Dictionary<string, int>(StringComparer.Ordinal);
+        for (var index = 0; index < preview.NormalizedHeaders.Count; index++)
+        {
+            var header = preview.NormalizedHeaders[index];
+            if (header.Length > 0) columnNumberByHeader.TryAdd(header, index + 1);
+        }
+
+        var resolved = new Dictionary<int, int>();
+        foreach (var column in required)
+        {
+            // A mapped column with no header of its own — a merged-header continuation — can only ever be
+            // identified by position, so the rescue rule has nothing to match it on.
+            var wanted = WorkbookHeaderNormalizer.Normalize(column.SourceHeader);
+            if (wanted.Length == 0 || !columnNumberByHeader.TryGetValue(wanted, out var number))
+            {
+                missingHeader = column.SourceHeader;
+                return null;
+            }
+
+            resolved[column.SourceColumnNumber] = number;
+        }
+
+        return resolved;
+    }
+
+    /// <summary>
+    /// Explains why the rescue rule could not be applied either, naming the header an administrator has to
+    /// correct in the mapping or the distributor has to restore in the file.
+    /// </summary>
+    internal static string DescribeMissingHeader(string? missingHeader) =>
+        string.IsNullOrWhiteSpace(missingHeader)
+            ? " The template maps a column that carries no header, so it can only be matched by position."
+            : $" The header '{missingHeader}' the template maps was not found on the worksheet.";
 }

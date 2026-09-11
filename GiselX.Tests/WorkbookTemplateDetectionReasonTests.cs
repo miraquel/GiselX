@@ -117,6 +117,11 @@ public sealed class WorkbookTemplateDetectionReasonTests
             && error.Contains("Stok Bulanan", StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// Builds a mapping that maps one column per header its signature claims. A real mapping may map
+    /// fewer columns than the header row holds — unmapped columns are ordinary — but a fixture that
+    /// claims a header and then does not map it is asserting nothing about that header.
+    /// </summary>
     private static DistributorTemplateMappingDto Mapping(string name, string worksheetName,
         params string[] normalizedHeaders) => new()
     {
@@ -127,12 +132,17 @@ public sealed class WorkbookTemplateDetectionReasonTests
         FirstDataRowNumber = 2,
         HeaderSignature = string.Join('\u001F', normalizedHeaders),
         IsActive = true,
-        Columns =
-        [
-            new DistributorTemplateColumnDto
-            {
-                SourceColumnNumber = 1, SourceHeader = "Invoice No", CanonicalField = SelloutCanonicalField.InvoiceNo
-            }
-        ]
+        Columns = normalizedHeaders.Select((header, index) => new DistributorTemplateColumnDto
+        {
+            SourceColumnNumber = index + 1,
+            SourceHeader = header,
+            CanonicalField = MappedFields[index]
+        }).ToList()
     };
+
+    private static readonly SelloutCanonicalField[] MappedFields =
+    [
+        SelloutCanonicalField.InvoiceNo, SelloutCanonicalField.CustomerId, SelloutCanonicalField.ProductId,
+        SelloutCanonicalField.CustomerName, SelloutCanonicalField.ProductName, SelloutCanonicalField.InvoiceDate
+    ];
 }
