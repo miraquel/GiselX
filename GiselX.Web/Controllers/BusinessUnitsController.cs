@@ -8,17 +8,20 @@ using Microsoft.AspNetCore.Mvc;
 namespace GiselX.Web.Controllers;
 
 [Area("Admin")]
-[Authorize(PermissionConstants.Companies.Edit)]
+[Authorize]
 public sealed class BusinessUnitsController(IBusinessUnitService service) : Controller
 {
     [HttpGet]
+    [Authorize(PermissionConstants.BusinessUnits.Index)]
     public async Task<IActionResult> Index(CancellationToken cancellationToken) =>
         View((await service.ListAsync(false, cancellationToken)).Data ?? []);
 
     [HttpGet]
+    [Authorize(PermissionConstants.BusinessUnits.Manage)]
     public IActionResult Create() => View("Edit", new BusinessUnitDto());
 
     [HttpGet]
+    [Authorize(PermissionConstants.BusinessUnits.Manage)]
     public async Task<IActionResult> Edit(int id, CancellationToken cancellationToken)
     {
         var value = (await service.GetAsync(id, cancellationToken)).Data;
@@ -26,6 +29,7 @@ public sealed class BusinessUnitsController(IBusinessUnitService service) : Cont
     }
 
     [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(PermissionConstants.BusinessUnits.Manage)]
     public async Task<IActionResult> Save(BusinessUnitDto model, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid) return View("Edit", model);
@@ -40,14 +44,17 @@ public sealed class BusinessUnitsController(IBusinessUnitService service) : Cont
     }
 
     [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(PermissionConstants.BusinessUnits.Manage)]
     public async Task<IActionResult> Activate(int id, CancellationToken cancellationToken) =>
         RedirectToList(await service.SetActiveAsync(id, true, Username, cancellationToken));
 
     [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(PermissionConstants.BusinessUnits.Manage)]
     public async Task<IActionResult> Deactivate(int id, CancellationToken cancellationToken) =>
         RedirectToList(await service.SetActiveAsync(id, false, Username, cancellationToken));
 
     [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(PermissionConstants.BusinessUnits.Delete)]
     public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken) =>
         RedirectToList(await service.DeleteAsync(id, cancellationToken));
 

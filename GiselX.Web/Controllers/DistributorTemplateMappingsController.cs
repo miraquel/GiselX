@@ -11,12 +11,13 @@ using Microsoft.AspNetCore.Mvc;
 namespace GiselX.Web.Controllers;
 
 [Area("Admin")]
-[Authorize(PermissionConstants.Companies.Edit)]
+[Authorize]
 public sealed class DistributorTemplateMappingsController(
     IDistributorTemplateMappingService mappingService,
     ISelloutWorkbookInspector inspector) : Controller
 {
     [HttpGet]
+    [Authorize(PermissionConstants.DistributorTemplateMappings.Index)]
     public async Task<IActionResult> Index(int companyId, CancellationToken cancellationToken)
     {
         var response = await mappingService.ListAsync(companyId, cancellationToken);
@@ -28,6 +29,7 @@ public sealed class DistributorTemplateMappingsController(
     }
 
     [HttpGet]
+    [Authorize(PermissionConstants.DistributorTemplateMappings.Manage)]
     public IActionResult Create(int companyId) => View("Edit", new DistributorTemplateMappingEditViewModel
     {
         CompanyId = companyId,
@@ -35,6 +37,7 @@ public sealed class DistributorTemplateMappingsController(
     });
 
     [HttpGet]
+    [Authorize(PermissionConstants.DistributorTemplateMappings.Manage)]
     public async Task<IActionResult> Edit(int id, int companyId, CancellationToken cancellationToken)
     {
         var response = await mappingService.GetAsync(id, companyId, cancellationToken);
@@ -49,6 +52,7 @@ public sealed class DistributorTemplateMappingsController(
     }
 
     [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(PermissionConstants.DistributorTemplateMappings.Manage)]
     public async Task<IActionResult> Inspect(IFormFile sampleFile, string? worksheetName, int headerRowNumber,
         int firstDataRowNumber, CancellationToken cancellationToken)
     {
@@ -58,6 +62,7 @@ public sealed class DistributorTemplateMappingsController(
     }
 
     [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(PermissionConstants.DistributorTemplateMappings.Manage)]
     public async Task<IActionResult> Save(DistributorTemplateMappingEditViewModel model, IFormFile sampleFile,
         CancellationToken cancellationToken)
     {
@@ -99,16 +104,19 @@ public sealed class DistributorTemplateMappingsController(
     }
 
     [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(PermissionConstants.DistributorTemplateMappings.Manage)]
     public async Task<IActionResult> Activate(int id, int companyId, CancellationToken cancellationToken) =>
         RedirectToList(companyId, await mappingService.SetActiveAsync(id, companyId, true,
             User.Identity?.Name ?? "unknown", cancellationToken));
 
     [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(PermissionConstants.DistributorTemplateMappings.Manage)]
     public async Task<IActionResult> Deactivate(int id, int companyId, CancellationToken cancellationToken) =>
         RedirectToList(companyId, await mappingService.SetActiveAsync(id, companyId, false,
             User.Identity?.Name ?? "unknown", cancellationToken));
 
     [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(PermissionConstants.DistributorTemplateMappings.Delete)]
     public async Task<IActionResult> Delete(int id, int companyId, CancellationToken cancellationToken)
     {
         var response = await mappingService.DeleteAsync(id, companyId, cancellationToken);

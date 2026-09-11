@@ -8,14 +8,16 @@ using Microsoft.AspNetCore.Mvc;
 namespace GiselX.Web.Controllers;
 
 [Area("Admin")]
-[Authorize(PermissionConstants.Companies.Edit)]
+[Authorize]
 public sealed class SalesmenController(ISalesmanService service) : Controller
 {
     [HttpGet]
+    [Authorize(PermissionConstants.Salesmen.Index)]
     public async Task<IActionResult> Index(CancellationToken cancellationToken) =>
         View((await service.ListAsync(false, cancellationToken)).Data ?? []);
 
     [HttpGet]
+    [Authorize(PermissionConstants.Salesmen.Manage)]
     public async Task<IActionResult> Create(CancellationToken cancellationToken) =>
         View("Edit", new SalesmanDto
         {
@@ -23,6 +25,7 @@ public sealed class SalesmenController(ISalesmanService service) : Controller
         });
 
     [HttpGet]
+    [Authorize(PermissionConstants.Salesmen.Manage)]
     public async Task<IActionResult> Edit(int id, CancellationToken cancellationToken)
     {
         var value = (await service.GetAsync(id, cancellationToken)).Data;
@@ -30,6 +33,7 @@ public sealed class SalesmenController(ISalesmanService service) : Controller
     }
 
     [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(PermissionConstants.Salesmen.Manage)]
     public async Task<IActionResult> Save(SalesmanDto model, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid) return View("Edit", model);
@@ -44,14 +48,17 @@ public sealed class SalesmenController(ISalesmanService service) : Controller
     }
 
     [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(PermissionConstants.Salesmen.Manage)]
     public async Task<IActionResult> Activate(int id, CancellationToken cancellationToken) =>
         RedirectToList(await service.SetActiveAsync(id, true, Username, cancellationToken));
 
     [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(PermissionConstants.Salesmen.Manage)]
     public async Task<IActionResult> Deactivate(int id, CancellationToken cancellationToken) =>
         RedirectToList(await service.SetActiveAsync(id, false, Username, cancellationToken));
 
     [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(PermissionConstants.Salesmen.Delete)]
     public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken) =>
         RedirectToList(await service.DeleteAsync(id, cancellationToken));
 

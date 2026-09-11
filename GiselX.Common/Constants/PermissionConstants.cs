@@ -54,6 +54,53 @@ public static class PermissionConstants
         public const string ChangePassword = "Users.ChangePassword";
     }
     
+
+    // Mapping and master-data screens. Before these existed every one of them was gated on
+    // Companies.Edit, which meant granting a user the right to maintain distributor templates also
+    // granted the right to edit companies. Delete is separated from Manage because it is the only
+    // destructive action on these screens.
+    public static class StockTemplateMappings
+    {
+        public const string Index = "StockTemplateMappings.Index";
+        public const string Manage = "StockTemplateMappings.Manage";
+        public const string Delete = "StockTemplateMappings.Delete";
+    }
+
+    public static class DistributorTemplateMappings
+    {
+        public const string Index = "DistributorTemplateMappings.Index";
+        public const string Manage = "DistributorTemplateMappings.Manage";
+        public const string Delete = "DistributorTemplateMappings.Delete";
+    }
+
+    public static class ItemMappings
+    {
+        public const string Index = "ItemMappings.Index";
+        public const string Manage = "ItemMappings.Manage";
+        public const string Delete = "ItemMappings.Delete";
+        public const string Import = "ItemMappings.Import";
+    }
+
+    public static class BusinessUnits
+    {
+        public const string Index = "BusinessUnits.Index";
+        public const string Manage = "BusinessUnits.Manage";
+        public const string Delete = "BusinessUnits.Delete";
+    }
+
+    public static class Channels
+    {
+        public const string Index = "Channels.Index";
+        public const string Manage = "Channels.Manage";
+        public const string Delete = "Channels.Delete";
+    }
+
+    public static class Salesmen
+    {
+        public const string Index = "Salesmen.Index";
+        public const string Manage = "Salesmen.Manage";
+        public const string Delete = "Salesmen.Delete";
+    }
     public static class Hangfire
     {
         public const string Dashboard = "Hangfire.Dashboard";

@@ -11,12 +11,13 @@ using Microsoft.AspNetCore.Mvc;
 namespace GiselX.Web.Controllers;
 
 [Area("Admin")]
-[Authorize(PermissionConstants.Companies.Edit)]
+[Authorize]
 public sealed class StockTemplateMappingsController(
     IStockTemplateMappingService mappingService,
     IStockWorkbookInspector inspector) : Controller
 {
     [HttpGet]
+    [Authorize(PermissionConstants.StockTemplateMappings.Index)]
     public async Task<IActionResult> Index(int companyId, CancellationToken cancellationToken)
     {
         var response = await mappingService.ListAsync(companyId, cancellationToken);
@@ -24,6 +25,7 @@ public sealed class StockTemplateMappingsController(
     }
 
     [HttpGet]
+    [Authorize(PermissionConstants.StockTemplateMappings.Manage)]
     public IActionResult Create(int companyId) =>
         View("Edit", new StockTemplateMappingEditViewModel
         {
@@ -32,6 +34,7 @@ public sealed class StockTemplateMappingsController(
         });
 
     [HttpGet]
+    [Authorize(PermissionConstants.StockTemplateMappings.Manage)]
     public async Task<IActionResult> Edit(int id, int companyId, CancellationToken cancellationToken)
     {
         var value = (await mappingService.GetAsync(id, companyId, cancellationToken)).Data;
@@ -49,6 +52,7 @@ public sealed class StockTemplateMappingsController(
     }
 
     [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(PermissionConstants.StockTemplateMappings.Manage)]
     public async Task<IActionResult> Inspect(IFormFile sampleFile, string? worksheetName, int headerRowNumber,
         int firstDataRowNumber, CancellationToken cancellationToken)
     {
@@ -58,6 +62,7 @@ public sealed class StockTemplateMappingsController(
     }
 
     [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(PermissionConstants.StockTemplateMappings.Manage)]
     public async Task<IActionResult> Save(StockTemplateMappingEditViewModel model, IFormFile sampleFile,
         CancellationToken cancellationToken)
     {
@@ -102,16 +107,19 @@ public sealed class StockTemplateMappingsController(
     }
 
     [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(PermissionConstants.StockTemplateMappings.Manage)]
     public async Task<IActionResult> Activate(int id, int companyId, CancellationToken cancellationToken) =>
         RedirectToList(companyId, await mappingService.SetActiveAsync(id, companyId, true,
             User.Identity?.Name ?? "unknown", cancellationToken));
 
     [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(PermissionConstants.StockTemplateMappings.Manage)]
     public async Task<IActionResult> Deactivate(int id, int companyId, CancellationToken cancellationToken) =>
         RedirectToList(companyId, await mappingService.SetActiveAsync(id, companyId, false,
             User.Identity?.Name ?? "unknown", cancellationToken));
 
     [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(PermissionConstants.StockTemplateMappings.Delete)]
     public async Task<IActionResult> Delete(int id, int companyId, CancellationToken cancellationToken) =>
         RedirectToList(companyId, await mappingService.DeleteAsync(id, companyId, cancellationToken));
 

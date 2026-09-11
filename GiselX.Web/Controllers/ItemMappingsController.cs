@@ -11,11 +11,12 @@ using Microsoft.AspNetCore.Mvc;
 namespace GiselX.Web.Controllers;
 
 [Area("Admin")]
-[Authorize(PermissionConstants.Companies.Edit)]
+[Authorize]
 public sealed class ItemMappingsController(IItemMappingService mappingService, IItemMappingImportService importService)
     : Controller
 {
     [HttpGet]
+    [Authorize(PermissionConstants.ItemMappings.Index)]
     public async Task<IActionResult> Index(int companyId, string? search, string? sortBy, string? sortDirection,
         CancellationToken cancellationToken)
     {
@@ -35,6 +36,7 @@ public sealed class ItemMappingsController(IItemMappingService mappingService, I
     }
 
     [HttpGet]
+    [Authorize(PermissionConstants.ItemMappings.Manage)]
     public IActionResult Create(int companyId, string? distributorItemId = null, string? distributorItemName = null) =>
         View("Edit", new ItemMappingEditViewModel
         {
@@ -44,6 +46,7 @@ public sealed class ItemMappingsController(IItemMappingService mappingService, I
         });
 
     [HttpGet]
+    [Authorize(PermissionConstants.ItemMappings.Manage)]
     public async Task<IActionResult> Edit(int id, int companyId, CancellationToken cancellationToken)
     {
         var mapping = (await mappingService.GetAsync(id, companyId, cancellationToken)).Data;
@@ -61,6 +64,7 @@ public sealed class ItemMappingsController(IItemMappingService mappingService, I
     }
 
     [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(PermissionConstants.ItemMappings.Manage)]
     public async Task<IActionResult> Save(ItemMappingEditViewModel model, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid) return View("Edit", model);
@@ -85,18 +89,22 @@ public sealed class ItemMappingsController(IItemMappingService mappingService, I
     }
 
     [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(PermissionConstants.ItemMappings.Manage)]
     public async Task<IActionResult> Activate(int id, int companyId, CancellationToken cancellationToken) =>
         RedirectToList(companyId, await mappingService.SetActiveAsync(id, companyId, true, Username, cancellationToken));
 
     [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(PermissionConstants.ItemMappings.Manage)]
     public async Task<IActionResult> Deactivate(int id, int companyId, CancellationToken cancellationToken) =>
         RedirectToList(companyId, await mappingService.SetActiveAsync(id, companyId, false, Username, cancellationToken));
 
     [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(PermissionConstants.ItemMappings.Delete)]
     public async Task<IActionResult> Delete(int id, int companyId, CancellationToken cancellationToken) =>
         RedirectToList(companyId, await mappingService.DeleteAsync(id, companyId, cancellationToken));
 
     [HttpGet]
+    [Authorize(PermissionConstants.ItemMappings.Import)]
     public IActionResult DownloadTemplate(int companyId)
     {
         using var workbook = new XLWorkbook();
@@ -125,6 +133,7 @@ public sealed class ItemMappingsController(IItemMappingService mappingService, I
     }
 
     [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(PermissionConstants.ItemMappings.Import)]
     public async Task<IActionResult> PreflightImport(int companyId, IFormFile file, CancellationToken cancellationToken)
     {
         var workbook = await ReadWorkbookAsync(file, cancellationToken);
@@ -135,6 +144,7 @@ public sealed class ItemMappingsController(IItemMappingService mappingService, I
     }
 
     [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(PermissionConstants.ItemMappings.Import)]
     public async Task<IActionResult> Import(int companyId, IFormFile file, CancellationToken cancellationToken)
     {
         var workbook = await ReadWorkbookAsync(file, cancellationToken);
