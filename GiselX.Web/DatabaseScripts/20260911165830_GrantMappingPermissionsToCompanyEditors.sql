@@ -24,8 +24,8 @@ BEGIN TRY
     IF OBJECT_ID(N'dbo.__EFMigrationsHistory', N'U') IS NULL
         THROW 51003, 'dbo.__EFMigrationsHistory is required before granting mapping permissions.', 1;
 
-    IF OBJECT_ID(N'identity.AspNetRoleClaims', N'U') IS NULL
-        THROW 51004, 'identity.AspNetRoleClaims is required before granting mapping permissions.', 1;
+    IF OBJECT_ID(N'[identity].[AspNetRoleClaims]', N'U') IS NULL
+        THROW 51004, '[identity].[AspNetRoleClaims] is required before granting mapping permissions.', 1;
 
     WITH Granted(Value) AS
     (
@@ -42,16 +42,16 @@ BEGIN TRY
     ),
     Editors(RoleId) AS
     (
-        SELECT DISTINCT RoleId FROM identity.AspNetRoleClaims
+        SELECT DISTINCT RoleId FROM [identity].[AspNetRoleClaims]
         WHERE ClaimType = N'permission' AND ClaimValue = N'Companies.Edit'
     )
-    INSERT INTO identity.AspNetRoleClaims (RoleId, ClaimType, ClaimValue)
+    INSERT INTO [identity].[AspNetRoleClaims] (RoleId, ClaimType, ClaimValue)
     SELECT e.RoleId, N'permission', g.Value
     FROM Editors e
     CROSS JOIN Granted g
     WHERE NOT EXISTS
     (
-        SELECT 1 FROM identity.AspNetRoleClaims existing
+        SELECT 1 FROM [identity].[AspNetRoleClaims] existing
         WHERE existing.RoleId = e.RoleId
           AND existing.ClaimType = N'permission'
           AND existing.ClaimValue = g.Value

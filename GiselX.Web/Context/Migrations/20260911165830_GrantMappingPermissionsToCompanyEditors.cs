@@ -29,14 +29,14 @@ namespace GiselX.Web.Context.Migrations
             migrationBuilder.Sql($"""
                 WITH Granted(Value) AS (SELECT Value FROM (VALUES {GrantedPermissions}) AS v(Value)),
                      Editors(RoleId) AS (
-                        SELECT DISTINCT RoleId FROM identity.AspNetRoleClaims
+                        SELECT DISTINCT RoleId FROM [identity].[AspNetRoleClaims]
                         WHERE ClaimType = N'permission' AND ClaimValue = N'Companies.Edit')
-                INSERT INTO identity.AspNetRoleClaims (RoleId, ClaimType, ClaimValue)
+                INSERT INTO [identity].[AspNetRoleClaims] (RoleId, ClaimType, ClaimValue)
                 SELECT e.RoleId, N'permission', g.Value
                 FROM Editors e
                 CROSS JOIN Granted g
                 WHERE NOT EXISTS (
-                    SELECT 1 FROM identity.AspNetRoleClaims existing
+                    SELECT 1 FROM [identity].[AspNetRoleClaims] existing
                     WHERE existing.RoleId = e.RoleId
                       AND existing.ClaimType = N'permission'
                       AND existing.ClaimValue = g.Value);
@@ -47,11 +47,11 @@ namespace GiselX.Web.Context.Migrations
             migrationBuilder.Sql($"""
                 WITH Granted(Value) AS (SELECT Value FROM (VALUES {GrantedPermissions}) AS v(Value))
                 DELETE claim
-                FROM identity.AspNetRoleClaims claim
+                FROM [identity].[AspNetRoleClaims] claim
                 JOIN Granted g ON g.Value = claim.ClaimValue
                 WHERE claim.ClaimType = N'permission'
                   AND EXISTS (
-                    SELECT 1 FROM identity.AspNetRoleClaims editor
+                    SELECT 1 FROM [identity].[AspNetRoleClaims] editor
                     WHERE editor.RoleId = claim.RoleId
                       AND editor.ClaimType = N'permission'
                       AND editor.ClaimValue = N'Companies.Edit');

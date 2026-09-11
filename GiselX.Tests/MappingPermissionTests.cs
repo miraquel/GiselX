@@ -57,7 +57,10 @@ public sealed class MappingPermissionTests
         }
 
         Assert.Contains("ClaimValue = N'Companies.Edit'", sql, StringComparison.Ordinal);
-        Assert.Contains("identity.AspNetRoleClaims", sql, StringComparison.Ordinal);
+        // "identity" is a T-SQL keyword (the IDENTITY property), so the schema must be bracketed or the
+        // batch fails to parse. EF brackets identifiers for us; hand-written SQL has to do it itself.
+        Assert.Contains("[identity].[AspNetRoleClaims]", sql, StringComparison.Ordinal);
+        Assert.DoesNotMatch(@"(?<!\[)\bidentity\.AspNetRoleClaims", sql);
     }
 
     [Fact]
@@ -88,8 +91,20 @@ public sealed class MappingPermissionTests
         Assert.DoesNotMatch(@"(?i)DELETE\s+(FROM\s+)?[A-Za-z\[]", compact);
         Assert.DoesNotMatch(@"(?i)TRUNCATE\s+TABLE\b", compact);
         Assert.DoesNotMatch(@"(?i)DROP\s+(TABLE|INDEX|CONSTRAINT)\b", compact);
-        Assert.DoesNotMatch(@"(?i)UPDATE\s+identity\.", compact);
+        Assert.DoesNotMatch(@"(?i)UPDATE\s+\[?identity\]?\.", compact);
         Assert.DoesNotContain("AspNetUsers", compact, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Migration_brackets_the_reserved_identity_schema_just_as_the_script_does()
+    {
+        // The migration and the manual script carry the same statement, and the same trap: "identity" is
+        // a T-SQL keyword, so an unbracketed schema name makes the whole batch fail to parse at startup.
+        var migration = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "GiselX.Web", "Context",
+            "Migrations", "20260911165830_GrantMappingPermissionsToCompanyEditors.cs"));
+
+        Assert.Contains("[identity].[AspNetRoleClaims]", migration, StringComparison.Ordinal);
+        Assert.DoesNotMatch(@"(?<!\[)\bidentity\.AspNetRoleClaims", migration);
     }
 
     private static string ReadBackfillScript()
