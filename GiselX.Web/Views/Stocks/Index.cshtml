@@ -124,6 +124,11 @@ $(function () {
  const modalElement = document.getElementById('reviewModal');
  const modal = modalElement ? new bootstrap.Modal(modalElement) : null;
  const token = form?.querySelector('[name="__RequestVerificationToken"]')?.value;
+ // The SHA-256 preflight reported for the workbook shown in the review modal. It is sent back on confirm
+ // so the server can refuse a file that was swapped after the review, and cleared whenever the file input
+ // changes so a stale confirmation can never travel with a new workbook.
+ let confirmedSha256 = null;
+ document.getElementById('stockFile')?.addEventListener('change', () => { confirmedSha256 = null; });
  const numberFormatter = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 });
  let lastStockQuery = {};
  let stockSummaryRequest = 0;
@@ -204,8 +209,8 @@ $(function () {
    $('#reviewAlert').removeClass('d-none alert-success alert-warning alert-danger').addClass(preflight.canPublish?(preflight.invalidRows?'alert-warning':'alert-success'):'alert-danger').text(message||'Review complete.');
    $('#confirmUpload').prop('disabled',!preflight.canPublish); modal.show();
  }
- form?.addEventListener('submit', async e => { e.preventDefault(); const response=await fetch('@Url.Action("PreflightUpload")',{method:'POST',body:new FormData(form),headers:{RequestVerificationToken:token}}); const body=await response.json(); if(body.data) render(body.data,body.message); else alert(body.message||'Unable to analyze workbook.'); });
- $('#confirmUpload').on('click', async function(){ this.disabled=true; const data=new FormData(form); data.append('confirmed','true'); const response=await fetch('@Url.Action("Upload")',{method:'POST',body:data,headers:{RequestVerificationToken:token}}); const body=await response.json(); if(body.data?.batchId){window.location.href='@Url.Action("Result")?batchId='+body.data.batchId;return;} alert(body.message||'Upload failed.'); this.disabled=false; });
+ form?.addEventListener('submit', async e => { e.preventDefault(); const response=await fetch('@Url.Action("PreflightUpload")',{method:'POST',body:new FormData(form),headers:{RequestVerificationToken:token}}); const body=await response.json(); if(body.data){ confirmedSha256=body.data.fileSha256; render(body.data,body.message); } else { confirmedSha256=null; alert(body.message||'Unable to analyze workbook.'); } });
+ $('#confirmUpload').on('click', async function(){ this.disabled=true; const data=new FormData(form); data.append('confirmed','true'); data.append('confirmedSha256', confirmedSha256 || ''); const response=await fetch('@Url.Action("Upload")',{method:'POST',body:data,headers:{RequestVerificationToken:token}}); const body=await response.json(); if(body.data?.batchId){window.location.href='@Url.Action("Result")?batchId='+body.data.batchId;return;} alert(body.message||'Upload failed.'); this.disabled=false; });
 });
 </script>
 }

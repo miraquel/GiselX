@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Data;
 using GiselX.Domain;
 using GiselX.Repository.Interface;
@@ -51,7 +52,7 @@ public sealed class StockUploadServiceTests
         var (service, repository, transaction) = CreateService(Analysis(1, 0));
 
         var response = await service.UploadAsync(File(), "stock.xlsx", new DateTime(2026, 8, 10), 7,
-            false, "user", CancellationToken.None);
+            false, "user", ConfirmedSha(), CancellationToken.None);
 
         Assert.False(response.IsSuccess);
         Assert.Empty(repository.Batches);
@@ -64,7 +65,7 @@ public sealed class StockUploadServiceTests
         var (service, repository, transaction) = CreateService(Analysis(2, 1));
 
         var response = await service.UploadAsync(File(), "stock.xlsx", new DateTime(2026, 8, 10), 7,
-            true, "user", CancellationToken.None);
+            true, "user", ConfirmedSha(), CancellationToken.None);
 
         Assert.True(response.IsSuccess);
         Assert.Equal(3, repository.StagingRows.Count);
@@ -80,7 +81,7 @@ public sealed class StockUploadServiceTests
         var (service, repository, transaction) = CreateService(Analysis(0, 2));
 
         var response = await service.UploadAsync(File(), "stock.xlsx", new DateTime(2026, 8, 10), 7,
-            true, "user", CancellationToken.None);
+            true, "user", ConfirmedSha(), CancellationToken.None);
 
         Assert.False(response.IsSuccess);
         Assert.Equal(2, repository.StagingRows.Count);
@@ -97,7 +98,7 @@ public sealed class StockUploadServiceTests
         var (service, repository, _) = CreateService(analysis);
 
         var response = await service.UploadAsync(File(), "stock.xlsx", new DateTime(2026, 8, 10), 7,
-            true, "user", CancellationToken.None);
+            true, "user", ConfirmedSha(), CancellationToken.None);
 
         Assert.True(response.IsSuccess);
         Assert.Equal(12.50m, Assert.Single(repository.StagingRows).PriceUnit);
@@ -113,7 +114,7 @@ public sealed class StockUploadServiceTests
         var (service, repository, _) = CreateService(analysis);
 
         var response = await service.UploadAsync(File(), "stock.xlsx", new DateTime(2026, 8, 10), 7,
-            true, "user", CancellationToken.None);
+            true, "user", ConfirmedSha(), CancellationToken.None);
 
         Assert.True(response.IsSuccess);
         var staged = Assert.Single(repository.StagingRows);
@@ -134,7 +135,7 @@ public sealed class StockUploadServiceTests
         var (service, repository, _) = CreateService(analysis);
 
         var response = await service.UploadAsync(File(), "stock.xlsx", new DateTime(2026, 8, 10), 7,
-            true, "user", CancellationToken.None);
+            true, "user", ConfirmedSha(), CancellationToken.None);
 
         Assert.True(response.IsSuccess);
         var staging = Assert.Single(repository.StagingRows);
@@ -151,7 +152,7 @@ public sealed class StockUploadServiceTests
         var (service, repository, _) = CreateService(MultiSheetAnalysis());
 
         var response = await service.UploadAsync(File(), "stock.xlsx", new DateTime(2026, 8, 10), 7,
-            true, "user", CancellationToken.None);
+            true, "user", ConfirmedSha(), CancellationToken.None);
 
         Assert.True(response.IsSuccess);
         Assert.Equal([("Stok Gudang", 11), ("Stok Transit", 12)],
@@ -163,7 +164,7 @@ public sealed class StockUploadServiceTests
     {
         var (service, repository, _) = CreateService(MultiSheetAnalysis());
 
-        await service.UploadAsync(File(), "stock.xlsx", new DateTime(2026, 8, 10), 7, true, "user",
+        await service.UploadAsync(File(), "stock.xlsx", new DateTime(2026, 8, 10), 7, true, "user", ConfirmedSha(),
             CancellationToken.None);
 
         Assert.Null(repository.Batches.Single().StockTemplateMappingId);
@@ -174,7 +175,7 @@ public sealed class StockUploadServiceTests
     {
         var (service, repository, _) = CreateService(Analysis(1, 0));
 
-        await service.UploadAsync(File(), "stock.xlsx", new DateTime(2026, 8, 10), 7, true, "user",
+        await service.UploadAsync(File(), "stock.xlsx", new DateTime(2026, 8, 10), 7, true, "user", ConfirmedSha(),
             CancellationToken.None);
 
         Assert.Equal(5, repository.Batches.Single().StockTemplateMappingId);
@@ -256,7 +257,50 @@ public sealed class StockUploadServiceTests
         ]
     };
 
+    [Fact]
+    public async Task Upload_refuses_a_workbook_that_is_not_the_one_that_was_confirmed()
+    {
+        // The preview was reviewed for a different file; publishing this one would record totals nobody saw.
+        var (service, repository, transaction) = CreateService(Analysis(1, 0));
+        var otherWorkbook = Convert.ToHexString(SHA256.HashData([9, 9, 9])).ToLowerInvariant();
+
+        var response = await service.UploadAsync(File(), "stock.xlsx", new DateTime(2026, 8, 10), 7,
+            true, "user", otherWorkbook, CancellationToken.None);
+
+        Assert.False(response.IsSuccess);
+        Assert.Contains("not the workbook that was uploaded", response.Message, StringComparison.Ordinal);
+        Assert.Empty(repository.Batches);
+        Assert.Equal(0, transaction.CommitCount);
+    }
+
+    [Fact]
+    public async Task Upload_refuses_when_no_confirmation_accompanies_the_workbook()
+    {
+        var (service, repository, _) = CreateService(Analysis(1, 0));
+
+        var response = await service.UploadAsync(File(), "stock.xlsx", new DateTime(2026, 8, 10), 7,
+            true, "user", null, CancellationToken.None);
+
+        Assert.False(response.IsSuccess);
+        Assert.Empty(repository.Batches);
+    }
+
+    [Fact]
+    public async Task Preflight_reports_the_hash_the_upload_has_to_quote_back()
+    {
+        var (service, _, _) = CreateService(Analysis(1, 0));
+
+        var response = await service.PreflightAsync(File(), "stock.xlsx", new DateTime(2026, 8, 10), 7,
+            CancellationToken.None);
+
+        Assert.Equal(ConfirmedSha(), response.Data!.FileSha256);
+    }
+
     private static MemoryStream File() => new([1, 2, 3]);
+
+    /// <summary>The SHA-256 preflight reports for the bytes File() supplies, quoted back on upload.</summary>
+    private static string ConfirmedSha() =>
+        Convert.ToHexString(SHA256.HashData([1, 2, 3])).ToLowerInvariant();
 
     private sealed class AnalysisService(StockWorkbookAnalysisDto analysis) : IStockWorkbookAnalysisService
     {

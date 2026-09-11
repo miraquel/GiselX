@@ -25,7 +25,7 @@ public sealed class StockUploadService(
         var analysis = await analysisService.AnalyzeAsync(request.Content!, companyId, cancellationToken);
         return new ServiceResponse<StockUploadPreflightDto>
         {
-            Data = ToPreflight(analysis, stockDate.Date),
+            Data = ToPreflight(analysis, stockDate.Date, request.SourceSha256!),
             Errors = analysis.Errors.ToList(),
             Message = analysis.Errors.Count == 0 ? "Workbook analysis completed." : "Workbook validation failed.",
             StatusCode = analysis.Errors.Count == 0 ? StatusCodes.Status200OK : StatusCodes.Status400BadRequest
@@ -33,11 +33,15 @@ public sealed class StockUploadService(
     }
 
     public async Task<ServiceResponse<StockUploadResultDto>> UploadAsync(Stream file, string originalFileName,
-        DateTime stockDate, int companyId, bool confirmed, string uploadedBy, CancellationToken cancellationToken)
+        DateTime stockDate, int companyId, bool confirmed, string uploadedBy, string? confirmedSha256,
+        CancellationToken cancellationToken)
     {
         if (!confirmed) return Failure("Review the workbook and confirm the Stock upload before continuing.");
         var request = await ReadRequestAsync(file, originalFileName, stockDate, cancellationToken);
         if (request.Error is not null) return Failure(request.Error);
+
+        var mismatch = UploadConfirmation.DescribeMismatch(confirmedSha256, request.SourceSha256!);
+        if (mismatch is not null) return Failure(mismatch);
 
         var content = request.Content!;
         var analysis = await analysisService.AnalyzeAsync(content, companyId, cancellationToken);
@@ -157,8 +161,10 @@ public sealed class StockUploadService(
         ValidationErrorsJson = row.ValidationErrorsJson
     };
 
-    private static StockUploadPreflightDto ToPreflight(StockWorkbookAnalysisDto analysis, DateTime stockDate) => new()
+    private static StockUploadPreflightDto ToPreflight(StockWorkbookAnalysisDto analysis, DateTime stockDate,
+        string fileSha256) => new()
     {
+        FileSha256 = fileSha256,
         MappingName = DescribeMappings(analysis), StockDate = stockDate, TotalRows = analysis.Rows.Count,
         ValidRows = analysis.ValidRows, InvalidRows = analysis.InvalidRows,
         TotalSaldoAwal = analysis.Rows.Where(row => row.IsValid).Sum(row => row.SaldoAwal ?? 0m),

@@ -38,7 +38,7 @@ public sealed class SelloutUploadService(
         }
 
         var analysis = await analysisService.AnalyzeAsync(contentResponse.Content!, companyId, cancellationToken);
-        var data = ToPreflight(analysis);
+        var data = ToPreflight(analysis, contentResponse.SourceSha256!);
         var errors = CollectErrors(analysis);
         return new ServiceResponse<SelloutUploadPreflightDto>
         {
@@ -50,10 +50,14 @@ public sealed class SelloutUploadService(
     }
 
     public async Task<ServiceResponse<SelloutUploadResultDto>> UploadAsync(Stream file, string originalFileName,
-        int companyId, bool multiWeekConfirmed, string uploadedBy, CancellationToken cancellationToken)
+        int companyId, bool multiWeekConfirmed, string uploadedBy, string? confirmedSha256,
+        CancellationToken cancellationToken)
     {
         var contentResponse = await ReadRequestAsync(file, originalFileName, cancellationToken);
         if (contentResponse.Error is not null) return Failure(contentResponse.Error);
+
+        var mismatch = UploadConfirmation.DescribeMismatch(confirmedSha256, contentResponse.SourceSha256!);
+        if (mismatch is not null) return Failure(mismatch);
         var content = contentResponse.Content!;
         var analysis = await analysisService.AnalyzeAsync(content, companyId, cancellationToken);
         if (analysis.IsMultiWeek && !multiWeekConfirmed) return Failure(MultiWeekConfirmationMessage);
@@ -282,8 +286,9 @@ public sealed class SelloutUploadService(
         Errors = [message], Message = message, StatusCode = StatusCodes.Status400BadRequest
     };
 
-    private static SelloutUploadPreflightDto ToPreflight(SelloutWorkbookAnalysisDto analysis) => new()
+    private static SelloutUploadPreflightDto ToPreflight(SelloutWorkbookAnalysisDto analysis, string fileSha256) => new()
     {
+        FileSha256 = fileSha256,
         MappingName = analysis.Mapping?.Name,
         TotalRows = analysis.Rows.Count,
         ValidRows = analysis.Rows.Count(row => row.IsValid),

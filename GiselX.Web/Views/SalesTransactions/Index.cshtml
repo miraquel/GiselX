@@ -40,6 +40,7 @@
             {
                 <form id="selloutUploadForm" asp-controller="SalesTransactions" asp-action="Upload" method="post" enctype="multipart/form-data">
                     <input type="hidden" id="multiWeekConfirmed" name="multiWeekConfirmed" value="false" />
+                    <input type="hidden" id="confirmedSha256" name="confirmedSha256" value="" />
                     <div class="input-group">
                         <input type="file" id="fileInput" name="file" class="form-control" aria-describedby="fileInputAddon" aria-label="Upload" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" required>
                         <button type="submit" class="btn btn-outline-success material-shadow-none" id="fileInputAddon">
@@ -252,6 +253,9 @@
 
             function showUploadPreview(response) {
                 const data = response.data || {};
+                // Tie the confirmation to the workbook that was actually analysed: the server refuses an
+                // upload whose bytes do not hash to what the preview reported.
+                document.getElementById("confirmedSha256").value = data.fileSha256 || "";
                 const errors = [...new Set([...(response.errors || []), ...(data.errors || [])])];
                 document.getElementById('previewTotalRows').textContent = numberFormatter.format(data.totalRows || 0);
                 document.getElementById('previewValidRows').textContent = numberFormatter.format(data.validRows || 0);
@@ -333,6 +337,7 @@
 
             document.getElementById('fileInput')?.addEventListener('change', function() {
                 document.getElementById('multiWeekConfirmed').value = 'false';
+                document.getElementById('confirmedSha256').value = '';
             });
 
             monthSelect.prop('disabled', true);

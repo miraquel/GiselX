@@ -167,7 +167,8 @@ public class SalesTransactionsController : Controller
     [HttpPost]
     [Authorize(PermissionConstants.SalesTransactions.Upload)]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Upload([FromForm(Name = "file")] IFormFile fileInput, bool multiWeekConfirmed, CancellationToken cancellationToken)
+    public async Task<IActionResult> Upload([FromForm(Name = "file")] IFormFile fileInput, bool multiWeekConfirmed,
+        string? confirmedSha256, CancellationToken cancellationToken)
     {
         if (fileInput.Length == 0)
         {
@@ -184,7 +185,7 @@ public class SalesTransactionsController : Controller
 
         await using var stream = fileInput.OpenReadStream();
         var response = await _selloutUploadService.UploadAsync(stream, fileInput.FileName, user.CompanyId,
-            multiWeekConfirmed, user.UserName ?? "unknown", cancellationToken);
+            multiWeekConfirmed, user.UserName ?? "unknown", confirmedSha256, cancellationToken);
         if (response.Data?.GroupId > 0) return RedirectToAction(nameof(UploadResult), new { groupId = response.Data.GroupId });
         TempData["ErrorMessage"] = response.Message ?? "Failed to upload sellout data.";
         return RedirectToAction(nameof(Index));

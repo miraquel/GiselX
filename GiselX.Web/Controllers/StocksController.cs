@@ -46,14 +46,14 @@ public sealed class StocksController(
     [HttpPost, ValidateAntiForgeryToken]
     [Authorize(PermissionConstants.Stocks.Upload)]
     public async Task<IActionResult> Upload([FromForm(Name = "file")] IFormFile? fileInput,
-        DateTime stockDate, bool confirmed, CancellationToken cancellationToken)
+        DateTime stockDate, bool confirmed, string? confirmedSha256, CancellationToken cancellationToken)
     {
         if (fileInput is null || fileInput.Length == 0) return BadRequest("Please select a file to upload.");
         var user = await userManager.GetUserAsync(User);
         if (user is null) return Challenge();
         await using var stream = fileInput.OpenReadStream();
         var response = await uploadService.UploadAsync(stream, fileInput.FileName, stockDate, user.CompanyId,
-            confirmed, user.UserName ?? "unknown", cancellationToken);
+            confirmed, user.UserName ?? "unknown", confirmedSha256, cancellationToken);
         return StatusCode(response.StatusCode, response);
     }
 

@@ -2,6 +2,12 @@ namespace GiselX.Service.Dto;
 
 public sealed class StockUploadPreflightDto
 {
+    /// <summary>
+    /// SHA-256 of the workbook exactly as it was sent. The upload must quote it back, which is what
+    /// ties the file a user reviewed to the file that is actually published.
+    /// </summary>
+    public string FileSha256 { get; set; } = string.Empty;
+
     public string? MappingName { get; set; }
     public DateTime StockDate { get; set; }
     public int TotalRows { get; set; }
