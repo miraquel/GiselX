@@ -121,7 +121,7 @@ public sealed class ItemMappingResolverTests
         var resolver = new ItemMappingResolver(new CompanyRepository(), new ItemMappings());
         var context = EnabledContext(new ItemMappingDto
         {
-            Id = 5, DistributorItemId = null, GmkItemId = "4100039", IsActive = true
+            Id = 5, DistributorItemId = null!, GmkItemId = "4100039", IsActive = true
         });
 
         var result = resolver.Resolve(context, null, "Product");

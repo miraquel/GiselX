@@ -58,7 +58,9 @@ public sealed class SelloutUploadService(
         var analysis = await analysisService.AnalyzeAsync(content, companyId, cancellationToken);
         if (analysis.IsMultiWeek && !multiWeekConfirmed) return Failure(MultiWeekConfirmationMessage);
 
+        var totalRows = analysis.Rows.Count;
         var invalidRows = analysis.Rows.Count(row => !row.IsValid);
+        var validRows = totalRows - invalidRows;
         var group = new SelloutUploadGroup
         {
             CompanyId = companyId,
@@ -66,8 +68,8 @@ public sealed class SelloutUploadService(
             OriginalFileName = Path.GetFileName(originalFileName),
             FileSha256 = contentResponse.SourceSha256!,
             Status = SelloutUploadGroupStatus.Processing,
-            TotalRows = analysis.Rows.Count,
-            ValidRows = analysis.Rows.Count - invalidRows,
+            TotalRows = totalRows,
+            ValidRows = validRows,
             InvalidRows = invalidRows,
             IgnoredSummaryRowsJson = JsonSerializer.Serialize(analysis.IgnoredSummaryRowNumbers),
             ValidationErrorsJson = JsonSerializer.Serialize(analysis.RowErrors),
@@ -76,20 +78,13 @@ public sealed class SelloutUploadService(
         };
         group.Id = await uploadRepository.InsertGroupAsync(group, cancellationToken);
 
-        if (!analysis.IsValid)
+        var refusal = DescribeRefusal(analysis, totalRows, validRows, invalidRows);
+        if (refusal is not null)
         {
-            var message = analysis.Errors.Count > 0
-                ? string.Join(" ", analysis.Errors)
-                : $"{invalidRows} row(s) failed validation.";
             await uploadRepository.MarkGroupFailedAsync(
-                group.Id,
-                analysis.Rows.Count,
-                invalidRows,
-                message,
-                group.ValidationErrorsJson,
-                cancellationToken);
+                group.Id, totalRows, invalidRows, refusal, group.ValidationErrorsJson, cancellationToken);
             transaction.Commit();
-            return FailedGroup(group.Id, message, analysis.RowErrors, analysis);
+            return FailedGroup(group.Id, refusal, analysis.RowErrors, analysis);
         }
 
         var batchIds = new Dictionary<DateTime, long>();
@@ -113,27 +108,71 @@ public sealed class SelloutUploadService(
             batchIds.Add(week.ReportingWeekStart, batch.Id);
         }
 
+        // Week batches are derived from rows that carry a usable invoice date, so an invalid row can only
+        // be staged when its own date lands in a week some valid row also reached. A row with no date -
+        // frequently the very reason it is invalid - has no week to belong to, and neither has a row whose
+        // week contributed nothing valid. Those are reported through the group's own error list, which
+        // already carries every row error the analysis produced, rather than being forced onto a batch
+        // they did not come from.
+        var staging = new List<SelloutStaging>(totalRows);
         foreach (var row in analysis.Rows)
         {
-            row.SelloutUploadBatchId = batchIds[SelloutWorkbookParser.GetMonday(row.InvoiceDate!.Value)];
+            if (!row.InvoiceDate.HasValue) continue;
+            if (!batchIds.TryGetValue(SelloutWorkbookParser.GetMonday(row.InvoiceDate.Value), out var batchId)) continue;
+
+            row.SelloutUploadBatchId = batchId;
+            staging.Add(row);
         }
-        await uploadRepository.InsertStagingAsync(analysis.Rows.ToList(), cancellationToken);
+
+        await uploadRepository.InsertStagingAsync(staging, cancellationToken);
         await uploadRepository.PromoteGroupAsync(group.Id, cancellationToken);
         transaction.Commit();
+
+        var status = invalidRows > 0
+            ? SelloutUploadBatchStatus.CompletedWithWarnings
+            : SelloutUploadBatchStatus.Completed;
+        var message = invalidRows > 0
+            ? $"Sellout data was replaced for every reporting week in the workbook, with {invalidRows:N0} invalid row(s) excluded."
+            : "Sellout data was replaced successfully for every reporting week in the workbook.";
         return new ServiceResponse<SelloutUploadResultDto>
         {
             Data = new SelloutUploadResultDto
             {
                 GroupId = group.Id,
-                Status = SelloutUploadBatchStatus.Completed,
-                TotalRows = analysis.Rows.Count,
-                ValidRows = analysis.Rows.Count,
+                Status = status,
+                TotalRows = totalRows,
+                ValidRows = validRows,
+                InvalidRows = invalidRows,
                 Weeks = analysis.WeekSummaries,
                 IgnoredSummaryRowNumbers = analysis.IgnoredSummaryRowNumbers,
-                Message = "Sellout data was replaced successfully for every reporting week in the workbook."
+                Errors = analysis.RowErrors,
+                Message = message
             },
-            Message = "Sellout data was replaced successfully for every reporting week in the workbook."
+            Message = message
         };
+    }
+
+    /// <summary>
+    /// Why this workbook cannot be published at all, or null when its valid rows should go through. A few
+    /// unreadable cells no longer reject a month of sellout, but a workbook whose invalid share reaches
+    /// the configured limit is a mapping or export problem rather than a few bad cells, and publishing
+    /// part of it would quietly replace whole reporting weeks with less than they should hold.
+    /// </summary>
+    private string? DescribeRefusal(SelloutWorkbookAnalysisDto analysis, int totalRows, int validRows,
+        int invalidRows)
+    {
+        if (analysis.Errors.Count > 0) return string.Join(" ", analysis.Errors);
+        if (analysis.Mapping is null) return "No active distributor mapping matches this workbook.";
+        if (totalRows == 0) return "The workbook contains no data rows.";
+        if (validRows == 0) return $"All {totalRows:N0} row(s) failed validation. No data was published.";
+        if (invalidRows == 0) return null;
+
+        var limit = options.Value.MaxInvalidRowPercentage;
+        var share = invalidRows * 100m / totalRows;
+        return share < limit
+            ? null
+            : $"{invalidRows:N0} of {totalRows:N0} row(s) ({share:0.#}%) failed validation, which is at or "
+              + $"above the {limit:0.#}% limit. No data was published.";
     }
 
     public async Task<ServiceResponse<SelloutUploadBatchDto>> GetBatchAsync(long batchId, int companyId, CancellationToken cancellationToken)
@@ -151,7 +190,7 @@ public sealed class SelloutUploadService(
                 BatchId = batch.Id, CompanyId = batch.CompanyId, ReportingWeekStart = batch.ReportingWeekStart,
                 OriginalFileName = batch.OriginalFileName, FileSha256 = batch.FileSha256, Status = batch.Status,
                 TotalRows = batch.TotalRows, ValidRows = batch.ValidRows, InvalidRows = batch.InvalidRows,
-                Message = batch.ErrorSummary ?? (batch.Status == SelloutUploadBatchStatus.Completed ? "Upload completed." : string.Empty),
+                Message = batch.ErrorSummary ?? DescribeBatchCompletion(batch),
                 Errors = errors, UploadedBy = batch.UploadedBy, UploadedDate = batch.UploadedDate, CompletedDate = batch.CompletedDate
             }
         };
@@ -323,7 +362,7 @@ public sealed class SelloutUploadService(
         TotalRows = group.TotalRows,
         ValidRows = group.ValidRows,
         InvalidRows = group.InvalidRows,
-        Message = group.ErrorSummary ?? (group.Status == SelloutUploadGroupStatus.Completed
+        Message = group.ErrorSummary ?? (group.Status is SelloutUploadGroupStatus.Completed or SelloutUploadGroupStatus.CompletedWithWarnings
             ? "Upload completed for every reporting week." : string.Empty),
         UploadedBy = group.UploadedBy,
         UploadedDate = group.UploadedDate,
@@ -338,15 +377,19 @@ public sealed class SelloutUploadService(
     {
         GroupId = batch.SelloutUploadGroupId ?? 0,
         CompanyId = batch.CompanyId,
-        Status = batch.Status == SelloutUploadBatchStatus.Completed
-            ? SelloutUploadGroupStatus.Completed
-            : batch.Status == SelloutUploadBatchStatus.Failed ? SelloutUploadGroupStatus.Failed : SelloutUploadGroupStatus.Processing,
+        Status = batch.Status switch
+        {
+            SelloutUploadBatchStatus.Completed => SelloutUploadGroupStatus.Completed,
+            SelloutUploadBatchStatus.CompletedWithWarnings => SelloutUploadGroupStatus.CompletedWithWarnings,
+            SelloutUploadBatchStatus.Failed => SelloutUploadGroupStatus.Failed,
+            _ => SelloutUploadGroupStatus.Processing
+        },
         OriginalFileName = batch.OriginalFileName,
         FileSha256 = batch.FileSha256,
         TotalRows = batch.TotalRows,
         ValidRows = batch.ValidRows,
         InvalidRows = batch.InvalidRows,
-        Message = batch.ErrorSummary ?? (batch.Status == SelloutUploadBatchStatus.Completed ? "Upload completed." : string.Empty),
+        Message = batch.ErrorSummary ?? DescribeBatchCompletion(batch),
         UploadedBy = batch.UploadedBy,
         UploadedDate = batch.UploadedDate,
         CompletedDate = batch.CompletedDate,
@@ -371,6 +414,14 @@ public sealed class SelloutUploadService(
         UploadedBy = batch.UploadedBy,
         UploadedDate = batch.UploadedDate,
         CompletedDate = batch.CompletedDate
+    };
+
+    private static string DescribeBatchCompletion(SelloutUploadBatch batch) => batch.Status switch
+    {
+        SelloutUploadBatchStatus.Completed => "Upload completed.",
+        SelloutUploadBatchStatus.CompletedWithWarnings =>
+            $"Upload completed with {batch.InvalidRows:N0} invalid row(s) excluded.",
+        _ => string.Empty
     };
 
     private static IReadOnlyList<SelloutStagingErrorDto> RowsToErrors(IEnumerable<SelloutStaging> rows) =>

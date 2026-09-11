@@ -2,14 +2,19 @@
 @using GiselX.Domain
 @{
     ViewBag.Title = "Sellout Upload Result";
-    var successful = Model.Status == SelloutUploadGroupStatus.Completed;
+    // A group that completed with warnings published its weeks: it is a success that excluded some rows,
+    // not a failure, and is shown as a warning rather than in the danger colour.
+    var published = Model.Status is SelloutUploadGroupStatus.Completed
+        or SelloutUploadGroupStatus.CompletedWithWarnings;
+    var withWarnings = Model.Status == SelloutUploadGroupStatus.CompletedWithWarnings;
+    var alertClass = published ? withWarnings ? "alert-warning" : "alert-success" : "alert-danger";
 }
 <div class="card">
     <div class="card-header"><h4>Sellout Upload Result</h4></div>
     <div class="card-body">
-        <div class="alert @(successful ? "alert-success" : "alert-danger")">
+        <div class="alert @alertClass">
             @(string.IsNullOrWhiteSpace(Model.Message)
-                ? successful ? "Upload completed." : "Upload failed. No reporting week was replaced."
+                ? published ? "Upload completed." : "Upload failed. No reporting week was replaced."
                 : Model.Message)
         </div>
         <dl class="row">
