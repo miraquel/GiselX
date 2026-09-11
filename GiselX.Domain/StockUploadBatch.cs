@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations.Schema;
+
 namespace GiselX.Domain;
 
 public sealed class StockUploadBatch
@@ -18,6 +20,7 @@ public sealed class StockUploadBatch
     public string UploadedBy { get; set; } = string.Empty;
     public DateTime UploadedDate { get; set; }
     public DateTime? CompletedDate { get; set; }
+    [NotMapped] public string CompanyName { get; set; } = string.Empty;
 
     public Company Company { get; set; } = null!;
     public StockTemplateMapping? StockTemplateMapping { get; set; }

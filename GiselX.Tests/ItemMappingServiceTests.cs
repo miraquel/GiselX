@@ -3,6 +3,7 @@ using System.Collections;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
 using GiselX.Domain;
+using GiselX.Domain.Common;
 using GiselX.Repository;
 using GiselX.Repository.Interface;
 using GiselX.Service;
@@ -106,7 +107,7 @@ public class ItemMappingServiceTests
     }
 
     [Fact]
-    public async Task UpsertAsync_emits_normalized_match_without_changing_existing_activation()
+    public async Task UpsertAsync_emits_normalized_match_and_updates_activation()
     {
         var connection = new RecordingDbConnection();
         var repository = new ItemMappingRepository(connection, null!);
@@ -125,7 +126,7 @@ public class ItemMappingServiceTests
         Assert.Contains("UPPER(LTRIM(RTRIM(target.DistributorItemId))) = UPPER(LTRIM(RTRIM(source.DistributorItemId)))",
             connection.LastCommandText);
         var matchedUpdate = connection.LastCommandText.Split("WHEN NOT MATCHED", StringSplitOptions.None)[0];
-        Assert.DoesNotContain("IsActive = source.IsActive", matchedUpdate);
+        Assert.Contains("IsActive = source.IsActive", matchedUpdate);
         Assert.Contains("source.IsActive", connection.LastCommandText.Split("WHEN NOT MATCHED", StringSplitOptions.None)[1]);
     }
 
@@ -135,7 +136,7 @@ public class ItemMappingServiceTests
         var repository = new FakeItemMappingRepository(new ItemMapping
             { Id = 3, CompanyId = 7, DistributorItemId = " p0003 " });
         var transaction = new FakeTransaction();
-        var service = new ItemMappingService(repository, transaction);
+        var service = new ItemMappingService(repository, new FakeCompanyRepository(), transaction);
         var dto = ValidSave();
         dto.DistributorItemId = "P0003";
 
@@ -166,6 +167,20 @@ public class ItemMappingServiceTests
     }
 
     [Fact]
+    public async Task SaveAsync_creates_mapping_with_selected_inactive_status()
+    {
+        var dto = ValidSave();
+        dto.IsActive = false;
+        var (service, repository, transaction) = CreateService();
+
+        var response = await service.SaveAsync(dto, "admin", default);
+
+        Assert.True(response.IsSuccess);
+        Assert.False(Assert.Single(repository.Inserted).IsActive);
+        Assert.True(transaction.CommitCalled);
+    }
+
+    [Fact]
     public async Task SaveAsync_updates_owned_mapping_with_audit()
     {
         var (service, repository, transaction) = CreateService();
@@ -173,11 +188,13 @@ public class ItemMappingServiceTests
         repository.Mappings.Add(mapping);
         var dto = ValidSave();
         dto.Id = 8;
+        dto.IsActive = false;
 
         var response = await service.SaveAsync(dto, "editor", CancellationToken.None);
 
         Assert.True(response.IsSuccess);
         Assert.Single(repository.Updated);
+        Assert.False(mapping.IsActive);
         Assert.Equal("editor", mapping.ModifiedBy);
         Assert.InRange(mapping.ModifiedDate!.Value, DateTime.UtcNow.AddMinutes(-1), DateTime.UtcNow.AddMinutes(1));
         Assert.True(transaction.CommitCalled);
@@ -255,11 +272,100 @@ public class ItemMappingServiceTests
         Assert.False(transaction.CommitCalled);
     }
 
+    [Fact]
+    public async Task ListUnmappedAsync_returns_discovered_items_for_a_mapping_enabled_company()
+    {
+        var (service, repository) = CreateUnmappedService(itemMappingEnabled: true);
+        repository.UnmappedItems.Add(new UnmappedDistributorItem
+        {
+            DistributorItemId = "P0003",
+            DistributorItemName = "Panadol Extra",
+            SeenInStock = true,
+            SeenInSellout = true,
+            OccurrenceCount = 12,
+            FirstSeenDate = new DateTime(2026, 8, 1, 3, 0, 0, DateTimeKind.Utc),
+            LastSeenDate = new DateTime(2026, 9, 3, 4, 0, 0, DateTimeKind.Utc)
+        });
+
+        var response = await service.ListUnmappedAsync(7, CancellationToken.None);
+
+        Assert.True(response.IsSuccess);
+        Assert.True(response.Data!.ItemMappingEnabled);
+        var item = Assert.Single(response.Data.Items);
+        Assert.Equal("P0003", item.DistributorItemId);
+        Assert.Equal("Panadol Extra", item.DistributorItemName);
+        Assert.True(item.SeenInStock);
+        Assert.True(item.SeenInSellout);
+        Assert.Equal(12, item.OccurrenceCount);
+        Assert.Equal(new DateTime(2026, 9, 3, 4, 0, 0, DateTimeKind.Utc), item.LastSeenDate);
+    }
+
+    [Fact]
+    public async Task ListUnmappedAsync_stays_empty_when_item_mapping_is_disabled_for_the_company()
+    {
+        var (service, repository) = CreateUnmappedService(itemMappingEnabled: false);
+        repository.UnmappedItems.Add(new UnmappedDistributorItem { DistributorItemId = "P0003" });
+
+        var response = await service.ListUnmappedAsync(7, CancellationToken.None);
+
+        Assert.True(response.IsSuccess);
+        Assert.False(response.Data!.ItemMappingEnabled);
+        Assert.Empty(response.Data.Items);
+    }
+
+    [Fact]
+    public async Task ListUnmappedAsync_stays_empty_when_the_company_does_not_exist()
+    {
+        var repository = new FakeItemMappingRepository();
+        var companyRepository = new FakeCompanyRepository { Company = null };
+        var service = new ItemMappingService(repository, companyRepository, new FakeTransaction());
+        repository.UnmappedItems.Add(new UnmappedDistributorItem { DistributorItemId = "P0003" });
+
+        var response = await service.ListUnmappedAsync(7, CancellationToken.None);
+
+        Assert.False(response.Data!.ItemMappingEnabled);
+        Assert.Empty(response.Data.Items);
+    }
+
+    [Fact]
+    public async Task ListUnmappedAsync_maps_a_null_distributor_item_name_to_an_empty_string()
+    {
+        var (service, repository) = CreateUnmappedService(itemMappingEnabled: true);
+        repository.UnmappedItems.Add(new UnmappedDistributorItem { DistributorItemId = "P0003", DistributorItemName = null });
+
+        var response = await service.ListUnmappedAsync(7, CancellationToken.None);
+
+        Assert.Equal(string.Empty, Assert.Single(response.Data!.Items).DistributorItemName);
+    }
+
+    private static (ItemMappingService Service, FakeItemMappingRepository Repository) CreateUnmappedService(
+        bool itemMappingEnabled)
+    {
+        var repository = new FakeItemMappingRepository();
+        var companyRepository = new FakeCompanyRepository
+        {
+            Company = new Company { Id = 7, ItemMappingEnabled = itemMappingEnabled }
+        };
+        return (new ItemMappingService(repository, companyRepository, new FakeTransaction()), repository);
+    }
+
+    private sealed class FakeCompanyRepository : ICompanyRepository
+    {
+        public Company? Company { get; set; } = new() { Id = 7, ItemMappingEnabled = true };
+        public Task<Company> CreateCompanyAsync(Company company, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<Company?> GetCompanyByIdAsync(int id, CancellationToken cancellationToken) => Task.FromResult(Company);
+        public Task<PagedList<Company>> GetCompaniesAsync(PagedListRequest pagedListRequest, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<Company> UpdateCompanyAsync(Company company, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<IReadOnlyList<Company>> GetAllAsync(CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<Company>>([]);
+        public Task<IEnumerable<Company>> GetAllWithContactEmailAsync(CancellationToken cancellationToken) => throw new NotSupportedException();
+    }
+
     private static (ItemMappingService Service, FakeItemMappingRepository Repository, FakeTransaction Transaction) CreateService()
     {
         var repository = new FakeItemMappingRepository();
         var transaction = new FakeTransaction();
-        return (new ItemMappingService(repository, transaction), repository, transaction);
+        return (new ItemMappingService(repository, new FakeCompanyRepository(), transaction), repository, transaction);
     }
 
     private static SaveItemMappingDto ValidSave() => new()
@@ -321,6 +427,9 @@ public class ItemMappingServiceTests
             return Task.FromResult(DeleteResult);
         }
         public Task UpsertAsync(IReadOnlyList<ItemMapping> values, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task<IReadOnlyList<UnmappedDistributorItem>> GetUnmappedDistributorItemsAsync(int companyId, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<UnmappedDistributorItem>>(UnmappedItems);
+        public List<UnmappedDistributorItem> UnmappedItems { get; } = [];
     }
 
     private sealed record ActiveChange(int Id, int CompanyId, bool IsActive, string ModifiedBy, DateTime ModifiedDate);

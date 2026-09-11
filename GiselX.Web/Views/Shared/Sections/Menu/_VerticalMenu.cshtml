@@ -79,7 +79,12 @@
       </a>
     </li>
     
-    @if (User.HasClaim(c => c is { Type: "permission", Value: PermissionConstants.Users.Index or PermissionConstants.Roles.Index }) || User.IsInRole("Administrator"))
+    @if (User.HasClaim(c => c is
+         {
+           Type: "permission",
+           Value: PermissionConstants.Users.Index or PermissionConstants.Roles.Index or
+                  PermissionConstants.Companies.Index or PermissionConstants.Companies.Edit
+         }) || User.IsInRole("Administrator"))
     {
       <li class="menu-header mt-7">
         <span class="menu-header-text">Admin</span>
@@ -109,6 +114,27 @@
       <a asp-area="Admin" asp-controller="Companies" asp-action="Index" class="menu-link">
         <i class="menu-icon tf-icons ri-building-2-line"></i>
         <div>Companies</div>
+      </a>
+    </li>
+    }
+    @if (User.HasClaim(c => c is { Type: "permission", Value: PermissionConstants.Companies.Edit }))
+    {
+    <li class='menu-item@(currentPage.StartsWith("/Admin/BusinessUnits") ? " active" : "")'>
+      <a asp-area="Admin" asp-controller="BusinessUnits" asp-action="Index" class="menu-link">
+        <i class="menu-icon tf-icons ri-organization-chart"></i>
+        <div>Business Units</div>
+      </a>
+    </li>
+    <li class='menu-item@(currentPage.StartsWith("/Admin/Channels") ? " active" : "")'>
+      <a asp-area="Admin" asp-controller="Channels" asp-action="Index" class="menu-link">
+        <i class="menu-icon tf-icons ri-node-tree"></i>
+        <div>Channels</div>
+      </a>
+    </li>
+    <li class='menu-item@(currentPage.StartsWith("/Admin/Salesmen") ? " active" : "")'>
+      <a asp-area="Admin" asp-controller="Salesmen" asp-action="Index" class="menu-link">
+        <i class="menu-icon tf-icons ri-user-star-line"></i>
+        <div>Salesmen</div>
       </a>
     </li>
     }

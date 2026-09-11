@@ -9,6 +9,18 @@ namespace GiselX.Repository;
 
 public class ServiceLevelRepository : IServiceLevelRepository
 {
+    private static readonly HashSet<string> AdministratorSelectableFields =
+    [
+        nameof(ServiceLevel.SoId), nameof(ServiceLevel.SoCreateDate), nameof(ServiceLevel.LeadTimeDlv),
+        nameof(ServiceLevel.LeadTimeRct), nameof(ServiceLevel.ItemId), nameof(ServiceLevel.ItemName),
+        nameof(ServiceLevel.SoQty), nameof(ServiceLevel.Unit), nameof(ServiceLevel.KgPerUnit),
+        nameof(ServiceLevel.DlvDateRequest), nameof(ServiceLevel.RctDateRequest), nameof(ServiceLevel.DoQty),
+        nameof(ServiceLevel.DoDate), nameof(ServiceLevel.ReceiptDate), nameof(ServiceLevel.CreatedDate),
+        nameof(ServiceLevel.CompanyName)
+    ];
+    private static readonly HashSet<string> NormalSelectableFields = AdministratorSelectableFields
+        .Where(field => field != nameof(ServiceLevel.CompanyName)).ToHashSet();
+
     private readonly IDbConnection _dbConnection;
     private readonly IDbTransaction _dbTransaction;
 
@@ -104,6 +116,15 @@ public class ServiceLevelRepository : IServiceLevelRepository
 
     public async Task<IEnumerable<ServiceLevel>> SelectByCustPeriodAsync(string custCode, int year, int month, CancellationToken cancellationToken)
     {
+        if (string.IsNullOrEmpty(custCode))
+            return await _dbConnection.QueryAsync<ServiceLevel>(new CommandDefinition("""
+                SELECT td.*, c.Name AS CompanyName
+                FROM TransDist td INNER JOIN Company c ON c.Id=td.CompanyId
+                WHERE YEAR(td.SoCreateDate)=@Year AND MONTH(td.SoCreateDate)=@Month
+                ORDER BY c.Name, td.SoCreateDate, td.SoId, td.Id;
+                """, new { Year = year, Month = month }, _dbTransaction,
+                cancellationToken: cancellationToken));
+
         const string query = "Gisel_SelectByCustPeriod";
         
         var parameters = new DynamicParameters();
@@ -144,11 +165,14 @@ public class ServiceLevelRepository : IServiceLevelRepository
 
     public async Task<PagedList<ServiceLevel>> SelectAsync(PagedListRequest pagedListRequest, string custCode, CancellationToken cancellationToken)
     {
+        if (string.IsNullOrEmpty(custCode))
+            return await SelectAllAsync(pagedListRequest, cancellationToken);
+
         const string query = "Gisel_Select";
         
         var parameters = new DynamicParameters();
         // loop Filters
-        foreach (var parameter in pagedListRequest.Filters.Where(parameter => typeof(ServiceLevel).GetProperty(parameter.Key)?.CanRead is true))
+        foreach (var parameter in pagedListRequest.Filters.Where(parameter => NormalSelectableFields.Contains(parameter.Key)))
         {
             if (string.IsNullOrWhiteSpace(parameter.Value))
             {
@@ -231,6 +255,13 @@ public class ServiceLevelRepository : IServiceLevelRepository
 
     public async Task<IEnumerable<Period>> SelectPeriodsAsync(string custCode, CancellationToken cancellationToken)
     {
+        if (string.IsNullOrEmpty(custCode))
+            return await _dbConnection.QueryAsync<Period>(new CommandDefinition("""
+                SELECT DISTINCT YEAR(SoCreateDate) AS [Year], MONTH(SoCreateDate) AS [Month]
+                FROM TransDist
+                ORDER BY [Year] DESC, [Month] DESC;
+                """, transaction: _dbTransaction, cancellationToken: cancellationToken));
+
         const string query = "Gisel_SelectPeriods";
         
         var parameters = new DynamicParameters();
@@ -247,5 +278,79 @@ public class ServiceLevelRepository : IServiceLevelRepository
         );
         
         return await _dbConnection.QueryAsync<Period>(command);
+    }
+
+    private async Task<PagedList<ServiceLevel>> SelectAllAsync(PagedListRequest request,
+        CancellationToken cancellationToken)
+    {
+        var parameters = new DynamicParameters();
+        parameters.Add("PageNumber", Math.Max(1, request.PageNumber));
+        parameters.Add("PageSize", Math.Clamp(request.PageSize, 1, 500));
+        var clauses = new List<string>();
+
+        if (request.Filters.TryGetValue("Year", out var yearText) && int.TryParse(yearText, out var year))
+        { parameters.Add("Year", year); clauses.Add("YEAR(td.SoCreateDate)=@Year"); }
+        if (request.Filters.TryGetValue("Month", out var monthText) && int.TryParse(monthText, out var month))
+        { parameters.Add("Month", month); clauses.Add("MONTH(td.SoCreateDate)=@Month"); }
+
+        foreach (var filter in request.Filters.Where(filter => AdministratorSelectableFields.Contains(filter.Key)))
+        {
+            if (string.IsNullOrWhiteSpace(filter.Value)) continue;
+            var property = typeof(ServiceLevel).GetProperty(filter.Key);
+            if (property is null) continue;
+            var expression = filter.Key == nameof(ServiceLevel.CompanyName) ? "c.Name" : $"td.[{filter.Key}]";
+            switch (property.PropertyType)
+            {
+                case { } type when type == typeof(string):
+                    var text = filter.Value.Replace('*', '%');
+                    parameters.Add(filter.Key, text.Contains('%') ? text : $"%{text}%");
+                    clauses.Add($"{expression} LIKE @{filter.Key}");
+                    break;
+                case { } type when type == typeof(int):
+                    if (int.TryParse(filter.Value, out var intValue))
+                    { parameters.Add(filter.Key, intValue); clauses.Add($"{expression}=@{filter.Key}"); }
+                    break;
+                case { } type when type == typeof(decimal):
+                    if (decimal.TryParse(filter.Value, out var decimalValue))
+                    { parameters.Add(filter.Key, decimalValue); clauses.Add($"{expression}=@{filter.Key}"); }
+                    break;
+                case { } type when type == typeof(DateTime):
+                    if (DateTime.TryParse(filter.Value, out var dateValue))
+                    { parameters.Add(filter.Key, dateValue); clauses.Add($"CONVERT(date,{expression})=CONVERT(date,@{filter.Key})"); }
+                    break;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.SearchTerm))
+        {
+            var search = request.SearchTerm.Replace('*', '%');
+            parameters.Add("Search", search.Contains('%') ? search : $"%{search}%");
+            clauses.Add("(td.SoId LIKE @Search OR td.ItemId LIKE @Search OR td.ItemName LIKE @Search OR c.Name LIKE @Search)");
+        }
+
+        var filters = clauses.Count == 0 ? string.Empty : " WHERE " + string.Join(" AND ", clauses);
+        var sort = typeof(ServiceLevel).GetProperties()
+            .FirstOrDefault(property => AdministratorSelectableFields.Contains(property.Name) &&
+                                        string.Equals(property.Name, request.SortBy,
+                                            StringComparison.OrdinalIgnoreCase))?.Name
+            ?? nameof(ServiceLevel.SoCreateDate);
+        var sortExpression = sort == nameof(ServiceLevel.CompanyName) ? "c.Name" : $"td.[{sort}]";
+        var direction = request.IsSortAscending ? "ASC" : "DESC";
+        var query = $"""
+            SELECT td.*, c.Name AS CompanyName
+            FROM TransDist td INNER JOIN Company c ON c.Id=td.CompanyId
+            {filters}
+            ORDER BY {sortExpression} {direction}, td.Id
+            OFFSET (@PageNumber-1)*@PageSize ROWS FETCH NEXT @PageSize ROWS ONLY;
+            SELECT COUNT(*)
+            FROM TransDist td INNER JOIN Company c ON c.Id=td.CompanyId
+            {filters};
+            """;
+        using var result = await _dbConnection.QueryMultipleAsync(new CommandDefinition(query, parameters,
+            _dbTransaction, cancellationToken: cancellationToken));
+        var items = (await result.ReadAsync<ServiceLevel>()).ToList();
+        var totalCount = await result.ReadSingleAsync<int>();
+        return new PagedList<ServiceLevel>(items, Math.Max(1, request.PageNumber),
+            Math.Clamp(request.PageSize, 1, 500), totalCount);
     }
 }

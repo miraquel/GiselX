@@ -14,14 +14,13 @@ CREATE OR ALTER PROCEDURE [dbo].[GiselStock_Select]
     @ProductPackaging   NVARCHAR(100)  = NULL,
     @ProductUnit        NVARCHAR(50)   = NULL,
     @BatchNumber        NVARCHAR(100)  = NULL,
-    -- Integer column filters
-    @ProductPcsInCtn    INT            = NULL,
     -- Decimal column filters
-    @ProductNetto   DECIMAL(18, 2) = NULL,
+    @ProductPcsInCtn    DECIMAL(18, 2) = NULL,
+    @ProductNetto   DECIMAL(18, 4) = NULL,
     @PriceUnit      DECIMAL(18, 2) = NULL,
-    @SaldoAwal      DECIMAL(18, 2) = NULL,
-    @SaldoMasukPO   DECIMAL(18, 2) = NULL,
-    @SaldoAkhir     DECIMAL(18, 2) = NULL,
+    @SaldoAwal      DECIMAL(18, 4) = NULL,
+    @SaldoMasukPO   DECIMAL(18, 4) = NULL,
+    @SaldoAkhir     DECIMAL(18, 4) = NULL,
     -- DateTime column filters
     @ExpiredDate    DATETIME       = NULL,
     @CreatedDate    DATETIME       = NULL
@@ -41,6 +40,8 @@ BEGIN
         [ProductPcsInCtn],
         [ProductNetto],
         [ProductUnit],
+        [SmallestUnit],
+        [SmallestUnitQty],
         [PriceUnit],
         [SaldoAwal],
         [SaldoMasukPO],

@@ -9,4 +9,6 @@ public sealed class ItemMappingListViewModel
     public string? SortBy { get; set; }
     public string? SortDirection { get; set; }
     public IReadOnlyList<ItemMappingDto> Mappings { get; set; } = [];
+    public IReadOnlyList<UnmappedDistributorItemDto> UnmappedItems { get; set; } = [];
+    public bool ItemMappingEnabled { get; set; }
 }

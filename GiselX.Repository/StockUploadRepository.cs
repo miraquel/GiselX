@@ -21,13 +21,17 @@ public sealed class StockUploadRepository(IDbConnection connection, IDbTransacti
         CancellationToken cancellationToken)
     {
         const string sql = """
-            INSERT INTO StockStaging (StockUploadBatchId, SourceRowNumber, ProductId, ProductName,
+            INSERT INTO StockStaging (StockUploadBatchId, StockTemplateMappingId, SourceWorksheetName,
+             SourceRowNumber, ProductId, ProductName,
              DistributorProductId, DistributorProductName, ItemMappingId,
-             ProductPackaging, ProductPcsInCtn, ProductNetto, ProductUnit, PriceUnit, SaldoAwal, SaldoMasukPO,
+             ProductPackaging, ProductPcsInCtn, ProductNetto, ProductUnit, SmallestUnit, SmallestUnitQty,
+             PriceUnit, SaldoAwal, SaldoMasukPO,
              SaldoAkhir, BatchNumber, ExpiredDate, IsValid, ValidationErrorsJson)
-            VALUES (@StockUploadBatchId, @SourceRowNumber, @ProductId, @ProductName,
+            VALUES (@StockUploadBatchId, @StockTemplateMappingId, @SourceWorksheetName,
+             @SourceRowNumber, @ProductId, @ProductName,
              @DistributorProductId, @DistributorProductName, @ItemMappingId,
-             @ProductPackaging, @ProductPcsInCtn, @ProductNetto, @ProductUnit, @PriceUnit, @SaldoAwal, @SaldoMasukPO,
+             @ProductPackaging, @ProductPcsInCtn, @ProductNetto, @ProductUnit, @SmallestUnit, @SmallestUnitQty,
+             @PriceUnit, @SaldoAwal, @SaldoMasukPO,
              @SaldoAkhir, @BatchNumber, @ExpiredDate, @IsValid, @ValidationErrorsJson)
             """;
         foreach (var chunk in rows.Chunk(500))
@@ -46,11 +50,13 @@ public sealed class StockUploadRepository(IDbConnection connection, IDbTransacti
         CancellationToken cancellationToken) => connection.ExecuteAsync(new CommandDefinition("""
             INSERT INTO Stock (ProductId, ProductName, DistributorProductId, DistributorProductName, ItemMappingId,
              ProductPackaging, ProductPcsInCtn, ProductNetto,
-             ProductUnit, PriceUnit, SaldoAwal, SaldoMasukPO, SaldoAkhir, BatchNumber, ExpiredDate,
+             ProductUnit, SmallestUnit, SmallestUnitQty, PriceUnit, SaldoAwal, SaldoMasukPO, SaldoAkhir,
+             BatchNumber, ExpiredDate,
              CompanyId, CreatedDate, StockUploadBatchId, StockDate)
             SELECT COALESCE(s.ProductId,''), COALESCE(s.ProductName,''), s.DistributorProductId,
              s.DistributorProductName, s.ItemMappingId, COALESCE(s.ProductPackaging,''),
-             COALESCE(s.ProductPcsInCtn,0), COALESCE(s.ProductNetto,0), COALESCE(s.ProductUnit,''), s.PriceUnit,
+             COALESCE(s.ProductPcsInCtn,0), COALESCE(s.ProductNetto,0), COALESCE(s.ProductUnit,''),
+             s.SmallestUnit, s.SmallestUnitQty, s.PriceUnit,
              COALESCE(s.SaldoAwal,0), COALESCE(s.SaldoMasukPO,0), s.SaldoAkhir,
              COALESCE(s.BatchNumber,''), COALESCE(s.ExpiredDate,CONVERT(date,'17530101')),
              b.CompanyId, SYSUTCDATETIME(), b.Id, b.StockDate

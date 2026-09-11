@@ -137,7 +137,6 @@ public sealed class StockTemplateMappingService(
         if (dto.Columns.Any(column => column.SourceColumnNumber <= 0)) errors.Add("Every source column number must be greater than zero.");
         if (dto.Columns.Any(column => string.IsNullOrWhiteSpace(column.SourceHeader))) errors.Add("Every mapped source column must have a header.");
         if (dto.Columns.Any(column => !Enum.IsDefined(column.CanonicalField))) errors.Add("Every mapped column must use a valid canonical field.");
-        if (dto.Columns.GroupBy(column => column.SourceColumnNumber).Any(group => group.Count() > 1)) errors.Add("A source column can only be mapped once.");
         if (dto.Columns.GroupBy(column => column.CanonicalField).Any(group => group.Count() > 1)) errors.Add("A canonical field can only be mapped once.");
 
         var mapped = dto.Columns.Select(column => column.CanonicalField).ToHashSet();

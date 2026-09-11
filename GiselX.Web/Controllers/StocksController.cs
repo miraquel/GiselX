@@ -77,25 +77,31 @@ public sealed class StocksController(
             TempData["ErrorMessage"] = string.Join(" ", response.Errors);
             return RedirectToAction(nameof(Index));
         }
+        var includeDistributor = User.IsInRole("Administrator");
+        var columnOffset = includeDistributor ? 1 : 0;
         var stream = ExcelHelper.ExportExcel(response.Data, (row, dto) =>
         {
             if (row.RowNumber() == 1)
             {
                 var headers = new[] { "Product ID", "Product Name", "Packaging", "Pcs/Ctn", "Netto", "Unit",
-                    "Price Unit", "Saldo Awal", "Saldo Masuk PO", "Saldo Akhir", "Batch No", "Expired Date",
-                    "Stock Date" };
-                for (var index = 0; index < headers.Length; index++) row.Cell(index + 1).Value = headers[index];
+                    "Smallest Unit", "Qty per Smallest Unit", "Price Unit", "Saldo Awal", "Saldo Masuk PO",
+                    "Saldo Akhir", "Batch No", "Expired Date", "Stock Date" };
+                if (includeDistributor) row.Cell(1).Value = "Distributor";
+                for (var index = 0; index < headers.Length; index++)
+                    row.Cell(index + 1 + columnOffset).Value = headers[index];
             }
             else
             {
-                row.Cell(1).Value = dto.ProductId; row.Cell(2).Value = dto.ProductName;
-                row.Cell(3).Value = dto.ProductPackaging; row.Cell(4).Value = dto.ProductPcsInCtn;
-                row.Cell(5).Value = dto.ProductNetto; row.Cell(6).Value = dto.ProductUnit;
-                row.Cell(7).Value = dto.PriceUnit; row.Cell(8).Value = dto.SaldoAwal;
-                row.Cell(9).Value = dto.SaldoMasukPO; row.Cell(10).Value = dto.SaldoAkhir;
-                row.Cell(11).Value = dto.BatchNumber;
-                row.Cell(12).Value = dto.ExpiredDate == SqlDateTime.MinValue.Value ? null : dto.ExpiredDate.ToString("yyyy-MM-dd");
-                row.Cell(13).Value = dto.StockDate?.ToString("yyyy-MM-dd");
+                if (includeDistributor) row.Cell(1).Value = dto.CompanyName;
+                row.Cell(1 + columnOffset).Value = dto.ProductId; row.Cell(2 + columnOffset).Value = dto.ProductName;
+                row.Cell(3 + columnOffset).Value = dto.ProductPackaging; row.Cell(4 + columnOffset).Value = dto.ProductPcsInCtn;
+                row.Cell(5 + columnOffset).Value = dto.ProductNetto; row.Cell(6 + columnOffset).Value = dto.ProductUnit;
+                row.Cell(7 + columnOffset).Value = dto.SmallestUnit; row.Cell(8 + columnOffset).Value = dto.SmallestUnitQty;
+                row.Cell(9 + columnOffset).Value = dto.PriceUnit; row.Cell(10 + columnOffset).Value = dto.SaldoAwal;
+                row.Cell(11 + columnOffset).Value = dto.SaldoMasukPO; row.Cell(12 + columnOffset).Value = dto.SaldoAkhir;
+                row.Cell(13 + columnOffset).Value = dto.BatchNumber;
+                row.Cell(14 + columnOffset).Value = dto.ExpiredDate == SqlDateTime.MinValue.Value ? null : dto.ExpiredDate.ToString("yyyy-MM-dd");
+                row.Cell(15 + columnOffset).Value = dto.StockDate?.ToString("yyyy-MM-dd");
             }
         });
         return File(stream, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

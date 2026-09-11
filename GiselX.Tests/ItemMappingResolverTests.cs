@@ -117,5 +117,7 @@ public sealed class ItemMappingResolverTests
         public Task SetActiveAsync(int id, int companyId, bool isActive, string modifiedBy, DateTime modifiedDate, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<ItemMappingDeleteResult> DeleteAsync(int id, int companyId, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task UpsertAsync(IReadOnlyList<ItemMapping> values, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<IReadOnlyList<UnmappedDistributorItem>> GetUnmappedDistributorItemsAsync(int companyId, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
     }
 }

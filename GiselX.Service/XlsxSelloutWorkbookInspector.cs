@@ -49,12 +49,18 @@ public sealed class XlsxSelloutWorkbookInspector : ISelloutWorkbookInspector
             var sheets = ReadSheets(archive);
             result.WorksheetNames = sheets.Select(sheet => sheet.Name).ToList();
 
-            var selected = string.IsNullOrWhiteSpace(worksheetName)
-                ? sheets.FirstOrDefault()
-                : sheets.FirstOrDefault(sheet => string.Equals(sheet.Name, worksheetName, StringComparison.Ordinal));
+
+            var selected = ResolveWorksheet(sheets, worksheetName, out var ambiguous);
+            if (ambiguous.Count > 1)
+            {
+                result.Errors.Add($"Worksheet '{worksheetName}' matches more than one worksheet " +
+                    $"({string.Join(", ", ambiguous.Select(sheet => $"'{sheet.Name}'"))}). Rename the worksheets so they differ by more than letter case or surrounding spaces.");
+                return Task.FromResult(result);
+            }
             if (selected is null)
             {
-                result.Errors.Add($"Worksheet '{worksheetName}' was not found.");
+                result.Errors.Add($"Worksheet '{worksheetName}' was not found. The workbook contains " +
+                    $"{string.Join(", ", sheets.Select(sheet => $"'{sheet.Name}'"))}.");
                 return Task.FromResult(result);
             }
 
@@ -70,14 +76,17 @@ public sealed class XlsxSelloutWorkbookInspector : ISelloutWorkbookInspector
             worksheet.Rows.TryGetValue(headerRowNumber, out var headerCells);
             headerCells ??= new Dictionary<int, string>();
             var width = headerCells.Count == 0 ? 0 : headerCells.Keys.Max();
-            result.Headers = Enumerable.Range(1, width)
-                .Select(column => headerCells.GetValueOrDefault(column, string.Empty)).ToList();
-            result.NormalizedHeaders = result.Headers.Select(SelloutHeaderNormalizer.Normalize).ToList();
-            result.HeaderSignature = SelloutHeaderNormalizer.CreateSignature(result.Headers);
             var mergedHeaderContinuationColumns = worksheet.MergedRanges
                 .Where(range => range.FirstRow == headerRowNumber && range.LastColumn > range.FirstColumn)
                 .SelectMany(range => Enumerable.Range(range.FirstColumn + 1, range.LastColumn - range.FirstColumn))
                 .ToHashSet();
+            var sourceHeaders = Enumerable.Range(1, width)
+                .Select(column => headerCells.GetValueOrDefault(column, string.Empty));
+            result.Headers = SelloutHeaderNormalizer.CreateDisplayHeaders(
+                sourceHeaders,
+                mergedHeaderContinuationColumns).ToList();
+            result.NormalizedHeaders = result.Headers.Select(SelloutHeaderNormalizer.Normalize).ToList();
+            result.HeaderSignature = SelloutHeaderNormalizer.CreateSignature(result.Headers);
             result.Errors.AddRange(SelloutHeaderNormalizer.ValidateHeaders(
                 result.Headers,
                 mergedHeaderContinuationColumns));
@@ -112,6 +121,7 @@ public sealed class XlsxSelloutWorkbookInspector : ISelloutWorkbookInspector
         CancellationToken cancellationToken = default)
     {
         var matches = new List<DistributorTemplateMappingDto>();
+        var rejections = new List<string>();
         foreach (var mapping in mappings.Where(mapping => mapping.IsActive))
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -124,7 +134,10 @@ public sealed class XlsxSelloutWorkbookInspector : ISelloutWorkbookInspector
             if (preview.Errors.Count == 0 && string.Equals(preview.HeaderSignature, mapping.HeaderSignature, StringComparison.Ordinal))
             {
                 matches.Add(mapping);
+                continue;
             }
+
+            rejections.Add($"{mapping.Name}: {DescribeRejection(preview, mapping.HeaderSignature)}");
         }
 
         if (matches.Count == 1)
@@ -136,10 +149,46 @@ public sealed class XlsxSelloutWorkbookInspector : ISelloutWorkbookInspector
         {
             CandidateMappingNames = matches.Select(mapping => mapping.Name).OrderBy(name => name, StringComparer.Ordinal).ToList()
         };
-        result.Errors.Add(matches.Count == 0
-            ? "No active distributor mapping exactly matches this workbook."
-            : "Multiple active distributor mappings exactly match this workbook.");
+        if (matches.Count == 0)
+        {
+            result.Errors.Add(rejections.Count == 0
+                ? "No active distributor mapping is configured for this company."
+                : "No active distributor mapping matches this workbook.");
+            result.Errors.AddRange(rejections);
+        }
+        else
+        {
+            result.Errors.Add("Multiple active distributor mappings exactly match this workbook: " +
+                string.Join(", ", result.CandidateMappingNames) + ". Deactivate all but one.");
+        }
+
         return result;
+    }
+
+    /// <summary>
+    /// Explains why one template was not used, so a failed upload names the thing to fix instead of
+    /// reporting only that nothing matched.
+    /// </summary>
+    internal static string DescribeRejection(SelloutWorkbookPreviewDto preview, string expectedSignature)
+    {
+        if (preview.Errors.Count > 0) return string.Join(" ", preview.Errors);
+
+        var expected = expectedSignature.Split(SelloutHeaderNormalizer.SignatureSeparator);
+        var actual = preview.NormalizedHeaders.ToArray();
+        if (expected.Length != actual.Length)
+        {
+            return $"the header row has {actual.Length} column(s) but the template expects {expected.Length}.";
+        }
+
+        var differences = expected.Zip(actual, (want, got) => (Want: want, Got: got))
+            .Select((pair, index) => (pair.Want, pair.Got, Column: index + 1))
+            .Where(pair => !string.Equals(pair.Want, pair.Got, StringComparison.Ordinal))
+            .Take(3)
+            .Select(pair => $"column {pair.Column} is '{pair.Got}' but the template expects '{pair.Want}'")
+            .ToList();
+        return differences.Count == 0
+            ? "the header signature differs from the template."
+            : "the header row differs - " + string.Join("; ", differences) + ".";
     }
 
     internal static IReadOnlyDictionary<int, IReadOnlyDictionary<int, string>> ReadWorksheet(
@@ -149,7 +198,7 @@ public sealed class XlsxSelloutWorkbookInspector : ISelloutWorkbookInspector
     {
         using var stream = new MemoryStream(workbook, writable: false);
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
-        var sheet = ReadSheets(archive).FirstOrDefault(item => string.Equals(item.Name, worksheetName, StringComparison.Ordinal))
+        var sheet = ResolveWorksheet(ReadSheets(archive), worksheetName, out _)
             ?? throw new InvalidDataException($"Worksheet '{worksheetName}' was not found.");
         var worksheet = ReadWorksheetData(archive, sheet.Path, ReadSharedStrings(archive));
         return ExpandVerticalMergedValues(worksheet, firstDataRowNumber);
@@ -159,9 +208,37 @@ public sealed class XlsxSelloutWorkbookInspector : ISelloutWorkbookInspector
     {
         using var stream = new MemoryStream(workbook, writable: false);
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
-        var sheet = ReadSheets(archive).FirstOrDefault(item => string.Equals(item.Name, worksheetName, StringComparison.Ordinal))
+        var sheet = ResolveWorksheet(ReadSheets(archive), worksheetName, out _)
             ?? throw new InvalidDataException($"Worksheet '{worksheetName}' was not found.");
         return ReadWorksheetData(archive, sheet.Path, ReadSharedStrings(archive));
+    }
+
+    /// <summary>
+    /// Finds the worksheet a template points at. An exact name wins outright; failing that the name is
+    /// matched ignoring letter case and surrounding whitespace, because export tools vary the tab name
+    /// between runs ("laporan penjualan" one month, "laporan penjualan " the next) and the header
+    /// signature — not the tab name — is what actually identifies a template. A loose match that hits
+    /// more than one worksheet is reported through <paramref name="ambiguousMatches"/> instead of guessed.
+    /// </summary>
+    private static WorksheetDefinition? ResolveWorksheet(List<WorksheetDefinition> sheets, string? worksheetName,
+        out IReadOnlyList<WorksheetDefinition> ambiguousMatches)
+    {
+        ambiguousMatches = [];
+        if (string.IsNullOrWhiteSpace(worksheetName)) return sheets.FirstOrDefault();
+
+        var exact = sheets.FirstOrDefault(sheet => string.Equals(sheet.Name, worksheetName, StringComparison.Ordinal));
+        if (exact is not null) return exact;
+
+        var loose = sheets
+            .Where(sheet => string.Equals(sheet.Name.Trim(), worksheetName.Trim(), StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (loose.Count > 1)
+        {
+            ambiguousMatches = loose;
+            return null;
+        }
+
+        return loose.SingleOrDefault();
     }
 
     private static List<WorksheetDefinition> ReadSheets(ZipArchive archive)

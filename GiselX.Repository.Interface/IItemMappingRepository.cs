@@ -13,4 +13,6 @@ public interface IItemMappingRepository
         CancellationToken cancellationToken);
     Task<ItemMappingDeleteResult> DeleteAsync(int id, int companyId, CancellationToken cancellationToken);
     Task UpsertAsync(IReadOnlyList<ItemMapping> values, CancellationToken cancellationToken);
+    Task<IReadOnlyList<UnmappedDistributorItem>> GetUnmappedDistributorItemsAsync(int companyId,
+        CancellationToken cancellationToken);
 }

@@ -1,24 +1,125 @@
 @using GiselX.Domain
+@using GiselX.Service
 @model GiselX.Web.Models.StockTemplateMappingEditViewModel
 @{ ViewData["Title"] = Model.Id.HasValue ? "Edit Stock Mapping" : "Add Stock Mapping"; Layout = "_ContentNavbarLayout"; }
 <div class="card"><div class="card-header"><h5>@ViewData["Title"]</h5></div><div class="card-body">
 <form asp-action="Save" method="post" enctype="multipart/form-data" id="mappingForm">
     <input asp-for="CompanyId" type="hidden"/><input asp-for="Id" type="hidden"/><div asp-validation-summary="All" class="text-danger"></div>
     <div class="mb-3"><label asp-for="Name" class="form-label"></label><input asp-for="Name" class="form-control" required/></div>
-    <div class="mb-3"><label class="form-label">Sample .xlsx file</label><input type="file" name="sampleFile" id="sampleFile" class="form-control" accept=".xlsx" required/></div>
+    <div class="mb-3"><label class="form-label">Sample .xlsx or .xls file</label><input type="file" name="sampleFile" id="sampleFile" class="form-control" accept=".xlsx,.xls" required/></div>
     <div class="row"><div class="col-md-4 mb-3"><label asp-for="WorksheetName" class="form-label"></label><input asp-for="WorksheetName" class="form-control"/></div><div class="col-md-4 mb-3"><label asp-for="HeaderRowNumber" class="form-label"></label><input asp-for="HeaderRowNumber" class="form-control" min="1"/></div><div class="col-md-4 mb-3"><label asp-for="FirstDataRowNumber" class="form-label"></label><input asp-for="FirstDataRowNumber" class="form-control" min="2"/></div></div>
     <button type="button" class="btn btn-info" id="inspect">Inspect sample</button>
-    <div class="table-responsive mt-3"><table class="table" id="columns"><thead><tr><th>Column</th><th>Source header</th><th>Stock field</th></tr></thead><tbody>
-    @for (var i = 0; i < Model.Columns.Count; i++) { <tr><td>@Model.Columns[i].SourceColumnNumber<input asp-for="Columns[i].SourceColumnNumber" type="hidden"/></td><td>@Model.Columns[i].SourceHeader</td><td><select asp-for="Columns[i].CanonicalField" asp-items="Html.GetEnumSelectList<StockCanonicalField>()" class="form-select"><option value="">Ignore</option></select></td></tr> }
+    <div class="table-responsive mt-3"><table class="table" id="columns"><thead><tr><th>Canonical field</th><th>Source header</th></tr></thead><tbody>
+    @for (var i = 0; i < Model.Columns.Count; i++)
+    {
+        <tr>
+            <td>
+                @Model.Columns[i].CanonicalField
+                @if (Model.Columns[i].CanonicalField is { } canonicalField)
+                {
+                    <span class="badge bg-label-info ms-1">@StockCanonicalFieldCatalog.GetValueTypeLabel(canonicalField)</span>
+                    if (StockCanonicalFieldCatalog.RequiredFields.Contains(canonicalField))
+                    {
+                        <span class="badge bg-label-danger ms-1">Required</span>
+                    }
+                }
+                <input asp-for="Columns[i].CanonicalField" type="hidden" />
+            </td>
+            <td>
+                <select asp-for="Columns[i].SourceColumnNumber" class="form-select source-header-select" data-canonical-value="@((int?)Model.Columns[i].CanonicalField)">
+                    <option value="0">Not mapped</option>
+                    @if (Model.Columns[i].SourceColumnNumber > 0)
+                    {
+                        <option value="@Model.Columns[i].SourceColumnNumber" data-header="@Model.Columns[i].SourceHeader">@Model.Columns[i].SourceColumnNumber — @Model.Columns[i].SourceHeader</option>
+                    }
+                </select>
+                <input asp-for="Columns[i].SourceHeader" type="hidden" class="source-header-value" />
+            </td>
+        </tr>
+    }
     </tbody></table></div>
     <button class="btn btn-primary" type="submit">Save Mapping</button> <a asp-controller="Companies" asp-action="Edit" asp-route-id="@Model.CompanyId" class="btn btn-secondary">Cancel</a>
 </form></div></div>
+<div class="modal fade" id="stockSourceReuseConfirmationModal" tabindex="-1" aria-labelledby="stockSourceReuseConfirmationTitle" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title" id="stockSourceReuseConfirmationTitle">Reuse source header?</h5></div>
+            <div class="modal-body">
+                <p class="mb-0">Source header <strong id="stockReusedSourceHeader"></strong> is already mapped to <strong id="stockExistingCanonicalFields"></strong>. Do you also want to map it to <strong id="stockRequestedCanonicalField"></strong>?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="rejectStockSourceReuse">No</button>
+                <button type="button" class="btn btn-primary" id="confirmStockSourceReuse">Yes</button>
+            </div>
+        </div>
+    </div>
+</div>
 <script>
+const stockCanonicalFields = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(
+    Enum.GetValues<StockCanonicalField>().Select(field => new
+    {
+        value = (int)field,
+        name = field.ToString(),
+        type = StockCanonicalFieldCatalog.GetValueTypeLabel(field),
+        required = StockCanonicalFieldCatalog.RequiredFields.Contains(field)
+    })));
+const encode = value => { const span = document.createElement('span'); span.textContent = value ?? ''; return span.innerHTML; };
+const updateStockSourceHeaderValue = select => {
+ const option = select.options[select.selectedIndex];
+ select.closest('td').querySelector('.source-header-value').value = option?.dataset.header ?? '';
+};
+let pendingStockSourceReuse = null;
+const stockCanonicalFieldName = select => stockCanonicalFields.find(field => String(field.value) === select.dataset.canonicalValue)?.name ?? 'this field';
+const acceptStockSourceSelection = select => {
+ updateStockSourceHeaderValue(select);
+ select.dataset.previousValue = select.value;
+};
+const handleStockSourceSelection = select => {
+ const matchingSelects = [...document.querySelectorAll('.source-header-select')]
+   .filter(other => other !== select && select.value !== '0' && other.value === select.value);
+ if (!matchingSelects.length) { acceptStockSourceSelection(select); return; }
+
+ pendingStockSourceReuse = { select, previousValue: select.dataset.previousValue ?? '0' };
+ const option = select.options[select.selectedIndex];
+ document.getElementById('stockReusedSourceHeader').textContent = option?.dataset.header ?? option?.textContent ?? '';
+ document.getElementById('stockExistingCanonicalFields').textContent = matchingSelects.map(stockCanonicalFieldName).join(', ');
+ document.getElementById('stockRequestedCanonicalField').textContent = stockCanonicalFieldName(select);
+ bootstrap.Modal.getOrCreateInstance(document.getElementById('stockSourceReuseConfirmationModal')).show();
+};
+const wireStockSourceSelects = () => {
+ document.querySelectorAll('.source-header-select').forEach(select => {
+   select.dataset.previousValue = select.value;
+   select.addEventListener('change', () => handleStockSourceSelection(select));
+ });
+};
+document.getElementById('confirmStockSourceReuse').addEventListener('click', () => {
+ if (!pendingStockSourceReuse) return;
+ acceptStockSourceSelection(pendingStockSourceReuse.select);
+ pendingStockSourceReuse = null;
+ bootstrap.Modal.getInstance(document.getElementById('stockSourceReuseConfirmationModal'))?.hide();
+});
+document.getElementById('rejectStockSourceReuse').addEventListener('click', () => {
+ if (!pendingStockSourceReuse) return;
+ pendingStockSourceReuse.select.value = pendingStockSourceReuse.previousValue;
+ updateStockSourceHeaderValue(pendingStockSourceReuse.select);
+ pendingStockSourceReuse = null;
+ bootstrap.Modal.getInstance(document.getElementById('stockSourceReuseConfirmationModal'))?.hide();
+});
+wireStockSourceSelects();
 document.getElementById('inspect').onclick = async () => {
  const form = document.getElementById('mappingForm'), data = new FormData();
  data.append('sampleFile', document.getElementById('sampleFile').files[0]); data.append('worksheetName', form.WorksheetName.value); data.append('headerRowNumber', form.HeaderRowNumber.value); data.append('firstDataRowNumber', form.FirstDataRowNumber.value); data.append('__RequestVerificationToken', form.querySelector('[name=__RequestVerificationToken]').value);
  const response = await fetch('@Url.Action("Inspect")', {method:'POST', body:data}); const p = await response.json(); if (p.errors?.length) { alert(p.errors.join('\n')); return; } form.WorksheetName.value = p.worksheetName;
- const fields = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Enum.GetNames<StockCanonicalField>())); const encode = value => { const span = document.createElement('span'); span.textContent = value ?? ''; return span.innerHTML; };
- document.querySelector('#columns tbody').innerHTML = p.headers.map((h,i) => `<tr><td>${i+1}<input type="hidden" name="Columns[${i}].SourceColumnNumber" value="${i+1}"></td><td>${encode(h)}</td><td><select class="form-select" name="Columns[${i}].CanonicalField"><option value="">Ignore</option>${fields.map((f,n)=>`<option value="${n}">${f}</option>`).join('')}</select></td></tr>`).join('');
+ const previous = new Map([...document.querySelectorAll('.source-header-select')]
+   .map(select => [select.dataset.canonicalValue, select.value]));
+ const headers = p.headers.map((header, index) => ({number: index + 1, header}))
+   .filter(item => item.header?.trim());
+ document.querySelector('#columns tbody').innerHTML = stockCanonicalFields.map((field, index) => {
+   const selected = previous.get(String(field.value)) ?? '0';
+   const options = headers.map(item => `<option value="${item.number}" data-header="${encode(item.header)}" ${String(item.number) === selected ? 'selected' : ''}>${item.number} — ${encode(item.header)}</option>`).join('');
+   return `<tr><td>${encode(field.name)}<span class="badge bg-label-info ms-1">${encode(field.type)}</span>${field.required ? '<span class="badge bg-label-danger ms-1">Required</span>' : ''}<input type="hidden" name="Columns[${index}].CanonicalField" value="${field.value}"></td><td><select class="form-select source-header-select" data-canonical-value="${field.value}" name="Columns[${index}].SourceColumnNumber"><option value="0">Not mapped</option>${options}</select><input type="hidden" class="source-header-value" name="Columns[${index}].SourceHeader" value=""></td></tr>`;
+ }).join('');
+ wireStockSourceSelects();
+ document.querySelectorAll('.source-header-select').forEach(updateStockSourceHeaderValue);
 };
 </script>

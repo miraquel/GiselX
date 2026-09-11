@@ -1,5 +1,7 @@
 ﻿using System.Data.SqlTypes;
 
+using System.ComponentModel.DataAnnotations.Schema;
+
 namespace GiselX.Domain;
 
 public class ServiceLevel
@@ -22,4 +24,5 @@ public class ServiceLevel
     public string CreatedBy { get; set; } = string.Empty;
     public DateTime CreatedDate { get; set; } = SqlDateTime.MinValue.Value;
     public int CompanyId { get; set; }
+    [NotMapped] public string CompanyName { get; set; } = string.Empty;
 }

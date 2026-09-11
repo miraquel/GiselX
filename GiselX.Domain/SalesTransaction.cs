@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations.Schema;
 using System.Data.SqlTypes;
 
 namespace GiselX.Domain;
@@ -16,7 +17,7 @@ public class SalesTransaction
     public string? DistributorProductName { get; set; }
     public int? ItemMappingId { get; set; }
     public string ProductPackaging { get; set; } = string.Empty;
-    public int ProductPcsInCtn { get; set; }
+    public decimal ProductPcsInCtn { get; set; }
     public string BatchNumber { get; set; } = string.Empty;
     public DateTime ExpiredDate { get; set; } = SqlDateTime.MinValue.Value;
     public string InvoiceNo { get; set; } = string.Empty;
@@ -36,6 +37,7 @@ public class SalesTransaction
     public DateTime CreatedDate { get; set; } = SqlDateTime.MinValue.Value;
     public long? SelloutUploadBatchId { get; set; }
     public DateTime? ReportingWeekStart { get; set; }
+    [NotMapped] public string CompanyName { get; set; } = string.Empty;
 
     public virtual Company Company { get; set; } = null!;
     public virtual ItemMapping? ItemMapping { get; set; }

@@ -22,7 +22,7 @@ public class SalesTransactionDto
     [Display(Name = "Product Packaging")]
     public string ProductPackaging { get; set; } = string.Empty;
     [Display(Name = "Pcs/Ctn")]
-    public int ProductPcsInCtn { get; set; }
+    public decimal ProductPcsInCtn { get; set; }
     [Display(Name = "Batch No")]
     public string BatchNumber { get; set; } = string.Empty;
     [Display(Name = "Expired Date")]
@@ -56,4 +56,6 @@ public class SalesTransactionDto
     public int CompanyId { get; set; }
     [Display(Name = "Created Date")]
     public DateTime CreatedDate { get; set; } = SqlDateTime.MinValue.Value;
+    [Display(Name = "Distributor")]
+    public string CompanyName { get; set; } = string.Empty;
 }

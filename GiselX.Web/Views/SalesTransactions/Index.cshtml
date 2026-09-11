@@ -41,7 +41,7 @@
                 <form id="selloutUploadForm" asp-controller="SalesTransactions" asp-action="Upload" method="post" enctype="multipart/form-data">
                     <input type="hidden" id="multiWeekConfirmed" name="multiWeekConfirmed" value="false" />
                     <div class="input-group">
-                        <input type="file" id="fileInput" name="file" class="form-control" aria-describedby="fileInputAddon" aria-label="Upload" accept="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
+                        <input type="file" id="fileInput" name="file" class="form-control" aria-describedby="fileInputAddon" aria-label="Upload" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" required>
                         <button type="submit" class="btn btn-outline-success material-shadow-none" id="fileInputAddon">
                             <span class="ri-upload-2-fill me-1"></span>
                             Upload
@@ -58,11 +58,26 @@
                 <select id="monthSelect" name="month" class="form-control"></select>
             </div>
         </div>
+        @if (User.IsInRole("Administrator"))
+        {
+            <div class="mt-4">
+                <div class="d-flex justify-content-between align-items-center mb-2"><h6 class="mb-0">Selected data summary</h6><small class="text-muted">Updates with period, distributor, search, and column filters</small></div>
+                <div class="row g-2" id="salesSelectionSummary">
+                    <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Distributors</small><div class="fs-5 fw-semibold" id="salesSummaryDistributors">—</div></div></div>
+                    <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Rows</small><div class="fs-5 fw-semibold" id="salesSummaryRows">—</div></div></div>
+                    <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Invoice quantity</small><div class="fs-5 fw-semibold" id="salesSummaryQty">—</div></div></div>
+                    <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Gross value</small><div class="fs-5 fw-semibold" id="salesSummaryGross">—</div></div></div>
+                    <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Discount</small><div class="fs-5 fw-semibold" id="salesSummaryDiscount">—</div></div></div>
+                    <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Net value</small><div class="fs-5 fw-semibold" id="salesSummaryNet">—</div></div></div>
+                </div>
+            </div>
+        }
     </div>
     <div class="card-datatable text-nowrap">
         <table id="salestransaction-table" class="datatables-basic table table-bordered" style="width: 100%;">
             <thead>
             <tr>
+                @if (User.IsInRole("Administrator")) { <th>@Html.DisplayNameFor(m => m.CompanyName)</th> }
                 <th>@Html.DisplayNameFor(m => m.InvoiceNo)</th>
                 <th>@Html.DisplayNameFor(m => m.InvoiceDate)</th>
                 <th>@Html.DisplayNameFor(m => m.CustomerId)</th>
@@ -86,6 +101,7 @@
             </tr>
             </thead>
             <tfoot>
+                @if (User.IsInRole("Administrator")) { <th>@Html.DisplayNameFor(m => m.CompanyName)</th> }
                 <th>@Html.DisplayNameFor(m => m.InvoiceNo)</th>
                 <th>@Html.DisplayNameFor(m => m.InvoiceDate)</th>
                 <th>@Html.DisplayNameFor(m => m.CustomerId)</th>
@@ -112,25 +128,50 @@
 </div>
 
 <div class="modal fade" id="selloutUploadPreviewModal" tabindex="-1" aria-labelledby="selloutUploadPreviewTitle" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="selloutUploadPreviewTitle">Review sales transaction upload</h5>
+                <h5 class="modal-title" id="selloutUploadPreviewTitle">Sellout upload summary</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <div id="uploadPreviewMessage" class="alert d-none" role="alert"></div>
-                <dl class="row mb-3">
-                    <dt class="col-sm-4">Detected mapping</dt><dd class="col-sm-8" id="previewMapping">-</dd>
-                    <dt class="col-sm-4">Transaction rows</dt><dd class="col-sm-8" id="previewRows">-</dd>
-                    <dt class="col-sm-4">Ignored summary rows</dt><dd class="col-sm-8" id="previewIgnoredRows">None</dd>
-                </dl>
+                <div class="row g-3 mb-4">
+                    <div class="col-sm-6 col-xl-3"><div class="border rounded p-3 h-100"><div class="text-muted small">Total transaction rows</div><div class="fs-3 fw-semibold" id="previewTotalRows">0</div></div></div>
+                    <div class="col-sm-6 col-xl-3"><div class="border border-success rounded p-3 h-100"><div class="text-success small">Ready to publish</div><div class="fs-3 fw-semibold text-success" id="previewValidRows">0</div></div></div>
+                    <div class="col-sm-6 col-xl-3"><div class="border border-danger rounded p-3 h-100"><div class="text-danger small">Invalid rows</div><div class="fs-3 fw-semibold text-danger" id="previewInvalidRows">0</div></div></div>
+                    <div class="col-sm-6 col-xl-3"><div class="border rounded p-3 h-100"><div class="text-muted small">Ignored summary rows</div><div class="fs-3 fw-semibold" id="previewIgnoredRowCount">0</div></div></div>
+                </div>
+                <div class="row g-4 mb-4">
+                    <div class="col-lg-6">
+                        <h6 class="mb-3">Upload information</h6>
+                        <dl class="row mb-0">
+                            <dt class="col-sm-4">File</dt><dd class="col-sm-8 text-break" id="previewFileName">-</dd>
+                            <dt class="col-sm-4">Detected mapping</dt><dd class="col-sm-8" id="previewMapping">-</dd>
+                            <dt class="col-sm-4">Ignored row numbers</dt><dd class="col-sm-8" id="previewIgnoredRows">None</dd>
+                        </dl>
+                    </div>
+                    <div class="col-lg-6">
+                        <h6 class="mb-3">Sellout totals from valid rows</h6>
+                        <div class="table-responsive"><table class="table table-sm table-bordered mb-0"><tbody>
+                            <tr><th>Invoice quantity</th><td class="text-end fw-semibold" id="previewInvoiceQty">0</td></tr>
+                            <tr><th>Gross value</th><td class="text-end fw-semibold" id="previewGrossValue">0</td></tr>
+                            <tr><th>Discount value</th><td class="text-end fw-semibold" id="previewDiscountValue">0</td></tr>
+                            <tr><th>Net value</th><td class="text-end fw-semibold" id="previewNetValue">0</td></tr>
+                        </tbody></table></div>
+                        <div class="form-text mt-2">Totals include only valid rows. Missing gross or net values are derived from quantity, unit price, and discount when possible.</div>
+                    </div>
+                </div>
                 <h6>Affected reporting weeks</h6>
                 <div class="table-responsive">
                     <table class="table table-sm table-bordered">
                         <thead><tr><th>Week (Monday–Sunday)</th><th class="text-end">Rows</th></tr></thead>
                         <tbody id="previewWeeks"></tbody>
                     </table>
+                </div>
+                <div id="previewWarningsContainer" class="d-none">
+                    <h6 class="text-warning">Before you confirm</h6>
+                    <ul id="previewWarnings" class="mb-3"></ul>
                 </div>
                 <div id="previewErrorsContainer" class="d-none">
                     <h6 class="text-danger">Validation errors</h6>
@@ -139,7 +180,7 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-success" id="confirmSelloutUpload">Confirm and upload</button>
+                <button type="button" class="btn btn-success" id="confirmSelloutUpload"><span class="ri-upload-2-fill me-1"></span>Confirm and upload</button>
             </div>
         </div>
     </div>
@@ -162,7 +203,31 @@
             const uploadButton = document.getElementById('fileInputAddon');
             const previewModalElement = document.getElementById('selloutUploadPreviewModal');
             const previewModal = previewModalElement ? new bootstrap.Modal(previewModalElement) : null;
+            const numberFormatter = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 });
+            let lastSalesQuery = {};
+            let salesSummaryRequest = 0;
             let table;
+
+            async function refreshSalesSummary(query) {
+                @if (User.IsInRole("Administrator"))
+                {
+                    <text>
+                    try {
+                        const requestId = ++salesSummaryRequest;
+                        const parameters = new URLSearchParams(Object.entries(query).filter(([, value]) => value !== null && value !== undefined && value !== ''));
+                        const response = await fetch(`/api/SalesTransactions/Summary?${parameters}`);
+                        const payload = await response.json(); if (requestId !== salesSummaryRequest) return; const data = payload.data;
+                        if (!response.ok || !data) throw new Error(payload.message || 'Summary unavailable');
+                        $('#salesSummaryDistributors').text(numberFormatter.format(data.distributorCount || 0));
+                        $('#salesSummaryRows').text(numberFormatter.format(data.rowCount || 0));
+                        $('#salesSummaryQty').text(numberFormatter.format(data.invoiceQty || 0));
+                        $('#salesSummaryGross').text(numberFormatter.format(data.grossValue || 0));
+                        $('#salesSummaryDiscount').text(numberFormatter.format(data.discountValue || 0));
+                        $('#salesSummaryNet').text(numberFormatter.format(data.netValue || 0));
+                    } catch { $('#salesSelectionSummary .fw-semibold').text('Unavailable'); }
+                    </text>
+                }
+            }
 
             function addTextRow(target, cells) {
                 const row = document.createElement('tr');
@@ -187,11 +252,19 @@
 
             function showUploadPreview(response) {
                 const data = response.data || {};
-                const errors = [...(response.errors || []), ...(data.errors || [])];
+                const errors = [...new Set([...(response.errors || []), ...(data.errors || [])])];
+                document.getElementById('previewTotalRows').textContent = numberFormatter.format(data.totalRows || 0);
+                document.getElementById('previewValidRows').textContent = numberFormatter.format(data.validRows || 0);
+                document.getElementById('previewInvalidRows').textContent = numberFormatter.format(data.invalidRows || 0);
+                document.getElementById('previewIgnoredRowCount').textContent = numberFormatter.format(data.ignoredSummaryRowNumbers?.length || 0);
+                document.getElementById('previewFileName').textContent = document.getElementById('fileInput')?.files?.[0]?.name || '-';
                 document.getElementById('previewMapping').textContent = data.mappingName || 'Not detected';
-                document.getElementById('previewRows').textContent = `${data.totalRows || 0} total, ${data.validRows || 0} valid, ${data.invalidRows || 0} invalid`;
                 document.getElementById('previewIgnoredRows').textContent = data.ignoredSummaryRowNumbers?.length
                     ? data.ignoredSummaryRowNumbers.join(', ') : 'None';
+                document.getElementById('previewInvoiceQty').textContent = numberFormatter.format(data.totalInvoiceQty || 0);
+                document.getElementById('previewGrossValue').textContent = numberFormatter.format(data.totalGrossValue || 0);
+                document.getElementById('previewDiscountValue').textContent = numberFormatter.format(data.totalDiscountValue || 0);
+                document.getElementById('previewNetValue').textContent = numberFormatter.format(data.totalNetValue || 0);
 
                 const weeksBody = document.getElementById('previewWeeks');
                 weeksBody.replaceChildren();
@@ -199,12 +272,25 @@
                     `${dateOnly(week.reportingWeekStart)} – ${weekEnd(week.reportingWeekStart)}`,
                     String(week.rowCount)
                 ]));
+                if (!(data.weeks || []).length) addTextRow(weeksBody, ['No reporting week detected', '0']);
 
                 const message = document.getElementById('uploadPreviewMessage');
                 message.textContent = data.isMultiWeek
                     ? 'This workbook affects multiple reporting weeks. Confirming will replace every week listed below as one all-or-nothing upload.'
                     : 'Confirm the reporting week derived from the workbook invoice dates.';
                 message.className = `alert ${errors.length ? 'alert-danger' : data.isMultiWeek ? 'alert-warning' : 'alert-info'}`;
+
+                // Warnings describe what confirming will destroy; unlike errors they must not hide Confirm.
+                const warnings = data.warnings || data.Warnings || [];
+                const warningList = document.getElementById('previewWarnings');
+                warningList.replaceChildren();
+                warnings.forEach(warning => {
+                    const item = document.createElement('li');
+                    item.className = 'text-warning-emphasis';
+                    item.textContent = warning;
+                    warningList.appendChild(item);
+                });
+                document.getElementById('previewWarningsContainer').classList.toggle('d-none', warnings.length === 0);
 
                 const errorContainer = document.getElementById('previewErrorsContainer');
                 const errorList = document.getElementById('previewErrors');
@@ -384,6 +470,7 @@
                             });
                             query['Filters.Year'] = yearSelect.val();
                             query['Filters.Month'] = monthSelect.val();
+                            lastSalesQuery = query;
                             return query;
                         },
                         beforeSend: function(xhr) {
@@ -392,6 +479,7 @@
                         dataSrc: function(json) {
                             if (!canLoadTable()) return [];
                             if (json.data && Array.isArray(json.data.items)) {
+                                refreshSalesSummary(lastSalesQuery);
                                 json.recordsTotal = json.data.totalCount;
                                 json.recordsFiltered = json.data.totalCount;
                                 return json.data.items;
@@ -403,6 +491,7 @@
                         }
                     },
                     columns: [
+                        @if (User.IsInRole("Administrator")) { <text>{ data: 'companyName', width: '160px' },</text> }
                         { data: 'invoiceNo', width: '120px' },
                         {
                             data: 'invoiceDate', width: '120px',
@@ -455,7 +544,7 @@
                         { data: 'salesmanNameGMK' }
                     ],
                     columnDefs: [
-                        { targets: [0, 1, 2, 4, 8, 9, 11, 18], className: 'text-center' }
+                        { targets: @Html.Raw(User.IsInRole("Administrator") ? "[1, 2, 3, 5, 9, 10, 12, 19]" : "[0, 1, 2, 4, 8, 9, 11, 18]"), className: 'text-center' }
                     ],
                     initComplete: function () {
                         $('.dt-layout-table').removeClass('mt-2');

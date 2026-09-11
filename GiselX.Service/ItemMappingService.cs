@@ -8,7 +8,8 @@ using Microsoft.AspNetCore.Http;
 
 namespace GiselX.Service;
 
-public sealed class ItemMappingService(IItemMappingRepository repository, IDbTransaction dbTransaction)
+public sealed class ItemMappingService(IItemMappingRepository repository, ICompanyRepository companyRepository,
+    IDbTransaction dbTransaction)
     : IItemMappingService
 {
     public async Task<ServiceResponse<IReadOnlyList<ItemMappingDto>>> ListAsync(int companyId, CancellationToken token)
@@ -18,6 +19,33 @@ public sealed class ItemMappingService(IItemMappingRepository repository, IDbTra
         {
             Data = mappings.Select(ToDto).ToList(),
             Message = "Item mappings retrieved successfully."
+        };
+    }
+
+    public async Task<ServiceResponse<UnmappedDistributorItemListDto>> ListUnmappedAsync(int companyId,
+        CancellationToken token)
+    {
+        // With item mapping disabled the resolver passes distributor ids straight through, leaving ItemMappingId
+        // NULL on every staging row. Those are not unmapped items, so discovery stays off for the company.
+        var company = await companyRepository.GetCompanyByIdAsync(companyId, token);
+        if (company?.ItemMappingEnabled != true)
+        {
+            return new ServiceResponse<UnmappedDistributorItemListDto>
+            {
+                Data = new UnmappedDistributorItemListDto(),
+                Message = "Item mapping is not enabled for this company."
+            };
+        }
+
+        var items = await repository.GetUnmappedDistributorItemsAsync(companyId, token);
+        return new ServiceResponse<UnmappedDistributorItemListDto>
+        {
+            Data = new UnmappedDistributorItemListDto
+            {
+                ItemMappingEnabled = true,
+                Items = items.Select(ToDto).ToList()
+            },
+            Message = "Unmapped distributor items retrieved successfully."
         };
     }
 
@@ -82,7 +110,7 @@ public sealed class ItemMappingService(IItemMappingRepository repository, IDbTra
                 GmkItemName = dto.GmkItemName.Trim(),
                 DistributorItemId = dto.DistributorItemId.Trim(),
                 DistributorItemName = dto.DistributorItemName.Trim(),
-                IsActive = true,
+                IsActive = dto.IsActive,
                 CreatedBy = username,
                 CreatedDate = now
             };
@@ -169,6 +197,7 @@ public sealed class ItemMappingService(IItemMappingRepository repository, IDbTra
         mapping.GmkItemName = dto.GmkItemName.Trim();
         mapping.DistributorItemId = dto.DistributorItemId.Trim();
         mapping.DistributorItemName = dto.DistributorItemName.Trim();
+        mapping.IsActive = dto.IsActive;
     }
 
     private static ItemMappingDto ToDto(ItemMapping mapping) => new()
@@ -184,5 +213,16 @@ public sealed class ItemMappingService(IItemMappingRepository repository, IDbTra
         CreatedBy = mapping.CreatedBy,
         ModifiedDate = mapping.ModifiedDate,
         ModifiedBy = mapping.ModifiedBy
+    };
+
+    private static UnmappedDistributorItemDto ToDto(UnmappedDistributorItem item) => new()
+    {
+        DistributorItemId = item.DistributorItemId,
+        DistributorItemName = item.DistributorItemName ?? string.Empty,
+        SeenInStock = item.SeenInStock,
+        SeenInSellout = item.SeenInSellout,
+        OccurrenceCount = item.OccurrenceCount,
+        FirstSeenDate = item.FirstSeenDate,
+        LastSeenDate = item.LastSeenDate
     };
 }

@@ -14,19 +14,25 @@ public class CompanyService : ICompanyService
     private readonly IItemMappingRepository _itemMappingRepository;
     private readonly IDbTransaction _dbTransaction;
     private readonly UserClaimDto _userClaimDto;
+    private readonly IBusinessUnitRepository? _businessUnitRepository;
     private readonly MapperlyMapper _mapper = new();
 
     public CompanyService(ICompanyRepository companyRepository, IItemMappingRepository itemMappingRepository,
-        IDbTransaction dbTransaction, UserClaimDto userClaimDto)
+        IDbTransaction dbTransaction, UserClaimDto userClaimDto,
+        IBusinessUnitRepository? businessUnitRepository = null)
     {
         _companyRepository = companyRepository;
         _itemMappingRepository = itemMappingRepository;
         _dbTransaction = dbTransaction;
         _userClaimDto = userClaimDto;
+        _businessUnitRepository = businessUnitRepository;
     }
 
     public async Task<ServiceResponse<CompanyDto>> CreateCompanyAsync(CompanyDto companyDto, CancellationToken cancellationToken)
     {
+        if (!await IsSelectableBusinessUnitAsync(companyDto.BusinessUnitId, cancellationToken))
+            return InvalidBusinessUnitResponse();
+
         if (companyDto.ItemMappingEnabled is true)
         {
             return new ServiceResponse<CompanyDto>
@@ -86,6 +92,10 @@ public class CompanyService : ICompanyService
             };
         }
 
+        if (companyDto.BusinessUnitId != existing.BusinessUnitId &&
+            !await IsSelectableBusinessUnitAsync(companyDto.BusinessUnitId, cancellationToken))
+            return InvalidBusinessUnitResponse();
+
         if (!existing.ItemMappingEnabled && companyDto.ItemMappingEnabled is true &&
             !(await _itemMappingRepository.GetActiveByCompanyAsync(companyDto.Id, cancellationToken)).Any())
         {
@@ -109,4 +119,20 @@ public class CompanyService : ICompanyService
             StatusCode = StatusCodes.Status200OK
         };
     }
+
+    private async Task<bool> IsSelectableBusinessUnitAsync(int? businessUnitId,
+        CancellationToken cancellationToken)
+    {
+        if (!businessUnitId.HasValue || _businessUnitRepository is null)
+            return true;
+
+        var businessUnit = await _businessUnitRepository.GetAsync(businessUnitId.Value, cancellationToken);
+        return businessUnit is { IsActive: true };
+    }
+
+    private static ServiceResponse<CompanyDto> InvalidBusinessUnitResponse() => new()
+    {
+        Errors = ["Select an active Business Unit."],
+        StatusCode = StatusCodes.Status400BadRequest
+    };
 }

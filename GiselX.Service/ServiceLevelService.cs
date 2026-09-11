@@ -131,7 +131,8 @@ public class ServiceLevelService : IServiceLevelService
 
     public async Task<ServiceResponse<PagedListDto<ServiceLevelDto>>> SelectAsync(PagedListRequestDto pagedListRequest, CancellationToken cancellationToken)
     {
-        var pagedList = await _serviceLevelRepository.SelectAsync(_mapper.MapToEntity(pagedListRequest), _userClaimDto.Username, cancellationToken);
+        var uploader = ResolveUploaderScope();
+        var pagedList = await _serviceLevelRepository.SelectAsync(_mapper.MapToEntity(pagedListRequest), uploader, cancellationToken);
         
         return new ServiceResponse<PagedListDto<ServiceLevelDto>>
         {
@@ -143,7 +144,8 @@ public class ServiceLevelService : IServiceLevelService
 
     public async Task<ServiceResponse<IEnumerable<ServiceLevelDto>>> SelectByCustPeriodAsync(string custCode, int year, int month, CancellationToken cancellationToken)
     {
-        var serviceLevels = await _serviceLevelRepository.SelectByCustPeriodAsync(custCode, year, month, cancellationToken);
+        var uploader = ResolveUploaderScope();
+        var serviceLevels = await _serviceLevelRepository.SelectByCustPeriodAsync(uploader, year, month, cancellationToken);
         
         return new ServiceResponse<IEnumerable<ServiceLevelDto>>
         {
@@ -155,7 +157,8 @@ public class ServiceLevelService : IServiceLevelService
 
     public async Task<ServiceResponse<IEnumerable<PeriodDto>>> SelectPeriodsAsync(CancellationToken cancellationToken)
     {
-        var periods = await _serviceLevelRepository.SelectPeriodsAsync(_userClaimDto.Username, cancellationToken);
+        var uploader = ResolveUploaderScope();
+        var periods = await _serviceLevelRepository.SelectPeriodsAsync(uploader, cancellationToken);
         
         return new ServiceResponse<IEnumerable<PeriodDto>>
         {
@@ -163,5 +166,14 @@ public class ServiceLevelService : IServiceLevelService
             Message = "Periods retrieved successfully.",
             StatusCode = StatusCodes.Status200OK
         };
+    }
+
+    private string ResolveUploaderScope()
+    {
+        if (_userClaimDto.IsAdministrator) return string.Empty;
+        if (string.IsNullOrWhiteSpace(_userClaimDto.Username))
+            throw new InvalidOperationException("Authenticated username is required.");
+
+        return _userClaimDto.Username;
     }
 }

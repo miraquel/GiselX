@@ -35,10 +35,10 @@ public sealed class ItemMappingImportServiceTests
         var service = new ItemMappingImportService(new ItemMappingWorkbookParser(), repository, transaction);
 
         var response = await service.PreflightAsync(Workbook(
-            ("4100039", "Cream Caramel", "P0003", "Caramel Mix"),
-            ("4100041", "New", "P0004", "New name"),
-            ("4100042", "Another", "P0005", "Another name"),
-            ("", "Missing", "P0006", "Missing gmk")), 7, default);
+            ("4100039", "Cream Caramel", "P0003", "Caramel Mix", "1"),
+            ("4100041", "New", "P0004", "New name", "0"),
+            ("4100042", "Another", "P0005", "Another name", "1"),
+            ("", "Missing", "P0006", "Missing gmk", "1")), 7, default);
 
         Assert.False(response.IsSuccess);
         Assert.Equal((1, 1, 1, 1), (response.Data!.NewRows, response.Data.UpdatedRows,
@@ -52,7 +52,7 @@ public sealed class ItemMappingImportServiceTests
     {
         var (service, repository, transaction) = CreateService();
 
-        var response = await service.ImportAsync(Workbook(("4100039", "Cream Caramel", "P0003", "Caramel Mix")),
+        var response = await service.ImportAsync(Workbook(("4100039", "Cream Caramel", "P0003", "Caramel Mix", "1")),
             7, false, "admin", default);
 
         Assert.False(response.IsSuccess);
@@ -67,8 +67,8 @@ public sealed class ItemMappingImportServiceTests
         var (service, repository, transaction) = CreateService();
 
         var response = await service.ImportAsync(Workbook(
-            ("4100039", "Cream Caramel", "P0003", "Caramel Mix"),
-            ("4100040", "Other", " p0003 ", "Other name")), 7, true, "admin", default);
+            ("4100039", "Cream Caramel", "P0003", "Caramel Mix", "1"),
+            ("4100040", "Other", " p0003 ", "Other name", "0")), 7, true, "admin", default);
 
         Assert.False(response.IsSuccess);
         Assert.Equal(400, response.StatusCode);
@@ -78,7 +78,7 @@ public sealed class ItemMappingImportServiceTests
     }
 
     [Fact]
-    public async Task ImportAsync_updates_existing_without_reactivating_and_inserts_new_active()
+    public async Task ImportAsync_updates_existing_and_new_mappings_with_selected_status()
     {
         var existing = Mapping(8, "P0003", "OLD", "Old", "Old name", false);
         existing.CreatedBy = "original";
@@ -88,18 +88,18 @@ public sealed class ItemMappingImportServiceTests
         var service = new ItemMappingImportService(new ItemMappingWorkbookParser(), repository, transaction);
 
         var response = await service.ImportAsync(Workbook(
-            ("4100039", "Cream Caramel", "P0003", "Caramel Mix"),
-            ("4100040", "Other", "P0004", "Other name")), 7, true, "admin", default);
+            ("4100039", "Cream Caramel", "P0003", "Caramel Mix", "1"),
+            ("4100040", "Other", "P0004", "Other name", "0")), 7, true, "admin", default);
 
         Assert.True(response.IsSuccess);
         Assert.Equal((1, 1, 0), (response.Data!.NewRows, response.Data.UpdatedRows, response.Data.UnchangedRows));
         var updated = Assert.Single(repository.Upserted, mapping => mapping.DistributorItemId == "P0003");
         Assert.Equal(8, updated.Id);
-        Assert.False(updated.IsActive);
+        Assert.True(updated.IsActive);
         Assert.Equal("original", updated.CreatedBy);
         Assert.Equal(new DateTime(2026, 1, 1), updated.CreatedDate);
         Assert.Equal("admin", updated.ModifiedBy);
-        Assert.True(Assert.Single(repository.Upserted, mapping => mapping.DistributorItemId == "P0004").IsActive);
+        Assert.False(Assert.Single(repository.Upserted, mapping => mapping.DistributorItemId == "P0004").IsActive);
         Assert.True(transaction.CommitCalled);
     }
 
@@ -112,12 +112,30 @@ public sealed class ItemMappingImportServiceTests
         var service = new ItemMappingImportService(new ItemMappingWorkbookParser(), repository, transaction);
 
         var response = await service.ImportAsync(Workbook(
-            ("4100039", "Cream Caramel", "p0003", "Caramel Mix")), 7, true, "admin", default);
+            ("4100039", "Cream Caramel", "p0003", "Caramel Mix", "1")), 7, true, "admin", default);
 
         Assert.True(response.IsSuccess);
         Assert.Equal(1, response.Data!.UnchangedRows);
         Assert.Equal(0, response.Data.UpdatedRows);
         Assert.Empty(repository.Upserted);
+        Assert.True(transaction.CommitCalled);
+    }
+
+    [Fact]
+    public async Task ImportAsync_treats_status_only_change_as_an_update()
+    {
+        var repository = new FakeRepository(
+            Mapping(8, "P0003", "4100039", "Cream Caramel", "Caramel Mix", true));
+        var transaction = new FakeTransaction();
+        var service = new ItemMappingImportService(new ItemMappingWorkbookParser(), repository, transaction);
+
+        var response = await service.ImportAsync(Workbook(
+            ("4100039", "Cream Caramel", "P0003", "Caramel Mix", "0")), 7, true, "admin", default);
+
+        Assert.True(response.IsSuccess);
+        Assert.Equal(1, response.Data!.UpdatedRows);
+        Assert.Equal(0, response.Data.UnchangedRows);
+        Assert.False(Assert.Single(repository.Upserted).IsActive);
         Assert.True(transaction.CommitCalled);
     }
 
@@ -135,7 +153,8 @@ public sealed class ItemMappingImportServiceTests
         GmkItemName = gmkItemName, DistributorItemName = distributorItemName, IsActive = active
     };
 
-    private static byte[] Workbook(params (string GmkId, string GmkName, string DistributorId, string DistributorName)[] rows)
+    private static byte[] Workbook(params (string GmkId, string GmkName, string DistributorId, string DistributorName,
+        string Status)[] rows)
     {
         using var workbook = new XLWorkbook();
         var sheet = workbook.AddWorksheet("Mappings");
@@ -143,12 +162,14 @@ public sealed class ItemMappingImportServiceTests
         sheet.Cell(1, 2).Value = "GMK Item Name";
         sheet.Cell(1, 3).Value = "Distributor Item ID";
         sheet.Cell(1, 4).Value = "Distributor Item Name";
+        sheet.Cell(1, 5).Value = "Status";
         for (var index = 0; index < rows.Length; index++)
         {
             sheet.Cell(index + 2, 1).Value = rows[index].GmkId;
             sheet.Cell(index + 2, 2).Value = rows[index].GmkName;
             sheet.Cell(index + 2, 3).Value = rows[index].DistributorId;
             sheet.Cell(index + 2, 4).Value = rows[index].DistributorName;
+            sheet.Cell(index + 2, 5).Value = rows[index].Status;
         }
 
         using var stream = new MemoryStream();
@@ -178,6 +199,8 @@ public sealed class ItemMappingImportServiceTests
             Upserted.AddRange(values);
             return Task.CompletedTask;
         }
+        public Task<IReadOnlyList<UnmappedDistributorItem>> GetUnmappedDistributorItemsAsync(int companyId, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<UnmappedDistributorItem>>([]);
     }
 
     private sealed class FakeTransaction : IDbTransaction

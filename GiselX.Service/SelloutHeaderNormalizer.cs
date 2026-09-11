@@ -4,7 +4,7 @@ namespace GiselX.Service;
 
 public static partial class SelloutHeaderNormalizer
 {
-    private const char SignatureSeparator = '\u001F';
+    internal const char SignatureSeparator = '\u001F';
 
     public static string Normalize(string? header)
     {
@@ -25,6 +25,55 @@ public static partial class SelloutHeaderNormalizer
         }
 
         return string.Join(SignatureSeparator, normalized);
+    }
+
+    public static IReadOnlyList<string> CreateDisplayHeaders(
+        IEnumerable<string?> headers,
+        IReadOnlySet<int>? allowedBlankColumns = null)
+    {
+        var result = new List<string>();
+        var usedHeaders = new HashSet<string>(StringComparer.Ordinal);
+        var firstDisplayNameByHeader = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (var item in headers.Select((value, index) => new { value, index }))
+        {
+            var columnNumber = item.index + 1;
+            if (string.IsNullOrWhiteSpace(item.value) &&
+                (allowedBlankColumns?.Contains(columnNumber) ?? false))
+            {
+                result.Add(string.Empty);
+                continue;
+            }
+
+            var originalHeader = string.IsNullOrWhiteSpace(item.value)
+                ? $"Column {columnNumber}"
+                : item.value!;
+            var normalizedHeader = Normalize(originalHeader);
+            var displayBase = WhitespaceRegex().Replace(originalHeader.Trim(), " ");
+
+            if (usedHeaders.Add(normalizedHeader))
+            {
+                firstDisplayNameByHeader[normalizedHeader] = displayBase;
+                result.Add(originalHeader);
+                continue;
+            }
+
+            if (firstDisplayNameByHeader.TryGetValue(normalizedHeader, out var firstDisplayName))
+            {
+                displayBase = firstDisplayName;
+            }
+            var suffix = 2;
+            string uniqueHeader;
+            do
+            {
+                uniqueHeader = $"{displayBase} {suffix++}";
+            } while (!usedHeaders.Add(Normalize(uniqueHeader)));
+
+            firstDisplayNameByHeader.TryAdd(Normalize(uniqueHeader), uniqueHeader);
+            result.Add(uniqueHeader);
+        }
+
+        return result;
     }
 
     public static IReadOnlyList<string> ValidateHeaders(

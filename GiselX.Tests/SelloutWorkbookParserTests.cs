@@ -18,6 +18,25 @@ public sealed class SelloutWorkbookParserTests
     }
 
     [Fact]
+    public void Parse_assigns_one_source_column_to_multiple_canonical_fields()
+    {
+        var mapping = Mapping(3);
+        var customerName = mapping.Columns.Single(column =>
+            column.CanonicalField == SelloutCanonicalField.CustomerName);
+        customerName.SourceColumnNumber = 1;
+        customerName.SourceHeader = "CustomerId";
+
+        var result = new SelloutWorkbookParser().Parse(
+            ClosedXmlSelloutWorkbookInspectorTests.BuildWorkbook("Data", CoreCells((3, "2026-08-03"))),
+            mapping);
+
+        var row = Assert.Single(result.Rows);
+        Assert.Equal("C1", row.CustomerId);
+        Assert.Equal("C1", row.CustomerName);
+        Assert.True(row.IsValid);
+    }
+
+    [Fact]
     public void Parse_reports_missing_core_value_with_source_row()
     {
         var cells = CoreCells((7, "2026-08-03"), dataRow: 7)
@@ -113,6 +132,36 @@ public sealed class SelloutWorkbookParserTests
 
         Assert.Equal(3, Assert.Single(result.Rows).SourceRowNumber);
         Assert.Equal([4], result.IgnoredSummaryRowNumbers);
+    }
+
+    /// <summary>
+    /// A caption typed across a quantity column - a signature line, a footnote - is not a total, and a
+    /// row with no identity and no figure can never be published. It is ignored wherever it sits, so a
+    /// backwards scan no longer stops short of the totals beneath it.
+    /// </summary>
+    [Fact]
+    public void Parse_ignores_a_caption_row_between_the_data_and_the_totals()
+    {
+        var cells = CoreCells((3, "2026-08-03"))
+            .Append((4, 7, "Mengetahui"))
+            .Append((5, 7, "25"))
+            .ToArray();
+
+        var result = Parse(cells);
+
+        Assert.Equal(3, Assert.Single(result.Rows).SourceRowNumber);
+        Assert.Equal([4, 5], result.IgnoredSummaryRowNumbers);
+        Assert.Empty(result.Errors);
+    }
+
+    [Fact]
+    public void Parse_keeps_every_row_when_no_row_carries_an_identity()
+    {
+        var result = Parse([(3, 7, "Mengetahui"), (4, 7, "Disetujui")]);
+
+        Assert.Equal(2, result.Rows.Count);
+        Assert.All(result.Rows, row => Assert.False(row.IsValid));
+        Assert.Empty(result.IgnoredSummaryRowNumbers);
     }
 
     [Fact]

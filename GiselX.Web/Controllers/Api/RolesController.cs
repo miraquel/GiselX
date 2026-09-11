@@ -61,6 +61,9 @@ public class RolesController : ControllerBase
         }).ToList();
 
         var pagedList = new PagedListDto<RoleDto>(roles, pageNumber, pageSize, recordsTotal, recordsFiltered);
+        // The constructor reads a filtered count of 0 as "not supplied" and falls back to the total, which
+        // would make a search matching nobody render paging for every record. Set it explicitly.
+        pagedList.TotalFilteredCount = recordsFiltered;
 
         var response = new ServiceResponse<PagedListDto<RoleDto>>
         {

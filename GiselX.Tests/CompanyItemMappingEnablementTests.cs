@@ -11,6 +11,84 @@ namespace GiselX.Tests;
 public class CompanyItemMappingEnablementTests
 {
     [Fact]
+    public async Task CreateCompanyAsync_maps_business_unit_to_the_company()
+    {
+        var companyRepository = new FakeCompanyRepository();
+        var transaction = new FakeTransaction();
+        var service = new CompanyService(companyRepository, new FakeItemMappingRepository(), transaction,
+            new UserClaimDto());
+
+        var response = await service.CreateCompanyAsync(new CompanyDto
+            { Name = "Distributor", BusinessUnitId = 3, BusinessUnitName = "Consumer Health" }, default);
+
+        Assert.True(response.IsSuccess);
+        Assert.Equal(3, companyRepository.CreatedCompany!.BusinessUnitId);
+        Assert.Equal("Consumer Health", response.Data!.BusinessUnitName);
+        Assert.True(transaction.CommitCalled);
+    }
+
+    [Fact]
+    public async Task CreateCompanyAsync_rejects_an_inactive_business_unit()
+    {
+        var companyRepository = new FakeCompanyRepository();
+        var transaction = new FakeTransaction();
+        var businessUnits = new FakeBusinessUnitRepository
+        {
+            Values = [new BusinessUnit { Id = 3, Name = "Consumer Health", IsActive = false }]
+        };
+        var service = new CompanyService(companyRepository, new FakeItemMappingRepository(), transaction,
+            new UserClaimDto(), businessUnits);
+
+        var response = await service.CreateCompanyAsync(new CompanyDto
+            { Name = "Distributor", BusinessUnitId = 3 }, default);
+
+        Assert.False(response.IsSuccess);
+        Assert.Contains(response.Errors, error => error.Contains("active Business Unit", StringComparison.Ordinal));
+        Assert.False(companyRepository.CreateCalled);
+        Assert.False(transaction.CommitCalled);
+    }
+
+    [Fact]
+    public async Task UpdateCompanyAsync_maps_business_unit_to_the_company()
+    {
+        var companyRepository = new FakeCompanyRepository();
+        var transaction = new FakeTransaction();
+        var service = new CompanyService(companyRepository, new FakeItemMappingRepository(), transaction,
+            new UserClaimDto());
+
+        var response = await service.UpdateCompanyAsync(new CompanyDto
+            { Id = 7, Name = "Distributor", BusinessUnitId = 4, BusinessUnitName = "Prescription" }, default);
+
+        Assert.True(response.IsSuccess);
+        Assert.Equal(4, companyRepository.UpdatedCompany!.BusinessUnitId);
+        Assert.Equal("Prescription", response.Data!.BusinessUnitName);
+        Assert.True(transaction.CommitCalled);
+    }
+
+    [Fact]
+    public async Task UpdateCompanyAsync_allows_an_existing_inactive_business_unit_to_remain_selected()
+    {
+        var companyRepository = new FakeCompanyRepository
+        {
+            ExistingCompany = new Company { Id = 7, Name = "Distributor", BusinessUnitId = 3 }
+        };
+        var transaction = new FakeTransaction();
+        var businessUnits = new FakeBusinessUnitRepository
+        {
+            Values = [new BusinessUnit { Id = 3, Name = "Consumer Health", IsActive = false }]
+        };
+        var service = new CompanyService(companyRepository, new FakeItemMappingRepository(), transaction,
+            new UserClaimDto(), businessUnits);
+
+        var response = await service.UpdateCompanyAsync(new CompanyDto
+            { Id = 7, Name = "Distributor", BusinessUnitId = 3 }, default);
+
+        Assert.True(response.IsSuccess);
+        Assert.Equal(3, companyRepository.UpdatedCompany!.BusinessUnitId);
+        Assert.True(transaction.CommitCalled);
+    }
+
+    [Fact]
     public async Task CreateCompanyAsync_rejects_explicit_item_mapping_enablement()
     {
         var companyRepository = new FakeCompanyRepository();
@@ -177,6 +255,27 @@ public class CompanyItemMappingEnablementTests
         public Task<ItemMappingDeleteResult> DeleteAsync(int id, int companyId, CancellationToken cancellationToken) =>
             Task.FromResult(ItemMappingDeleteResult.NotFound);
         public Task UpsertAsync(IReadOnlyList<ItemMapping> values, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task<IReadOnlyList<UnmappedDistributorItem>> GetUnmappedDistributorItemsAsync(int companyId, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<UnmappedDistributorItem>>(UnmappedItems);
+        public List<UnmappedDistributorItem> UnmappedItems { get; } = [];
+    }
+
+    private sealed class FakeBusinessUnitRepository : IBusinessUnitRepository
+    {
+        public IReadOnlyList<BusinessUnit> Values { get; init; } = [];
+
+        public Task<IReadOnlyList<BusinessUnit>> ListAsync(bool activeOnly, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<BusinessUnit>>(Values.Where(value => !activeOnly || value.IsActive).ToList());
+        public Task<BusinessUnit?> GetAsync(int id, CancellationToken cancellationToken) =>
+            Task.FromResult(Values.SingleOrDefault(value => value.Id == id));
+        public Task<int> InsertAsync(BusinessUnit businessUnit, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+        public Task UpdateAsync(BusinessUnit businessUnit, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+        public Task SetActiveAsync(int id, bool isActive, string modifiedBy, DateTime modifiedDate,
+            CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<BusinessUnitDeleteResult> DeleteAsync(int id, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
     }
 
     private sealed class FakeTransaction : IDbTransaction

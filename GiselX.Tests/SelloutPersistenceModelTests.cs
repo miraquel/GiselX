@@ -31,16 +31,35 @@ public class SelloutPersistenceModelTests
     }
 
     [Fact]
-    public void MappingColumns_AreUniqueBySourceAndCanonicalField()
+    public void MappingColumns_AllowSourceReuseButRemainUniqueByCanonicalField()
     {
         using var db = CreateContext();
         var columns = db.Model.FindEntityType(typeof(DistributorTemplateColumn))!;
-        var indexes = columns.GetIndexes().Where(index => index.IsUnique).ToList();
+        var indexes = columns.GetIndexes().ToList();
 
-        Assert.Contains(indexes, index => index.Properties.Select(property => property.Name)
+        var sourceIndex = Assert.Single(indexes, index => index.Properties.Select(property => property.Name)
             .SequenceEqual([nameof(DistributorTemplateColumn.DistributorTemplateMappingId), nameof(DistributorTemplateColumn.SourceColumnNumber)]));
-        Assert.Contains(indexes, index => index.Properties.Select(property => property.Name)
+        var canonicalIndex = Assert.Single(indexes, index => index.Properties.Select(property => property.Name)
             .SequenceEqual([nameof(DistributorTemplateColumn.DistributorTemplateMappingId), nameof(DistributorTemplateColumn.CanonicalField)]));
+
+        Assert.False(sourceIndex.IsUnique);
+        Assert.True(canonicalIndex.IsUnique);
+    }
+
+    [Fact]
+    public void StockMappingColumns_AllowSourceReuseButRemainUniqueByCanonicalField()
+    {
+        using var db = CreateContext();
+        var columns = db.Model.FindEntityType(typeof(StockTemplateColumn))!;
+        var indexes = columns.GetIndexes().ToList();
+
+        var sourceIndex = Assert.Single(indexes, index => index.Properties.Select(property => property.Name)
+            .SequenceEqual([nameof(StockTemplateColumn.StockTemplateMappingId), nameof(StockTemplateColumn.SourceColumnNumber)]));
+        var canonicalIndex = Assert.Single(indexes, index => index.Properties.Select(property => property.Name)
+            .SequenceEqual([nameof(StockTemplateColumn.StockTemplateMappingId), nameof(StockTemplateColumn.CanonicalField)]));
+
+        Assert.False(sourceIndex.IsUnique);
+        Assert.True(canonicalIndex.IsUnique);
     }
 
     [Fact]

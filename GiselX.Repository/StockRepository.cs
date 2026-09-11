@@ -38,9 +38,11 @@ public class StockRepository : IStockRepository
         dataTable.Columns.Add(nameof(Stock.ProductId), typeof(string));
         dataTable.Columns.Add(nameof(Stock.ProductName), typeof(string));
         dataTable.Columns.Add(nameof(Stock.ProductPackaging), typeof(string));
-        dataTable.Columns.Add(nameof(Stock.ProductPcsInCtn), typeof(int));
+        dataTable.Columns.Add(nameof(Stock.ProductPcsInCtn), typeof(decimal));
         dataTable.Columns.Add(nameof(Stock.ProductNetto), typeof(decimal));
         dataTable.Columns.Add(nameof(Stock.ProductUnit), typeof(string));
+        dataTable.Columns.Add(nameof(Stock.SmallestUnit), typeof(string));
+        dataTable.Columns.Add(nameof(Stock.SmallestUnitQty), typeof(decimal));
         dataTable.Columns.Add(nameof(Stock.PriceUnit), typeof(decimal));
         dataTable.Columns.Add(nameof(Stock.SaldoAwal), typeof(decimal));
         dataTable.Columns.Add(nameof(Stock.SaldoMasukPO), typeof(decimal));
@@ -60,6 +62,8 @@ public class StockRepository : IStockRepository
                 stock.ProductPcsInCtn,
                 stock.ProductNetto,
                 stock.ProductUnit,
+                (object?)stock.SmallestUnit ?? DBNull.Value,
+                (object?)stock.SmallestUnitQty ?? DBNull.Value,
                 (object?)stock.PriceUnit ?? DBNull.Value,
                 stock.SaldoAwal,
                 stock.SaldoMasukPO,
@@ -100,6 +104,15 @@ public class StockRepository : IStockRepository
 
     public async Task<IEnumerable<Stock>> SelectByCustPeriodAsync(int companyId, int year, int month, CancellationToken cancellationToken)
     {
+        if (companyId == 0)
+            return await _dbConnection.QueryAsync<Stock>(new CommandDefinition("""
+                SELECT s.*, c.Name AS CompanyName
+                FROM Stock s INNER JOIN Company c ON c.Id=s.CompanyId
+                WHERE YEAR(s.CreatedDate)=@Year AND MONTH(s.CreatedDate)=@Month
+                ORDER BY c.Name, s.CreatedDate, s.Id;
+                """, new { Year = year, Month = month }, _dbTransaction,
+                cancellationToken: cancellationToken));
+
         const string query = "GiselStock_SelectByCustPeriod";
 
         var parameters = new DynamicParameters();
@@ -131,9 +144,10 @@ public class StockRepository : IStockRepository
         {
             nameof(Stock.ProductId), nameof(Stock.ProductName), nameof(Stock.ProductPackaging),
             nameof(Stock.ProductPcsInCtn), nameof(Stock.ProductNetto), nameof(Stock.ProductUnit),
-            nameof(Stock.PriceUnit),
+            nameof(Stock.SmallestUnit), nameof(Stock.SmallestUnitQty), nameof(Stock.PriceUnit),
             nameof(Stock.SaldoAwal), nameof(Stock.SaldoMasukPO), nameof(Stock.SaldoAkhir),
-            nameof(Stock.BatchNumber), nameof(Stock.ExpiredDate), nameof(Stock.StockDate)
+            nameof(Stock.BatchNumber), nameof(Stock.ExpiredDate), nameof(Stock.StockDate),
+            nameof(Stock.CompanyName)
         };
         foreach (var parameter in pagedListRequest.Filters.Where(parameter => allowed.Contains(parameter.Key)))
         {
@@ -143,7 +157,10 @@ public class StockRepository : IStockRepository
             switch (propertyInfo.PropertyType)
             {
                 case { } t when t == typeof(string):
-                    clauses.Add($"{GetColumnExpression(parameter.Key, useDistributorIdentity)} LIKE @{parameter.Key}");
+                    var stringExpression = parameter.Key == nameof(Stock.CompanyName)
+                        ? "c.Name"
+                        : GetColumnExpression(parameter.Key, useDistributorIdentity);
+                    clauses.Add($"{stringExpression} LIKE @{parameter.Key}");
                     var text = parameter.Value.Replace('*', '%');
                     parameters.Add(parameter.Key, text.Contains('%') ? text : $"%{text}%");
                     break;
@@ -166,22 +183,45 @@ public class StockRepository : IStockRepository
         {
             var productId = GetColumnExpression(nameof(Stock.ProductId), useDistributorIdentity);
             var productName = GetColumnExpression(nameof(Stock.ProductName), useDistributorIdentity);
-            clauses.Add($"({productId} LIKE @Search OR {productName} LIKE @Search OR s.BatchNumber LIKE @Search)");
+            clauses.Add($"({productId} LIKE @Search OR {productName} LIKE @Search OR s.BatchNumber LIKE @Search OR c.Name LIKE @Search)");
             parameters.Add("Search", $"%{pagedListRequest.SearchTerm}%");
         }
         var where = clauses.Count == 0 ? string.Empty : " AND " + string.Join(" AND ", clauses);
-        var sort = allowed.Contains(pagedListRequest.SortBy) ? pagedListRequest.SortBy : nameof(Stock.ProductId);
-        var sortExpression = GetColumnExpression(sort, useDistributorIdentity);
+        var sort = typeof(Stock).GetProperties()
+            .FirstOrDefault(property => allowed.Contains(property.Name) &&
+                                        string.Equals(property.Name, pagedListRequest.SortBy,
+                                            StringComparison.OrdinalIgnoreCase))?.Name
+            ?? nameof(Stock.ProductId);
+        var sortExpression = sort == nameof(Stock.CompanyName)
+            ? "c.Name"
+            : GetColumnExpression(sort, useDistributorIdentity);
         var direction = pagedListRequest.IsSortAscending ? "ASC" : "DESC";
         var projection = GetProjection(useDistributorIdentity);
         var query = $"""
-            DECLARE @BatchId bigint = (SELECT TOP (1) Id FROM StockUploadBatch
-             WHERE CompanyId=@CompanyId AND Status IN (2,3)
-             ORDER BY CompletedDate DESC, Id DESC);
-            SELECT {projection} FROM Stock s WHERE s.CompanyId=@CompanyId AND s.StockUploadBatchId=@BatchId {where}
+            WITH RankedBatches AS (
+                SELECT Id, CompanyId,
+                       ROW_NUMBER() OVER (PARTITION BY CompanyId ORDER BY CompletedDate DESC, Id DESC) AS BatchRank
+                FROM StockUploadBatch
+                WHERE Status IN (2,3)
+            )
+            SELECT {projection}
+            FROM Stock s
+            INNER JOIN RankedBatches rb ON rb.Id=s.StockUploadBatchId AND rb.BatchRank=1
+            INNER JOIN Company c ON c.Id=s.CompanyId
+            WHERE (@CompanyId=0 OR s.CompanyId=@CompanyId) {where}
              ORDER BY {sortExpression} {direction}, s.Id ASC
              OFFSET (@PageNumber-1)*@PageSize ROWS FETCH NEXT @PageSize ROWS ONLY;
-            SELECT COUNT(*) FROM Stock s WHERE s.CompanyId=@CompanyId AND s.StockUploadBatchId=@BatchId {where};
+            WITH RankedBatches AS (
+                SELECT Id, CompanyId,
+                       ROW_NUMBER() OVER (PARTITION BY CompanyId ORDER BY CompletedDate DESC, Id DESC) AS BatchRank
+                FROM StockUploadBatch
+                WHERE Status IN (2,3)
+            )
+            SELECT COUNT(*)
+            FROM Stock s
+            INNER JOIN RankedBatches rb ON rb.Id=s.StockUploadBatchId AND rb.BatchRank=1
+            INNER JOIN Company c ON c.Id=s.CompanyId
+            WHERE (@CompanyId=0 OR s.CompanyId=@CompanyId) {where};
             """;
         using var result = await _dbConnection.QueryMultipleAsync(new CommandDefinition(query, parameters,
             _dbTransaction, cancellationToken: cancellationToken));
@@ -191,8 +231,85 @@ public class StockRepository : IStockRepository
             Math.Clamp(pagedListRequest.PageSize, 1, 500), totalCount);
     }
 
+    public Task<StockSelectionSummary> SummarizeAsync(PagedListRequest request, bool useDistributorIdentity,
+        CancellationToken cancellationToken)
+    {
+        var parameters = new DynamicParameters();
+        var clauses = new List<string>();
+        var allowed = new HashSet<string>(StringComparer.Ordinal)
+        {
+            nameof(Stock.ProductId), nameof(Stock.ProductName), nameof(Stock.ProductPackaging),
+            nameof(Stock.ProductPcsInCtn), nameof(Stock.ProductNetto), nameof(Stock.ProductUnit),
+            nameof(Stock.SmallestUnit), nameof(Stock.SmallestUnitQty),
+            nameof(Stock.PriceUnit), nameof(Stock.SaldoAwal), nameof(Stock.SaldoMasukPO),
+            nameof(Stock.SaldoAkhir), nameof(Stock.BatchNumber), nameof(Stock.ExpiredDate),
+            nameof(Stock.StockDate), nameof(Stock.CompanyName)
+        };
+        foreach (var filter in request.Filters.Where(filter => allowed.Contains(filter.Key)))
+        {
+            if (string.IsNullOrWhiteSpace(filter.Value)) continue;
+            var property = typeof(Stock).GetProperty(filter.Key);
+            if (property is null) continue;
+            var expression = filter.Key == nameof(Stock.CompanyName)
+                ? "c.Name" : GetColumnExpression(filter.Key, useDistributorIdentity);
+            switch (property.PropertyType)
+            {
+                case { } type when type == typeof(string):
+                    var text = filter.Value.Replace('*', '%');
+                    parameters.Add(filter.Key, text.Contains('%') ? text : $"%{text}%");
+                    clauses.Add($"{expression} LIKE @{filter.Key}");
+                    break;
+                case { } type when type == typeof(int):
+                    if (int.TryParse(filter.Value, out var integer))
+                    { parameters.Add(filter.Key, integer); clauses.Add($"{expression}=@{filter.Key}"); }
+                    break;
+                case { } type when type == typeof(decimal) || type == typeof(decimal?):
+                    if (decimal.TryParse(filter.Value, out var number))
+                    { parameters.Add(filter.Key, number); clauses.Add($"{expression}=@{filter.Key}"); }
+                    break;
+                case { } type when type == typeof(DateTime) || type == typeof(DateTime?):
+                    if (DateTime.TryParse(filter.Value, out var date))
+                    { parameters.Add(filter.Key, date); clauses.Add($"CONVERT(date,{expression})=CONVERT(date,@{filter.Key})"); }
+                    break;
+            }
+        }
+        if (!string.IsNullOrWhiteSpace(request.SearchTerm))
+        {
+            var search = request.SearchTerm.Replace('*', '%');
+            parameters.Add("Search", search.Contains('%') ? search : $"%{search}%");
+            clauses.Add($"({GetColumnExpression(nameof(Stock.ProductId), useDistributorIdentity)} LIKE @Search OR " +
+                        $"{GetColumnExpression(nameof(Stock.ProductName), useDistributorIdentity)} LIKE @Search OR " +
+                        "s.BatchNumber LIKE @Search OR c.Name LIKE @Search)");
+        }
+        var filters = clauses.Count == 0 ? string.Empty : " AND " + string.Join(" AND ", clauses);
+        return _dbConnection.QuerySingleAsync<StockSelectionSummary>(new CommandDefinition($"""
+            WITH RankedBatches AS (
+                SELECT Id, CompanyId,
+                       ROW_NUMBER() OVER (PARTITION BY CompanyId ORDER BY CompletedDate DESC, Id DESC) AS BatchRank
+                FROM StockUploadBatch WHERE Status IN (2,3)
+            )
+            SELECT COUNT(DISTINCT s.CompanyId) AS DistributorCount,
+                   COUNT(*) AS [RowCount],
+                   COALESCE(SUM(s.SaldoAwal),0) AS SaldoAwal,
+                   COALESCE(SUM(s.SaldoMasukPO),0) AS SaldoMasukPO,
+                   COALESCE(SUM(s.SaldoAkhir),0) AS SaldoAkhir,
+                   COALESCE(SUM(COALESCE(s.SaldoAkhir,0) * COALESCE(s.PriceUnit,0)),0) AS StockValue
+            FROM Stock s
+            INNER JOIN RankedBatches rb ON rb.Id=s.StockUploadBatchId AND rb.BatchRank=1
+            INNER JOIN Company c ON c.Id=s.CompanyId
+            WHERE 1=1 {filters};
+            """, parameters, _dbTransaction, cancellationToken: cancellationToken));
+    }
+
     public async Task<IEnumerable<Period>> SelectPeriodsAsync(int companyId, CancellationToken cancellationToken)
     {
+        if (companyId == 0)
+            return await _dbConnection.QueryAsync<Period>(new CommandDefinition("""
+                SELECT DISTINCT YEAR(CreatedDate) AS [Year], MONTH(CreatedDate) AS [Month]
+                FROM Stock
+                ORDER BY [Year] DESC, [Month] DESC;
+                """, transaction: _dbTransaction, cancellationToken: cancellationToken));
+
         const string query = "GiselStock_SelectPeriods";
 
         var parameters = new DynamicParameters();
@@ -212,8 +329,10 @@ public class StockRepository : IStockRepository
 
     public async Task<IReadOnlyList<StockUploadBatch>> ListCompletedUploadsAsync(int companyId,
         CancellationToken cancellationToken) => (await _dbConnection.QueryAsync<StockUploadBatch>(new CommandDefinition("""
-            SELECT * FROM StockUploadBatch WHERE CompanyId=@CompanyId AND Status IN (2,3)
-            ORDER BY UploadedDate DESC, Id DESC
+            SELECT b.*, c.Name AS CompanyName
+            FROM StockUploadBatch b INNER JOIN Company c ON c.Id=b.CompanyId
+            WHERE (@CompanyId=0 OR b.CompanyId=@CompanyId) AND b.Status IN (2,3)
+            ORDER BY b.UploadedDate DESC, b.Id DESC
             """, new { CompanyId = companyId }, _dbTransaction, cancellationToken: cancellationToken))).ToList();
 
     public Task<IEnumerable<Stock>> SelectByBatchAsync(long batchId, int companyId, bool useDistributorIdentity,
@@ -222,8 +341,10 @@ public class StockRepository : IStockRepository
         var projection = GetProjection(useDistributorIdentity);
         var productId = GetColumnExpression(nameof(Stock.ProductId), useDistributorIdentity);
         return _dbConnection.QueryAsync<Stock>(new CommandDefinition($"""
-            SELECT {projection} FROM Stock s INNER JOIN StockUploadBatch b ON b.Id=s.StockUploadBatchId
-            WHERE b.Id=@BatchId AND b.CompanyId=@CompanyId AND b.Status IN (2,3)
+            SELECT {projection} FROM Stock s
+            INNER JOIN StockUploadBatch b ON b.Id=s.StockUploadBatchId
+            INNER JOIN Company c ON c.Id=b.CompanyId
+            WHERE b.Id=@BatchId AND (@CompanyId=0 OR b.CompanyId=@CompanyId) AND b.Status IN (2,3)
             ORDER BY {productId}, s.Id
             """, new { BatchId = batchId, CompanyId = companyId }, _dbTransaction,
             cancellationToken: cancellationToken));
@@ -251,6 +372,8 @@ public class StockRepository : IStockRepository
             s.ProductPcsInCtn,
             s.ProductNetto,
             s.ProductUnit,
+            s.SmallestUnit,
+            s.SmallestUnitQty,
             s.PriceUnit,
             s.SaldoAwal,
             s.SaldoMasukPO,
@@ -260,7 +383,8 @@ public class StockRepository : IStockRepository
             s.CompanyId,
             s.CreatedDate,
             s.StockUploadBatchId,
-            s.StockDate
+            s.StockDate,
+            c.Name AS CompanyName
             """;
     }
 }

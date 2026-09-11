@@ -12,11 +12,15 @@ public class StockDto
     [Display(Name = "Packaging")]
     public string ProductPackaging { get; set; } = string.Empty;
     [Display(Name = "Pcs/Ctn")]
-    public int ProductPcsInCtn { get; set; }
+    public decimal ProductPcsInCtn { get; set; }
     [Display(Name = "Netto")]
     public decimal ProductNetto { get; set; }
     [Display(Name = "Unit")]
     public string ProductUnit { get; set; } = string.Empty;
+    [Display(Name = "Smallest Unit")]
+    public string? SmallestUnit { get; set; }
+    [Display(Name = "Qty per Smallest Unit")]
+    public decimal? SmallestUnitQty { get; set; }
     [Display(Name = "Price Unit")]
     public decimal? PriceUnit { get; set; }
     [Display(Name = "Saldo Awal")]
@@ -35,4 +39,6 @@ public class StockDto
     public long? StockUploadBatchId { get; set; }
     [Display(Name = "Stock Date")]
     public DateTime? StockDate { get; set; }
+    [Display(Name = "Distributor")]
+    public string CompanyName { get; set; } = string.Empty;
 }

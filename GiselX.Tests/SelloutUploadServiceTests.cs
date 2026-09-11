@@ -26,6 +26,32 @@ public sealed class SelloutUploadServiceTests
     }
 
     [Fact]
+    public async Task PreflightAsync_summarizes_values_from_valid_rows_only()
+    {
+        var analysis = ValidAnalysis(multiWeek: false);
+        analysis.Rows[0].InvoiceQty = 2m;
+        analysis.Rows[0].UnitPrice = 10m;
+        analysis.Rows[0].DiscountValue = 1m;
+        analysis.Rows[1].InvoiceQty = 3m;
+        analysis.Rows[1].GrossValue = 45m;
+        analysis.Rows[1].DiscountValue = 5m;
+        analysis.Rows[1].NetValue = 38m;
+        analysis.Rows = analysis.Rows.Append(new SelloutStaging
+        {
+            SourceRowNumber = 5, IsValid = false, InvoiceQty = 999m,
+            GrossValue = 999m, DiscountValue = 999m, NetValue = 999m
+        }).ToList();
+        var (service, _, _) = CreateService(analysis);
+
+        var response = await service.PreflightAsync(Stream(), "sales.xlsx", 9, CancellationToken.None);
+
+        Assert.Equal(5m, response.Data!.TotalInvoiceQty);
+        Assert.Equal(65m, response.Data.TotalGrossValue);
+        Assert.Equal(6m, response.Data.TotalDiscountValue);
+        Assert.Equal(57m, response.Data.TotalNetValue);
+    }
+
+    [Fact]
     public async Task UploadAsync_requires_explicit_confirmation_for_multiple_weeks()
     {
         var (service, repository, transaction) = CreateService(ValidAnalysis(multiWeek: true));

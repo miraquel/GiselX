@@ -1,4 +1,6 @@
 using GiselX.Common.Constants;
+using GiselX.Domain;
+using GiselX.Service;
 using GiselX.Service.Dto;
 using GiselX.Service.Dto.Common;
 using GiselX.Service.Interface;
@@ -23,7 +25,11 @@ public sealed class StockTemplateMappingsController(
 
     [HttpGet]
     public IActionResult Create(int companyId) =>
-        View("Edit", new StockTemplateMappingEditViewModel { CompanyId = companyId });
+        View("Edit", new StockTemplateMappingEditViewModel
+        {
+            CompanyId = companyId,
+            Columns = BuildCanonicalRows([])
+        });
 
     [HttpGet]
     public async Task<IActionResult> Edit(int id, int companyId, CancellationToken cancellationToken)
@@ -38,12 +44,7 @@ public sealed class StockTemplateMappingsController(
             WorksheetName = value.WorksheetName,
             HeaderRowNumber = value.HeaderRowNumber,
             FirstDataRowNumber = value.FirstDataRowNumber,
-            Columns = value.Columns.Select(column => new StockTemplateColumnEditViewModel
-            {
-                SourceColumnNumber = column.SourceColumnNumber,
-                SourceHeader = column.SourceHeader,
-                CanonicalField = column.CanonicalField
-            }).ToList()
+            Columns = BuildCanonicalRows(value.Columns)
         });
     }
 
@@ -126,6 +127,27 @@ public sealed class StockTemplateMappingsController(
         await using var input = file.OpenReadStream();
         using var memory = new MemoryStream();
         await input.CopyToAsync(memory, cancellationToken);
-        return memory.ToArray();
+        return LegacyExcelWorkbookConverter.EnsureOpenXmlOrOriginal(memory.ToArray());
+    }
+
+    private static List<StockTemplateColumnEditViewModel> BuildCanonicalRows(
+        IEnumerable<StockTemplateColumnDto> mappedColumns)
+    {
+        var mappedByField = mappedColumns
+            .GroupBy(column => column.CanonicalField)
+            .ToDictionary(group => group.Key, group => group.First());
+
+        return Enum.GetValues<StockCanonicalField>()
+            .Select(field =>
+            {
+                mappedByField.TryGetValue(field, out var mapped);
+                return new StockTemplateColumnEditViewModel
+                {
+                    CanonicalField = field,
+                    SourceColumnNumber = mapped?.SourceColumnNumber ?? 0,
+                    SourceHeader = mapped?.SourceHeader
+                };
+            })
+            .ToList();
     }
 }

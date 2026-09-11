@@ -16,6 +16,6 @@ public sealed class DistributorTemplateMappingEditViewModel
 public sealed class DistributorTemplateColumnEditViewModel
 {
     public int SourceColumnNumber { get; set; }
-    public string SourceHeader { get; set; } = string.Empty;
+    public string? SourceHeader { get; set; }
     public SelloutCanonicalField? CanonicalField { get; set; }
 }

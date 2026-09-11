@@ -84,6 +84,87 @@ public sealed class StockManualSqlScriptTests
                     sql.IndexOf("COMMIT TRANSACTION", StringComparison.OrdinalIgnoreCase));
     }
 
+    [Fact]
+    public void SmallestUnit_script_guards_both_tables_and_validates_column_shapes()
+    {
+        var sql = ReadSmallestUnitScript();
+
+        Assert.Contains("COL_LENGTH(N'dbo.Stock', N'SmallestUnit')", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("COL_LENGTH(N'dbo.Stock', N'SmallestUnitQty')", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("COL_LENGTH(N'dbo.StockStaging', N'SmallestUnit')", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("COL_LENGTH(N'dbo.StockStaging', N'SmallestUnitQty')", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("nvarchar(50) NULL", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("decimal(18,2) NULL", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("sp_getapplock", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("THROW", sql, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void SmallestUnit_script_has_no_destructive_stock_data_statement()
+    {
+        var compact = Regex.Replace(ReadSmallestUnitScript(), @"\s+", " ");
+
+        Assert.DoesNotMatch(@"(?i)DELETE\s+(FROM\s+)?(?:dbo\.)?Stock\b", compact);
+        Assert.DoesNotMatch(@"(?i)UPDATE\s+(?:dbo\.)?Stock\s+SET\b", compact);
+        Assert.DoesNotMatch(@"(?i)TRUNCATE\s+TABLE\s+(?:dbo\.)?Stock\b", compact);
+    }
+
+    [Fact]
+    public void SmallestUnit_script_records_history_only_inside_the_transaction()
+    {
+        var sql = ReadSmallestUnitScript();
+
+        Assert.Contains("SET XACT_ABORT ON", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("BEGIN TRANSACTION", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("20260903120000_AddStockSmallestUnit", sql, StringComparison.Ordinal);
+        Assert.Contains("INSERT INTO dbo.__EFMigrationsHistory", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.True(sql.IndexOf("INSERT INTO dbo.__EFMigrationsHistory", StringComparison.OrdinalIgnoreCase) <
+                    sql.IndexOf("COMMIT TRANSACTION", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void SheetSource_script_guards_and_validates_both_staging_columns()
+    {
+        var sql = ReadSheetSourceScript();
+
+        Assert.Contains("COL_LENGTH(N'dbo.StockStaging', N'SourceWorksheetName')", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("COL_LENGTH(N'dbo.StockStaging', N'StockTemplateMappingId')", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("OBJECT_ID(N'dbo.StockTemplateMapping'", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("nvarchar(255) NULL", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("StockTemplateMappingId int NULL", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("FK_StockStaging_StockTemplateMapping_StockTemplateMappingId", sql, StringComparison.Ordinal);
+        Assert.Contains("IX_StockStaging_StockTemplateMappingId", sql, StringComparison.Ordinal);
+        Assert.Contains("sp_getapplock", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("THROW", sql, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void SheetSource_script_has_no_destructive_stock_data_statement()
+    {
+        var compact = Regex.Replace(ReadSheetSourceScript(), @"\s+", " ");
+
+        Assert.DoesNotMatch(@"(?i)DELETE\s+(FROM\s+)?(?:dbo\.)?Stock\b", compact);
+        Assert.DoesNotMatch(@"(?i)UPDATE\s+(?:dbo\.)?Stock(Staging)?\s+SET\b", compact);
+        Assert.DoesNotMatch(@"(?i)TRUNCATE\s+TABLE\s+(?:dbo\.)?Stock\b", compact);
+    }
+
+    [Fact]
+    public void SheetSource_script_records_history_only_inside_the_transaction()
+    {
+        var sql = ReadSheetSourceScript();
+
+        Assert.Contains("SET XACT_ABORT ON", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("BEGIN TRANSACTION", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("20260907024804_AddStockStagingSheetSource", sql, StringComparison.Ordinal);
+        Assert.Contains("INSERT INTO dbo.__EFMigrationsHistory", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.True(sql.IndexOf("INSERT INTO dbo.__EFMigrationsHistory", StringComparison.OrdinalIgnoreCase) <
+                    sql.IndexOf("COMMIT TRANSACTION", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string ReadSheetSourceScript() => ReadScript("20260907024804_AddStockStagingSheetSource.sql");
+
+    private static string ReadSmallestUnitScript() => ReadScript("20260903120000_AddStockSmallestUnit.sql");
+
     private static string ReadScript() => ReadScript("20260810160000_AddStockSnapshotUploads.sql");
 
     private static string ReadPriceUnitScript() => ReadScript("20260810190000_AddStockPriceUnit.sql");

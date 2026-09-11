@@ -54,16 +54,20 @@ public sealed class StockTemplateMappingServiceTests
     }
 
     [Fact]
-    public async Task SaveAsync_rejects_duplicate_source_columns()
+    public async Task SaveAsync_allows_one_source_column_for_multiple_canonical_fields()
     {
         var dto = ValidMapping();
         dto.Columns[1].SourceColumnNumber = dto.Columns[0].SourceColumnNumber;
-        var (service, repository, _) = CreateService();
+        dto.Columns[1].SourceHeader = dto.Columns[0].SourceHeader;
+        var (service, repository, transaction) = CreateService();
 
         var response = await service.SaveAsync(dto, "admin", CancellationToken.None);
 
-        Assert.Contains(response.Errors, error => error.Contains("source column", StringComparison.OrdinalIgnoreCase));
-        Assert.Empty(repository.Inserted);
+        Assert.True(response.IsSuccess);
+        var mapping = Assert.Single(repository.Inserted);
+        Assert.Equal(2, mapping.Columns.Count(column =>
+            column.SourceColumnNumber == dto.Columns[0].SourceColumnNumber));
+        Assert.True(transaction.CommitCalled);
     }
 
     [Fact]

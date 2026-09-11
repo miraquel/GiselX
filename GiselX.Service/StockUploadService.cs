@@ -47,7 +47,7 @@ public sealed class StockUploadService(
             StockTemplateMappingId = analysis.Mapping?.Id,
             StockDate = stockDate.Date,
             OriginalFileName = Path.GetFileName(originalFileName),
-            FileSha256 = Convert.ToHexString(SHA256.HashData(content)).ToLowerInvariant(),
+            FileSha256 = request.SourceSha256!,
             TotalRows = analysis.Rows.Count,
             ValidRows = analysis.ValidRows,
             InvalidRows = analysis.InvalidRows,
@@ -114,12 +114,12 @@ public sealed class StockUploadService(
         };
     }
 
-    private async Task<(byte[]? Content, string? Error)> ReadRequestAsync(Stream file, string filename,
-        DateTime stockDate, CancellationToken cancellationToken)
+    private async Task<(byte[]? Content, string? SourceSha256, string? Error)> ReadRequestAsync(Stream file,
+        string filename, DateTime stockDate, CancellationToken cancellationToken)
     {
-        if (stockDate == default) return (null, "Stock date is required.");
-        if (!string.Equals(Path.GetExtension(filename), ".xlsx", StringComparison.OrdinalIgnoreCase))
-            return (null, "Only .xlsx files are supported.");
+        if (stockDate == default) return (null, null, "Stock date is required.");
+        if (!LegacyExcelWorkbookConverter.IsSupportedExtension(filename))
+            return (null, null, LegacyExcelWorkbookConverter.UnsupportedFileMessage);
         try
         {
             using var output = new MemoryStream();
@@ -131,18 +131,26 @@ public sealed class StockUploadService(
                     throw new InvalidDataException($"The workbook exceeds the {options.Value.MaxFileSizeBytes} byte upload limit.");
                 await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
             }
-            return output.Length == 0 ? (null, "The workbook is empty.") : (output.ToArray(), null);
+            if (output.Length == 0) return (null, null, "The workbook is empty.");
+
+            // Hash what the distributor actually sent; a converted .xls is not the audited artifact.
+            var source = output.ToArray();
+            var sha256 = Convert.ToHexString(SHA256.HashData(source)).ToLowerInvariant();
+            return (LegacyExcelWorkbookConverter.EnsureOpenXml(source), sha256, null);
         }
-        catch (InvalidDataException exception) { return (null, exception.Message); }
+        catch (InvalidDataException exception) { return (null, null, exception.Message); }
     }
 
     private static StockStaging ToStaging(StockStagingRowDto row, long batchId) => new()
     {
-        StockUploadBatchId = batchId, SourceRowNumber = row.SourceRowNumber, ProductId = row.ProductId,
+        StockUploadBatchId = batchId, StockTemplateMappingId = row.StockTemplateMappingId,
+        SourceWorksheetName = row.SourceWorksheetName,
+        SourceRowNumber = row.SourceRowNumber, ProductId = row.ProductId,
         ProductName = row.ProductName, DistributorProductId = row.DistributorProductId,
         DistributorProductName = row.DistributorProductName, ItemMappingId = row.ItemMappingId,
         ProductPackaging = row.ProductPackaging,
         ProductPcsInCtn = row.ProductPcsInCtn, ProductNetto = row.ProductNetto, ProductUnit = row.ProductUnit,
+        SmallestUnit = row.SmallestUnit, SmallestUnitQty = row.SmallestUnitQty,
         PriceUnit = row.PriceUnit, SaldoAwal = row.SaldoAwal, SaldoMasukPO = row.SaldoMasukPO,
         SaldoAkhir = row.SaldoAkhir,
         BatchNumber = row.BatchNumber, ExpiredDate = row.ExpiredDate, IsValid = row.IsValid,
@@ -151,10 +159,25 @@ public sealed class StockUploadService(
 
     private static StockUploadPreflightDto ToPreflight(StockWorkbookAnalysisDto analysis, DateTime stockDate) => new()
     {
-        MappingName = analysis.Mapping?.Name, StockDate = stockDate, TotalRows = analysis.Rows.Count,
+        MappingName = DescribeMappings(analysis), StockDate = stockDate, TotalRows = analysis.Rows.Count,
         ValidRows = analysis.ValidRows, InvalidRows = analysis.InvalidRows,
+        TotalSaldoAwal = analysis.Rows.Where(row => row.IsValid).Sum(row => row.SaldoAwal ?? 0m),
+        TotalSaldoMasukPo = analysis.Rows.Where(row => row.IsValid).Sum(row => row.SaldoMasukPO ?? 0m),
+        TotalSaldoAkhir = analysis.Rows.Where(row => row.IsValid).Sum(row => row.SaldoAkhir ?? 0m),
+        Sheets = analysis.Sheets, IgnoredWorksheetNames = analysis.IgnoredWorksheetNames,
         IgnoredSummaryRowNumbers = analysis.IgnoredSummaryRowNumbers,
         RowErrors = analysis.RowErrors, Errors = analysis.Errors
+    };
+
+    /// <summary>
+    /// Names every mapping the workbook matched, because a single upload can draw on several mapped
+    /// worksheets and the review must show all of them, not just the first.
+    /// </summary>
+    private static string? DescribeMappings(StockWorkbookAnalysisDto analysis) => analysis.Sheets.Count switch
+    {
+        0 => analysis.Mapping?.Name,
+        1 => analysis.Sheets[0].MappingName,
+        _ => string.Join(", ", analysis.Sheets.Select(sheet => $"{sheet.MappingName} ({sheet.WorksheetName})"))
     };
 
     private static StockUploadResultDto Result(StockUploadBatch batch, StockUploadBatchStatus status,

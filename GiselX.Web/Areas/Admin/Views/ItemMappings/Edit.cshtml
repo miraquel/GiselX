@@ -16,6 +16,14 @@
                 <div class="col-md-6 mb-3"><label asp-for="GmkItemName" class="form-label"></label><input asp-for="GmkItemName" class="form-control" required /><span asp-validation-for="GmkItemName" class="text-danger"></span></div>
                 <div class="col-md-6 mb-3"><label asp-for="DistributorItemId" class="form-label"></label><input asp-for="DistributorItemId" class="form-control" required /><span asp-validation-for="DistributorItemId" class="text-danger"></span></div>
                 <div class="col-md-6 mb-3"><label asp-for="DistributorItemName" class="form-label"></label><input asp-for="DistributorItemName" class="form-control" required /><span asp-validation-for="DistributorItemName" class="text-danger"></span></div>
+                <div class="col-md-6 mb-3">
+                    <label asp-for="IsActive" class="form-label"></label>
+                    <select asp-for="IsActive" class="form-select">
+                        <option value="true">Active</option>
+                        <option value="false">Inactive</option>
+                    </select>
+                    <span asp-validation-for="IsActive" class="text-danger"></span>
+                </div>
             </div>
             <button type="submit" class="btn btn-primary">Save Mapping</button>
             <a asp-action="Index" asp-route-companyId="@Model.CompanyId" class="btn btn-secondary ms-2">Cancel</a>

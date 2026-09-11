@@ -66,6 +66,7 @@
         <table id="servicelevel-table" class="datatables-basic table table-bordered" style="width: 100%;">
             <thead>
             <tr>
+                @if (User.IsInRole("Administrator")) { <th>@Html.DisplayNameFor(m => m.CompanyName)</th> }
                 <th>@Html.DisplayNameFor(m => m.SoId)</th>
                 <th>@Html.DisplayNameFor(m => m.SoCreateDate)</th>
                 <th>@Html.DisplayNameFor(m => m.LeadTimeDlv)</th>
@@ -83,6 +84,7 @@
             </tr>
             </thead>
             <tfoot>
+                @if (User.IsInRole("Administrator")) { <th>@Html.DisplayNameFor(m => m.CompanyName)</th> }
                 <th>@Html.DisplayNameFor(m => m.SoId)</th>
                 <th>@Html.DisplayNameFor(m => m.SoCreateDate)</th>
                 <th>@Html.DisplayNameFor(m => m.LeadTimeDlv)</th>
@@ -268,7 +270,7 @@
                                 pageSize: d.length,
                             };
                             if (d.search && d.search.value) {
-                                query.Search = d.search.value;
+                                query.SearchTerm = d.search.value;
                             }
                             if (d.order && d.order.length) {
                                 query.SortBy = d.columns[d.order[0].column].data;
@@ -305,6 +307,7 @@
                         }
                     },
                     columns: [
+                        @if (User.IsInRole("Administrator")) { <text>{ data: 'companyName', width: '160px' },</text> }
                         { data: 'soId', width: '100px' },
                         {
                             data: 'soCreateDate',
@@ -370,7 +373,7 @@
                     ],
                     columnDefs: [
                         {
-                            targets: [0, 1, 4, 7, 9, 10, 12],
+                            targets: @Html.Raw(User.IsInRole("Administrator") ? "[1, 2, 5, 8, 10, 11, 13]" : "[0, 1, 4, 7, 9, 10, 12]"),
                             className: 'text-center'
                         }
                     ],

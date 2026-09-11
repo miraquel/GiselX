@@ -16,6 +16,6 @@ public sealed class StockTemplateMappingEditViewModel
 public sealed class StockTemplateColumnEditViewModel
 {
     public int SourceColumnNumber { get; set; }
-    public string SourceHeader { get; set; } = string.Empty;
+    public string? SourceHeader { get; set; }
     public StockCanonicalField? CanonicalField { get; set; }
 }

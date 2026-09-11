@@ -69,7 +69,8 @@ builder.Services.AddScoped(serviceProvider =>
     var userClaimDto = new UserClaimDto
     {
         UserId = userId,
-        Username = username
+        Username = username,
+        IsAdministrator = httpContextAccessor.HttpContext?.User.IsInRole("Administrator") == true
     };
 
     return userClaimDto;

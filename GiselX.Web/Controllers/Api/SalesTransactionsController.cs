@@ -27,6 +27,15 @@ public class SalesTransactionsController : ControllerBase
     }
 
     [HttpGet]
+    [Authorize(Roles = "Administrator")]
+    public async Task<IActionResult> SummaryAsync([FromQuery] PagedListRequestDto listRequest,
+        CancellationToken cancellationToken)
+    {
+        var response = await _salesTransactionService.SelectSummaryAsync(listRequest, false, cancellationToken);
+        return StatusCode(response.StatusCode, response);
+    }
+
+    [HttpGet]
     [Authorize(PermissionConstants.SalesTransactions.Index)]
     public async Task<IActionResult> SelectPeriodsAsync(CancellationToken cancellationToken)
     {

@@ -24,16 +24,15 @@ CREATE OR ALTER PROCEDURE [dbo].[GiselSales_Select]
     @InvoiceUnit        NVARCHAR(50)   = NULL,
     @GeisaPOId          NVARCHAR(100)  = NULL,
     @SalesmanNameGMK    NVARCHAR(200)  = NULL,
-    -- Integer column filters
-    @ProductPcsInCtn    INT            = NULL,
     -- Decimal column filters
-    @InvoiceQty     DECIMAL(18, 2) = NULL,
+    @ProductPcsInCtn    DECIMAL(18, 2) = NULL,
+    @InvoiceQty     DECIMAL(18, 4) = NULL,
     @UnitPrice      DECIMAL(18, 2) = NULL,
     @GrossValue     DECIMAL(18, 2) = NULL,
     @DiscountValue  DECIMAL(18, 2) = NULL,
     @DiscountPct    DECIMAL(18, 2) = NULL,
     @NetValue       DECIMAL(18, 2) = NULL,
-    @InKg           DECIMAL(18, 2) = NULL,
+    @InKg           DECIMAL(18, 4) = NULL,
     -- DateTime column filters
     @ExpiredDate    DATETIME       = NULL,
     @InvoiceDate    DATETIME       = NULL,

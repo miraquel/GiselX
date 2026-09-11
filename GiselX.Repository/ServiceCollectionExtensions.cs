@@ -33,6 +33,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ISalesTransactionRepository, SalesTransactionRepository>();
         services.AddScoped<IStockRepository, StockRepository>();
         services.AddScoped<ICompanyRepository, CompanyRepository>();
+        services.AddScoped<IBusinessUnitRepository, BusinessUnitRepository>();
         services.AddScoped<IPowerBiReportMenuConnectionFactory, PowerBiReportMenuConnectionFactory>();
         services.AddScoped<IPowerBiReportMenuRepository, PowerBiReportMenuRepository>();
         services.AddScoped<IPowerBiReportRepository, PowerBiReportRepository>();
@@ -42,5 +43,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ISelloutUploadRepository, SelloutUploadRepository>();
         services.AddScoped<IStockUploadRepository, StockUploadRepository>();
         services.AddScoped<IItemMappingRepository, ItemMappingRepository>();
+        services.AddScoped<IChannelRepository, ChannelRepository>();
+        services.AddScoped<ISalesmanRepository, SalesmanRepository>();
     }
 }

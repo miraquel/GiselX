@@ -6,7 +6,7 @@
 <form asp-action="Save" method="post" enctype="multipart/form-data" id="mappingForm">
     <input asp-for="CompanyId" type="hidden"/><input asp-for="Id" type="hidden"/><div asp-validation-summary="All" class="text-danger"></div>
     <div class="mb-3"><label asp-for="Name" class="form-label"></label><input asp-for="Name" class="form-control" required/></div>
-    <div class="mb-3"><label class="form-label">Sample .xlsx file</label><input type="file" name="sampleFile" id="sampleFile" class="form-control" accept=".xlsx" required/></div>
+    <div class="mb-3"><label class="form-label">Sample .xlsx or .xls file</label><input type="file" name="sampleFile" id="sampleFile" class="form-control" accept=".xlsx,.xls" required/></div>
     <div class="row"><div class="col-md-4 mb-3"><label asp-for="WorksheetName" class="form-label"></label><input asp-for="WorksheetName" class="form-control"/></div>
     <div class="col-md-4 mb-3"><label asp-for="HeaderRowNumber" class="form-label"></label><input asp-for="HeaderRowNumber" class="form-control" min="1"/></div>
     <div class="col-md-4 mb-3"><label asp-for="FirstDataRowNumber" class="form-label"></label><input asp-for="FirstDataRowNumber" class="form-control" min="2"/></div></div>
@@ -38,6 +38,26 @@
     </tbody></table></div>
     <button class="btn btn-primary" type="submit">Save Mapping</button> <a asp-controller="Companies" asp-action="Edit" asp-route-id="@Model.CompanyId" class="btn btn-secondary">Cancel</a>
 </form></div></div>
+<div class="modal fade" id="sourceReuseConfirmationModal" tabindex="-1" aria-labelledby="sourceReuseConfirmationTitle" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="sourceReuseConfirmationTitle">Reuse source header?</h5>
+            </div>
+            <div class="modal-body">
+                <p class="mb-0">
+                    Source header <strong id="reusedSourceHeader"></strong> is already mapped to
+                    <strong id="existingCanonicalFields"></strong>. Do you also want to map it to
+                    <strong id="requestedCanonicalField"></strong>?
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="rejectSourceReuse">No</button>
+                <button type="button" class="btn btn-primary" id="confirmSourceReuse">Yes</button>
+            </div>
+        </div>
+    </div>
+</div>
 <script>
 const canonicalFields = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(
     Enum.GetValues<SelloutCanonicalField>().Select(field => new
@@ -51,19 +71,43 @@ const updateSourceHeaderValue = select => {
  const option = select.options[select.selectedIndex];
  select.closest('td').querySelector('.source-header-value').value = option?.dataset.header ?? '';
 };
-const refreshSourceAvailability = () => {
- const selects = [...document.querySelectorAll('.source-header-select')];
- const selected = new Set(selects.map(select => select.value).filter(value => value !== '0'));
- selects.forEach(select => [...select.options].forEach(option => {
-   option.disabled = option.value !== '0' && option.value !== select.value && selected.has(option.value);
- }));
+let pendingSourceReuse = null;
+const canonicalFieldName = select => canonicalFields.find(field => String(field.value) === select.dataset.canonicalValue)?.name ?? 'this field';
+const acceptSourceSelection = select => {
+ updateSourceHeaderValue(select);
+ select.dataset.previousValue = select.value;
+};
+const handleSourceSelection = select => {
+ const matchingSelects = [...document.querySelectorAll('.source-header-select')]
+   .filter(other => other !== select && select.value !== '0' && other.value === select.value);
+ if (!matchingSelects.length) { acceptSourceSelection(select); return; }
+
+ pendingSourceReuse = { select, previousValue: select.dataset.previousValue ?? '0' };
+ const option = select.options[select.selectedIndex];
+ document.getElementById('reusedSourceHeader').textContent = option?.dataset.header ?? option?.textContent ?? '';
+ document.getElementById('existingCanonicalFields').textContent = matchingSelects.map(canonicalFieldName).join(', ');
+ document.getElementById('requestedCanonicalField').textContent = canonicalFieldName(select);
+ bootstrap.Modal.getOrCreateInstance(document.getElementById('sourceReuseConfirmationModal')).show();
 };
 const wireSourceSelects = () => {
- document.querySelectorAll('.source-header-select').forEach(select => select.addEventListener('change', () => {
-   updateSourceHeaderValue(select); refreshSourceAvailability();
- }));
- refreshSourceAvailability();
+ document.querySelectorAll('.source-header-select').forEach(select => {
+   select.dataset.previousValue = select.value;
+   select.addEventListener('change', () => handleSourceSelection(select));
+ });
 };
+document.getElementById('confirmSourceReuse').addEventListener('click', () => {
+ if (!pendingSourceReuse) return;
+ acceptSourceSelection(pendingSourceReuse.select);
+ pendingSourceReuse = null;
+ bootstrap.Modal.getInstance(document.getElementById('sourceReuseConfirmationModal'))?.hide();
+});
+document.getElementById('rejectSourceReuse').addEventListener('click', () => {
+ if (!pendingSourceReuse) return;
+ pendingSourceReuse.select.value = pendingSourceReuse.previousValue;
+ updateSourceHeaderValue(pendingSourceReuse.select);
+ pendingSourceReuse = null;
+ bootstrap.Modal.getInstance(document.getElementById('sourceReuseConfirmationModal'))?.hide();
+});
 wireSourceSelects();
 document.getElementById('inspect').onclick = async () => {
  const form = document.getElementById('mappingForm'), data = new FormData();

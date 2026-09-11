@@ -64,7 +64,7 @@ public sealed class SelloutUploadService(
             CompanyId = companyId,
             DistributorTemplateMappingId = analysis.Mapping?.Id,
             OriginalFileName = Path.GetFileName(originalFileName),
-            FileSha256 = Convert.ToHexString(SHA256.HashData(content)).ToLowerInvariant(),
+            FileSha256 = contentResponse.SourceSha256!,
             Status = SelloutUploadGroupStatus.Processing,
             TotalRows = analysis.Rows.Count,
             ValidRows = analysis.Rows.Count - invalidRows,
@@ -182,21 +182,25 @@ public sealed class SelloutUploadService(
         return GroupNotFound();
     }
 
-    private async Task<(byte[]? Content, string? Error)> ReadRequestAsync(
+    private async Task<(byte[]? Content, string? SourceSha256, string? Error)> ReadRequestAsync(
         Stream file,
         string filename,
         CancellationToken cancellationToken)
     {
-        if (!string.Equals(Path.GetExtension(filename), ".xlsx", StringComparison.OrdinalIgnoreCase))
-            return (null, "Only .xlsx files are supported.");
+        if (!LegacyExcelWorkbookConverter.IsSupportedExtension(filename))
+            return (null, null, LegacyExcelWorkbookConverter.UnsupportedFileMessage);
         try
         {
-            var content = await ReadBoundedAsync(file, options.Value.MaxFileSizeBytes, cancellationToken);
-            return content.Length == 0 ? (null, "The workbook is empty.") : (content, null);
+            var source = await ReadBoundedAsync(file, options.Value.MaxFileSizeBytes, cancellationToken);
+            if (source.Length == 0) return (null, null, "The workbook is empty.");
+
+            // Hash what the distributor actually sent; a converted .xls is not the audited artifact.
+            var sha256 = Convert.ToHexString(SHA256.HashData(source)).ToLowerInvariant();
+            return (LegacyExcelWorkbookConverter.EnsureOpenXml(source), sha256, null);
         }
         catch (InvalidDataException exception)
         {
-            return (null, exception.Message);
+            return (null, null, exception.Message);
         }
     }
 
@@ -245,16 +249,62 @@ public sealed class SelloutUploadService(
         TotalRows = analysis.Rows.Count,
         ValidRows = analysis.Rows.Count(row => row.IsValid),
         InvalidRows = analysis.Rows.Count(row => !row.IsValid),
+        TotalInvoiceQty = analysis.Rows.Where(row => row.IsValid).Sum(row => row.InvoiceQty ?? 0m),
+        TotalGrossValue = analysis.Rows.Where(row => row.IsValid).Sum(row =>
+            row.GrossValue ?? (row.InvoiceQty ?? 0m) * (row.UnitPrice ?? 0m)),
+        TotalDiscountValue = analysis.Rows.Where(row => row.IsValid).Sum(row => row.DiscountValue ?? 0m),
+        TotalNetValue = analysis.Rows.Where(row => row.IsValid).Sum(row =>
+            row.NetValue ??
+            (row.GrossValue ?? (row.InvoiceQty ?? 0m) * (row.UnitPrice ?? 0m)) - (row.DiscountValue ?? 0m)),
         Weeks = analysis.WeekSummaries,
         IgnoredSummaryRowNumbers = analysis.IgnoredSummaryRowNumbers,
         RowErrors = analysis.RowErrors,
-        Errors = analysis.Errors
+        Errors = analysis.Errors,
+        Warnings = PartialWeekWarnings(analysis.WeekSummaries)
     };
+
+    /// <summary>
+    /// Publishing replaces whole Monday-Sunday weeks. Inside the range a workbook covers, that is correct -
+    /// a day with no rows genuinely had no sales. The danger is only at the two ends, where a week reaches
+    /// past the file's first or last invoice date into a neighbouring period the file says nothing about,
+    /// and replacing the whole week deletes rows a previous upload published there.
+    /// </summary>
+    private static List<string> PartialWeekWarnings(IReadOnlyList<SelloutWeekSummaryDto> weeks)
+    {
+        if (weeks.Count == 0) return [];
+
+        var firstCoveredDay = weeks.Min(week => week.CoveredFrom);
+        var lastCoveredDay = weeks.Max(week => week.CoveredTo);
+        var warnings = new List<string>();
+        foreach (var week in weeks)
+        {
+            if (week.ReportingWeekStart < firstCoveredDay)
+            {
+                warnings.Add(Describe(week, week.ReportingWeekStart, firstCoveredDay.AddDays(-1)));
+            }
+
+            if (week.ReportingWeekEnd > lastCoveredDay)
+            {
+                warnings.Add(Describe(week, lastCoveredDay.AddDays(1), week.ReportingWeekEnd));
+            }
+        }
+
+        return warnings;
+    }
+
+    private static string Describe(SelloutWeekSummaryDto week, DateTime uncoveredFrom, DateTime uncoveredTo) =>
+        $"This workbook carries no rows for {uncoveredFrom:yyyy-MM-dd} to {uncoveredTo:yyyy-MM-dd}, but they fall in "
+        + $"the reporting week {week.ReportingWeekStart:yyyy-MM-dd} to {week.ReportingWeekEnd:yyyy-MM-dd} that "
+        + "confirming replaces in full. Any rows a previous upload published on those days will be deleted.";
 
     private static List<string> CollectErrors(SelloutWorkbookAnalysisDto analysis) =>
         analysis.Errors
             .Concat(analysis.RowErrors.Select(error =>
-                $"Row {error.SourceRowNumber}, {error.Field}: {error.Reason}"))
+                // The rejected text is the whole diagnosis for a bad cell - without it "not a valid
+                // DateTime" leaves the user opening the workbook to find out what the cell actually held.
+                string.IsNullOrWhiteSpace(error.RejectedValue)
+                    ? $"Row {error.SourceRowNumber}, {error.Field}: {error.Reason}"
+                    : $"Row {error.SourceRowNumber}, {error.Field}: {error.Reason} (cell value: \"{error.RejectedValue}\")"))
             .ToList();
 
     private static ServiceResponse<SelloutUploadGroupDto> GroupNotFound() => new()

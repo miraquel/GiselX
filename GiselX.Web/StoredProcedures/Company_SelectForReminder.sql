@@ -3,8 +3,11 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    SELECT Id, Name, Address, ContactEmail, DeadlineDayOfMonth, DeadlineDaysOfWeek, ReminderLeadDays
-    FROM [dbo].[Company]
-    WHERE ContactEmail IS NOT NULL
-      AND (DeadlineDayOfMonth IS NOT NULL OR DeadlineDaysOfWeek IS NOT NULL);
+    SELECT company.Id, company.Name, company.BusinessUnitId, unit.Name AS BusinessUnitName,
+           company.Address, company.ContactEmail, company.DeadlineDayOfMonth,
+           company.DeadlineDaysOfWeek, company.ReminderLeadDays
+    FROM [dbo].[Company] company
+    LEFT JOIN [dbo].[BusinessUnit] unit ON unit.Id = company.BusinessUnitId
+    WHERE company.ContactEmail IS NOT NULL
+      AND (company.DeadlineDayOfMonth IS NOT NULL OR company.DeadlineDaysOfWeek IS NOT NULL);
 END

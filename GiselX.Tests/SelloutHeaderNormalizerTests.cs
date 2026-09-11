@@ -27,11 +27,30 @@ public class SelloutHeaderNormalizerTests
     }
 
     [Fact]
-    public void ValidateHeaders_RejectsDuplicateNormalizedHeaders()
+    public void CreateDisplayHeaders_DeclaresBlankColumnsAndNumbersDuplicateHeaders()
     {
-        var errors = SelloutHeaderNormalizer.ValidateHeaders(["Invoice No", " invoice   no "]);
+        var headers = SelloutHeaderNormalizer.CreateDisplayHeaders([null, "Unit", " unit ", "UNIT"]);
 
-        Assert.Single(errors);
-        Assert.Contains("duplicate", errors[0], StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(["Column 1", "Unit", "Unit 2", "Unit 3"], headers);
+        Assert.Empty(SelloutHeaderNormalizer.ValidateHeaders(headers));
+    }
+
+    [Fact]
+    public void CreateDisplayHeaders_PreservesBlankMergedContinuationColumns()
+    {
+        var headers = SelloutHeaderNormalizer.CreateDisplayHeaders(
+            ["Invoice Date", "", "", "Product ID"],
+            new HashSet<int> { 2, 3 });
+
+        Assert.Equal(["Invoice Date", "", "", "Product ID"], headers);
+    }
+
+    [Fact]
+    public void CreateDisplayHeaders_HandlesANaturalHeaderThatMatchesAGeneratedName()
+    {
+        var headers = SelloutHeaderNormalizer.CreateDisplayHeaders(["Unit", "Unit", "Unit 2"]);
+
+        Assert.Equal(["Unit", "Unit 2", "Unit 2 2"], headers);
+        Assert.Equal(headers.Count, headers.Select(SelloutHeaderNormalizer.Normalize).Distinct().Count());
     }
 }

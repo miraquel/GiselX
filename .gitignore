@@ -21,3 +21,10 @@ GiselX-Database-Documentation.xlsx
 # Local upload fixtures — the app generates its own templates via DownloadTemplate
 GiselX.Web/*_Sample.csv
 GiselX.Web/*_Sample.xlsx
+
+# Agent scratch artifacts — build/test transcripts, 6+ GB of them
+GiselX.Web/.tmp/
+
+# Generated PDF output of the tutorial feature
+output/
+tmp/

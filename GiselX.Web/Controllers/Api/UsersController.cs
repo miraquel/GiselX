@@ -27,18 +27,8 @@ public class UsersController : ControllerBase
     {
         var usersQuery = _userManager.Users;
 
-        // Filtering
-        if (!string.IsNullOrEmpty(request.SearchTerm))
-        {
-            usersQuery = usersQuery.Where(u =>
-                u.UserName != null && u.Email != null &&
-                u.LastName != null &&
-                (u.UserName.Contains(request.SearchTerm) ||
-                 u.Email.Contains(request.SearchTerm) ||
-                 u.FirstName.Contains(request.SearchTerm) ||
-                 u.LastName.Contains(request.SearchTerm))
-            );
-        }
+        usersQuery = ApplySearch(usersQuery, request.SearchTerm);
+
         
         // check if the property exists on AppIdentityUser
         if (!string.IsNullOrEmpty(request.SortBy) && typeof(AppIdentityUser).GetProperties().Any(p => p.Name.Equals(request.SortBy, StringComparison.OrdinalIgnoreCase)))
@@ -76,6 +66,9 @@ public class UsersController : ControllerBase
         }
 
         var pagedList = new PagedListDto<UserDto>(users, pageNumber, pageSize, recordsTotal, recordsFiltered);
+        // The constructor reads a filtered count of 0 as "not supplied" and falls back to the total, which
+        // would make a search matching nobody render paging for every record. Set it explicitly.
+        pagedList.TotalFilteredCount = recordsFiltered;
 
         var response = new ServiceResponse<PagedListDto<UserDto>>
         {
@@ -85,5 +78,21 @@ public class UsersController : ControllerBase
         };
         
         return StatusCode(response.StatusCode, response);
+    }
+
+    /// <summary>
+    /// Matches the term against any one of the four name fields. Each is null-checked on its own: gating
+    /// the whole predicate on every field being non-null hid users who simply had no last name.
+    /// </summary>
+    public static IQueryable<AppIdentityUser> ApplySearch(IQueryable<AppIdentityUser> users, string? searchTerm)
+    {
+        if (string.IsNullOrWhiteSpace(searchTerm)) return users;
+
+        var term = searchTerm.Trim();
+        return users.Where(user =>
+            (user.UserName != null && user.UserName.Contains(term)) ||
+            (user.Email != null && user.Email.Contains(term)) ||
+            (user.FirstName != null && user.FirstName.Contains(term)) ||
+            (user.LastName != null && user.LastName.Contains(term)));
     }
 }

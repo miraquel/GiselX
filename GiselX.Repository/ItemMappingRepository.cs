@@ -52,6 +52,7 @@ public sealed class ItemMappingRepository(IDbConnection dbConnection, IDbTransac
                 GmkItemName = @GmkItemName,
                 DistributorItemId = @DistributorItemId,
                 DistributorItemName = @DistributorItemName,
+                IsActive = @IsActive,
                 ModifiedDate = @ModifiedDate,
                 ModifiedBy = @ModifiedBy
             WHERE Id = @Id AND CompanyId = @CompanyId;
@@ -129,6 +130,7 @@ public sealed class ItemMappingRepository(IDbConnection dbConnection, IDbTransac
                 GmkItemId = source.GmkItemId,
                 GmkItemName = source.GmkItemName,
                 DistributorItemName = source.DistributorItemName,
+                IsActive = source.IsActive,
                 ModifiedDate = source.ModifiedDate,
                 ModifiedBy = source.ModifiedBy
             WHEN NOT MATCHED THEN INSERT
@@ -140,6 +142,67 @@ public sealed class ItemMappingRepository(IDbConnection dbConnection, IDbTransac
                  source.ModifiedDate, source.ModifiedBy);
             """;
         return dbConnection.ExecuteAsync(new CommandDefinition(sql, values, dbTransaction, cancellationToken: cancellationToken));
+    }
+
+    public async Task<IReadOnlyList<UnmappedDistributorItem>> GetUnmappedDistributorItemsAsync(int companyId,
+        CancellationToken cancellationToken)
+    {
+        // Derived from staging history rather than stored: a row whose ItemMappingId stayed NULL is an item the
+        // resolver could not translate. The NOT EXISTS drops ids that have since been mapped, so an entry leaves
+        // this list the moment an ItemMapping row is created for it.
+        const string sql = """
+            WITH Discovered AS (
+                SELECT UPPER(LTRIM(RTRIM(staging.DistributorProductId))) AS NormalizedItemId,
+                       LTRIM(RTRIM(staging.DistributorProductId)) AS DistributorItemId,
+                       LTRIM(RTRIM(staging.DistributorProductName)) AS DistributorItemName,
+                       batch.UploadedDate AS UploadedDate,
+                       staging.Id AS StagingRowId,
+                       1 AS FromStock,
+                       0 AS FromSellout
+                FROM StockStaging staging
+                INNER JOIN StockUploadBatch batch ON batch.Id = staging.StockUploadBatchId
+                WHERE batch.CompanyId = @CompanyId
+                  AND staging.ItemMappingId IS NULL
+                  AND NULLIF(LTRIM(RTRIM(staging.DistributorProductId)), '') IS NOT NULL
+                UNION ALL
+                SELECT UPPER(LTRIM(RTRIM(staging.DistributorProductId))),
+                       LTRIM(RTRIM(staging.DistributorProductId)),
+                       LTRIM(RTRIM(staging.DistributorProductName)),
+                       batch.UploadedDate,
+                       staging.Id,
+                       0,
+                       1
+                FROM SelloutStaging staging
+                INNER JOIN SelloutUploadBatch batch ON batch.Id = staging.SelloutUploadBatchId
+                WHERE batch.CompanyId = @CompanyId
+                  AND staging.ItemMappingId IS NULL
+                  AND NULLIF(LTRIM(RTRIM(staging.DistributorProductId)), '') IS NOT NULL
+            ),
+            Ranked AS (
+                SELECT discovered.*,
+                       ROW_NUMBER() OVER (PARTITION BY discovered.NormalizedItemId
+                                          ORDER BY discovered.UploadedDate DESC, discovered.StagingRowId DESC) AS RecencyRank
+                FROM Discovered discovered
+            )
+            SELECT MAX(CASE WHEN ranked.RecencyRank = 1 THEN ranked.DistributorItemId END) AS DistributorItemId,
+                   MAX(CASE WHEN ranked.RecencyRank = 1 THEN ranked.DistributorItemName END) AS DistributorItemName,
+                   CAST(MAX(ranked.FromStock) AS bit) AS SeenInStock,
+                   CAST(MAX(ranked.FromSellout) AS bit) AS SeenInSellout,
+                   COUNT(*) AS OccurrenceCount,
+                   MIN(ranked.UploadedDate) AS FirstSeenDate,
+                   MAX(ranked.UploadedDate) AS LastSeenDate
+            FROM Ranked ranked
+            WHERE NOT EXISTS (
+                SELECT 1
+                FROM ItemMapping mapping
+                WHERE mapping.CompanyId = @CompanyId
+                  AND UPPER(LTRIM(RTRIM(mapping.DistributorItemId))) = ranked.NormalizedItemId)
+            GROUP BY ranked.NormalizedItemId
+            ORDER BY LastSeenDate DESC, DistributorItemId;
+            """;
+        var values = await dbConnection.QueryAsync<UnmappedDistributorItem>(new CommandDefinition(sql,
+            new { CompanyId = companyId }, dbTransaction, cancellationToken: cancellationToken));
+        return values.ToList();
     }
 
     private async Task<IReadOnlyList<ItemMapping>> LoadAsync(int companyId, bool activeOnly,

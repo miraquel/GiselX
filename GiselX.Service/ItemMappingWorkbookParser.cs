@@ -8,7 +8,7 @@ public sealed class ItemMappingWorkbookParser
 {
     private static readonly string[] Headers =
     [
-        "GMK Item ID", "GMK Item Name", "Distributor Item ID", "Distributor Item Name"
+        "GMK Item ID", "GMK Item Name", "Distributor Item ID", "Distributor Item Name", "Status"
     ];
 
     public ItemMappingWorkbookParseResult Parse(byte[] workbook)
@@ -42,7 +42,7 @@ public sealed class ItemMappingWorkbookParser
             sourceRows.Add((rowNumber, new ItemMapping
             {
                 GmkItemId = values[0], GmkItemName = values[1], DistributorItemId = values[2],
-                DistributorItemName = values[3], CreatedDate = DateTime.UtcNow
+                DistributorItemName = values[3], IsActive = values[4] == "1", CreatedDate = DateTime.UtcNow
             }));
         }
 
@@ -94,6 +94,13 @@ public sealed class ItemMappingWorkbookParser
             if (string.IsNullOrWhiteSpace(values[index]))
             {
                 errors.Add(Error(rowNumber, index, values[index], "A value is required."));
+                continue;
+            }
+
+            if (index == 4)
+            {
+                if (values[index] is not "0" and not "1")
+                    errors.Add(Error(rowNumber, index, values[index], "Status must be 1 (Active) or 0 (Inactive)."));
                 continue;
             }
 

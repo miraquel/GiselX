@@ -18,4 +18,7 @@ public sealed class ItemMappingEditViewModel
 
     [Required, Display(Name = "Distributor Item Name")]
     public string DistributorItemName { get; set; } = string.Empty;
+
+    [Display(Name = "Status")]
+    public bool IsActive { get; set; } = true;
 }

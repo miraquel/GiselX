@@ -45,14 +45,14 @@
 
         <div class="border rounded p-3 mb-4">
             <h6>Import item mappings from Excel</h6>
-            <p class="text-muted mb-2">Use the template headers exactly. The import is previewed before any changes are saved.</p>
+            <p class="text-muted mb-2">Use the template headers exactly and set Status to 1 for Active or 0 for Inactive. The import is previewed before any changes are saved.</p>
             <form id="importForm" enctype="multipart/form-data">
                 @Html.AntiForgeryToken()
                 <input type="hidden" name="companyId" value="@Model.CompanyId" />
                 <div class="row g-2 align-items-end">
                     <div class="col-md-6">
-                        <label class="form-label" for="importFile">Item mapping .xlsx file</label>
-                        <input id="importFile" name="file" type="file" class="form-control" accept=".xlsx" required />
+                        <label class="form-label" for="importFile">Item mapping .xlsx or .xls file</label>
+                        <input id="importFile" name="file" type="file" class="form-control" accept=".xlsx,.xls" required />
                     </div>
                     <div class="col-auto"><button type="button" id="previewImport" class="btn btn-outline-primary">Preview Import</button></div>
                 </div>
@@ -60,6 +60,24 @@
             <div id="importResult" class="mt-3" aria-live="polite"></div>
         </div>
 
+        <ul class="nav nav-tabs mb-3" role="tablist">
+            <li class="nav-item">
+                <button type="button" class="nav-link active" data-bs-toggle="tab" data-bs-target="#mappedPane" role="tab" aria-controls="mappedPane" aria-selected="true">
+                    Mapped <span class="badge bg-secondary">@Model.Mappings.Count</span>
+                </button>
+            </li>
+            @if (Model.ItemMappingEnabled)
+            {
+                <li class="nav-item">
+                    <button type="button" class="nav-link" data-bs-toggle="tab" data-bs-target="#unmappedPane" role="tab" aria-controls="unmappedPane" aria-selected="false">
+                        Unmapped <span class="badge @(Model.UnmappedItems.Count > 0 ? "bg-danger" : "bg-secondary")">@Model.UnmappedItems.Count</span>
+                    </button>
+                </li>
+            }
+        </ul>
+
+        <div class="tab-content p-0">
+        <div class="tab-pane fade show active" id="mappedPane" role="tabpanel">
         @if (Model.Mappings.Count == 0)
         {
             <p class="text-muted mb-0">No item mappings yet.</p>
@@ -108,6 +126,64 @@
                 </table>
             </div>
         }
+        </div>
+        @if (Model.ItemMappingEnabled)
+        {
+            <div class="tab-pane fade" id="unmappedPane" role="tabpanel">
+                <p class="text-muted">Distributor item IDs seen in Stock or Sellout uploads that have no mapping yet. Their rows were excluded from the published data. Map one and it leaves this list; the distributor can then re-upload the file.</p>
+                @if (Model.UnmappedItems.Count == 0)
+                {
+                    <p class="text-muted mb-0">Every distributor item ID from the uploads so far is mapped.</p>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table align-middle">
+                            <thead>
+                            <tr>
+                                <th>No</th>
+                                <th>Distributor Item ID</th>
+                                <th>Distributor Item Name</th>
+                                <th>Source</th>
+                                <th>Rows</th>
+                                <th>First Seen</th>
+                                <th>Last Seen</th>
+                                <th>Actions</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            @for (var index = 0; index < Model.UnmappedItems.Count; index++)
+                            {
+                                var item = Model.UnmappedItems[index];
+                                <tr>
+                                    <td>@(index + 1)</td>
+                                    <td>@item.DistributorItemId</td>
+                                    <td>@item.DistributorItemName</td>
+                                    <td class="text-nowrap">
+                                        @if (item.SeenInStock)
+                                        {
+                                            <span class="badge bg-info">Stock</span>
+                                        }
+                                        @if (item.SeenInSellout)
+                                        {
+                                            <span class="badge bg-primary">Sellout</span>
+                                        }
+                                    </td>
+                                    <td>@item.OccurrenceCount</td>
+                                    <td class="text-nowrap">@item.FirstSeenDate.ToString("yyyy-MM-dd HH:mm")</td>
+                                    <td class="text-nowrap">@item.LastSeenDate.ToString("yyyy-MM-dd HH:mm")</td>
+                                    <td class="text-nowrap">
+                                        <a asp-action="Create" asp-route-companyId="@Model.CompanyId" asp-route-distributorItemId="@item.DistributorItemId" asp-route-distributorItemName="@item.DistributorItemName" class="btn btn-sm btn-primary">Map</a>
+                                    </td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        }
+        </div>
     </div>
 </div>
 

@@ -13,9 +13,14 @@ public sealed class StockWorkbookParser
             StockCanonicalField.ProductName
         };
 
-    public StockParseResult Parse(byte[] workbook, StockTemplateMappingDto mapping)
+    /// <summary>
+    /// Parses one worksheet with one mapping. <paramref name="worksheetName"/> overrides the mapping's own
+    /// worksheet name with the name as resolved in the workbook, so a workbook contributing several mapped
+    /// worksheets reads each one exactly where detection found it.
+    /// </summary>
+    public StockParseResult Parse(byte[] workbook, StockTemplateMappingDto mapping, string? worksheetName = null)
     {
-        var rows = XlsxSelloutWorkbookInspector.ReadWorksheet(workbook, mapping.WorksheetName);
+        var rows = XlsxSelloutWorkbookInspector.ReadWorksheet(workbook, worksheetName ?? mapping.WorksheetName);
         var staged = new List<StockStagingRowDto>();
         var allErrors = new List<StockStagingErrorDto>();
         var sourceRows = rows
@@ -24,7 +29,7 @@ public sealed class StockWorkbookParser
                 !string.IsNullOrWhiteSpace(row.Value.GetValueOrDefault(column.SourceColumnNumber))))
             .OrderBy(row => row.Key)
             .ToList();
-        var ignoredSummaryRows = FindTrailingSummaryRows(sourceRows, mapping);
+        var ignoredSummaryRows = FindIgnorableRows(sourceRows, mapping);
 
         foreach (var source in sourceRows)
         {
@@ -62,13 +67,27 @@ public sealed class StockWorkbookParser
             ignoredSummaryRows.OrderBy(row => row).ToList());
     }
 
-    private static IReadOnlySet<int> FindTrailingSummaryRows(
+    /// <summary>
+    /// Finds the rows that are not stock lines at all. A row carrying no product identity can never be
+    /// published, and it comes in two shapes: a total line, which pairs the missing identity with real
+    /// figures and only ever sits under the data, and form noise such as a signature block
+    /// ("Mengetahui" over a blank name), which carries no figure at all and can sit anywhere - including
+    /// between the last product and the totals, where a purely backwards scan would stop short of it.
+    /// A worksheet made up entirely of such rows is left alone: that points at the mapping rather than at
+    /// the sheet, and reporting every row tells the user more than silently publishing nothing.
+    /// </summary>
+    private static IReadOnlySet<int> FindIgnorableRows(
         IReadOnlyList<KeyValuePair<int, IReadOnlyDictionary<int, string>>> sourceRows,
         StockTemplateMappingDto mapping)
     {
-        var ignored = new HashSet<int>();
+        var ignored = sourceRows
+            .Where(row => IsFormNoiseRow(row.Value, mapping))
+            .Select(row => row.Key)
+            .ToHashSet();
+
         var index = sourceRows.Count - 1;
-        while (index >= 0 && IsSummaryRow(sourceRows[index].Value, mapping))
+        while (index >= 0 &&
+               (ignored.Contains(sourceRows[index].Key) || IsTotalRow(sourceRows[index].Value, mapping)))
         {
             ignored.Add(sourceRows[index].Key);
             index--;
@@ -82,29 +101,54 @@ public sealed class StockWorkbookParser
         return ignored;
     }
 
-    private static bool IsSummaryRow(
+    private static bool IsTotalRow(
         IReadOnlyDictionary<int, string> source,
-        StockTemplateMappingDto mapping)
-    {
-        var identityValuesAreBlank = mapping.Columns
-            .Where(column => IdentityFields.Contains(column.CanonicalField))
-            .All(column => string.IsNullOrWhiteSpace(source.GetValueOrDefault(column.SourceColumnNumber)));
-        var hasNumericValue = mapping.Columns
-            .Where(column => StockCanonicalFieldCatalog.GetValueType(column.CanonicalField) is var type &&
-                             (type == typeof(int) || type == typeof(decimal)))
-            .Any(column => !string.IsNullOrWhiteSpace(source.GetValueOrDefault(column.SourceColumnNumber)));
+        StockTemplateMappingDto mapping) =>
+        HasNoProductIdentity(source, mapping) && HasNumericValue(source, mapping);
 
-        return identityValuesAreBlank && hasNumericValue;
-    }
+    private static bool IsFormNoiseRow(
+        IReadOnlyDictionary<int, string> source,
+        StockTemplateMappingDto mapping) =>
+        HasNoProductIdentity(source, mapping) && !HasNumericValue(source, mapping);
+
+    private static bool HasNoProductIdentity(
+        IReadOnlyDictionary<int, string> source,
+        StockTemplateMappingDto mapping) => mapping.Columns
+        .Where(column => IdentityFields.Contains(column.CanonicalField))
+        .All(column => string.IsNullOrWhiteSpace(source.GetValueOrDefault(column.SourceColumnNumber)));
+
+    /// <summary>
+    /// Asks whether a numeric column holds a figure, not merely whether it holds something. "Mengetahui"
+    /// typed across a quantity column is a signature caption, not a total.
+    /// </summary>
+    private static bool HasNumericValue(
+        IReadOnlyDictionary<int, string> source,
+        StockTemplateMappingDto mapping) => mapping.Columns
+        .Where(column => StockCanonicalFieldCatalog.GetValueType(column.CanonicalField) is var type &&
+                         (type == typeof(int) || type == typeof(decimal)))
+        .Any(column => StockCellValueConverter.TryConvert(
+                           source.GetValueOrDefault(column.SourceColumnNumber),
+                           column.CanonicalField,
+                           out var value) && value is not null);
 
     private static void Validate(StockStagingRowDto row, List<StockStagingErrorDto> errors)
     {
         foreach (var field in StockCanonicalFieldCatalog.RequiredFields)
         {
-            if (GetValue(row, field) is null or "")
+            if (GetValue(row, field) is not (null or ""))
             {
-                errors.Add(Error(row.SourceRowNumber, field, null, "A value is required."));
+                continue;
             }
+
+            // A distributor leaves a quantity cell blank when the product carries no stock. Read that as
+            // zero so the product still reaches the snapshot instead of the whole row being rejected.
+            if (StockCanonicalFieldCatalog.GetValueType(field) == typeof(decimal))
+            {
+                Assign(row, field, 0m);
+                continue;
+            }
+
+            errors.Add(Error(row.SourceRowNumber, field, null, "A value is required."));
         }
 
         if (row.SaldoAkhir < 0)
@@ -117,6 +161,12 @@ public sealed class StockWorkbookParser
         {
             errors.Add(Error(row.SourceRowNumber, StockCanonicalField.PriceUnit,
                 row.PriceUnit.Value.ToString(), "PriceUnit must not be negative."));
+        }
+
+        if (row.SmallestUnitQty < 0)
+        {
+            errors.Add(Error(row.SourceRowNumber, StockCanonicalField.SmallestUnitQty,
+                row.SmallestUnitQty.Value.ToString(), "SmallestUnitQty must not be negative."));
         }
 
         foreach (var field in Enum.GetValues<StockCanonicalField>())
@@ -138,6 +188,8 @@ public sealed class StockWorkbookParser
         StockCanonicalField.ProductPcsInCtn => row.ProductPcsInCtn,
         StockCanonicalField.ProductNetto => row.ProductNetto,
         StockCanonicalField.ProductUnit => row.ProductUnit,
+        StockCanonicalField.SmallestUnit => row.SmallestUnit,
+        StockCanonicalField.SmallestUnitQty => row.SmallestUnitQty,
         StockCanonicalField.PriceUnit => row.PriceUnit,
         StockCanonicalField.SaldoAwal => row.SaldoAwal,
         StockCanonicalField.SaldoMasukPO => row.SaldoMasukPO,
@@ -154,9 +206,11 @@ public sealed class StockWorkbookParser
             case StockCanonicalField.ProductId: row.ProductId = (string?)value; break;
             case StockCanonicalField.ProductName: row.ProductName = (string?)value; break;
             case StockCanonicalField.ProductPackaging: row.ProductPackaging = (string?)value; break;
-            case StockCanonicalField.ProductPcsInCtn: row.ProductPcsInCtn = (int?)value; break;
+            case StockCanonicalField.ProductPcsInCtn: row.ProductPcsInCtn = (decimal?)value; break;
             case StockCanonicalField.ProductNetto: row.ProductNetto = (decimal?)value; break;
             case StockCanonicalField.ProductUnit: row.ProductUnit = (string?)value; break;
+            case StockCanonicalField.SmallestUnit: row.SmallestUnit = (string?)value; break;
+            case StockCanonicalField.SmallestUnitQty: row.SmallestUnitQty = (decimal?)value; break;
             case StockCanonicalField.PriceUnit: row.PriceUnit = (decimal?)value; break;
             case StockCanonicalField.SaldoAwal: row.SaldoAwal = (decimal?)value; break;
             case StockCanonicalField.SaldoMasukPO: row.SaldoMasukPO = (decimal?)value; break;

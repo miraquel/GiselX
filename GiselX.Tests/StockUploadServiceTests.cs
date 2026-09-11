@@ -23,6 +23,29 @@ public sealed class StockUploadServiceTests
     }
 
     [Fact]
+    public async Task Preflight_summarizes_stock_values_from_valid_rows_only()
+    {
+        var analysis = Analysis(2, 1);
+        analysis.Rows[0].SaldoAwal = 10m;
+        analysis.Rows[0].SaldoMasukPO = 2m;
+        analysis.Rows[0].SaldoAkhir = 12m;
+        analysis.Rows[1].SaldoAwal = 20m;
+        analysis.Rows[1].SaldoMasukPO = 3m;
+        analysis.Rows[1].SaldoAkhir = 23m;
+        analysis.Rows[2].SaldoAwal = 999m;
+        analysis.Rows[2].SaldoMasukPO = 999m;
+        analysis.Rows[2].SaldoAkhir = 999m;
+        var (service, _, _) = CreateService(analysis);
+
+        var response = await service.PreflightAsync(
+            File(), "stock.xlsx", new DateTime(2026, 8, 10), 7, CancellationToken.None);
+
+        Assert.Equal(30m, response.Data!.TotalSaldoAwal);
+        Assert.Equal(5m, response.Data.TotalSaldoMasukPo);
+        Assert.Equal(35m, response.Data.TotalSaldoAkhir);
+    }
+
+    [Fact]
     public async Task Upload_requires_explicit_confirmation()
     {
         var (service, repository, transaction) = CreateService(Analysis(1, 0));
@@ -82,6 +105,24 @@ public sealed class StockUploadServiceTests
     }
 
     [Fact]
+    public async Task Upload_copies_smallest_unit_fields_to_staging_before_publication()
+    {
+        var analysis = Analysis(1, 0);
+        analysis.Rows[0].SmallestUnit = "PCS";
+        analysis.Rows[0].SmallestUnitQty = 24m;
+        var (service, repository, _) = CreateService(analysis);
+
+        var response = await service.UploadAsync(File(), "stock.xlsx", new DateTime(2026, 8, 10), 7,
+            true, "user", CancellationToken.None);
+
+        Assert.True(response.IsSuccess);
+        var staged = Assert.Single(repository.StagingRows);
+        Assert.Equal("PCS", staged.SmallestUnit);
+        Assert.Equal(24m, staged.SmallestUnitQty);
+        Assert.Equal([3], repository.PublishedSourceRows);
+    }
+
+    [Fact]
     public async Task Upload_forwards_both_item_identities_and_mapping_id_to_stock_staging()
     {
         var analysis = Analysis(1, 0);
@@ -102,6 +143,56 @@ public sealed class StockUploadServiceTests
         Assert.Equal("P-DIST", staging.DistributorProductId);
         Assert.Equal("Distributor Product", staging.DistributorProductName);
         Assert.Equal(9, staging.ItemMappingId);
+    }
+
+    [Fact]
+    public async Task Upload_records_the_worksheet_and_mapping_each_staged_row_came_from()
+    {
+        var (service, repository, _) = CreateService(MultiSheetAnalysis());
+
+        var response = await service.UploadAsync(File(), "stock.xlsx", new DateTime(2026, 8, 10), 7,
+            true, "user", CancellationToken.None);
+
+        Assert.True(response.IsSuccess);
+        Assert.Equal([("Stok Gudang", 11), ("Stok Transit", 12)],
+            repository.StagingRows.Select(row => (row.SourceWorksheetName, row.StockTemplateMappingId)));
+    }
+
+    [Fact]
+    public async Task Upload_leaves_the_batch_mapping_empty_when_the_workbook_spans_several_mappings()
+    {
+        var (service, repository, _) = CreateService(MultiSheetAnalysis());
+
+        await service.UploadAsync(File(), "stock.xlsx", new DateTime(2026, 8, 10), 7, true, "user",
+            CancellationToken.None);
+
+        Assert.Null(repository.Batches.Single().StockTemplateMappingId);
+    }
+
+    [Fact]
+    public async Task Upload_still_records_the_batch_mapping_for_a_single_worksheet_workbook()
+    {
+        var (service, repository, _) = CreateService(Analysis(1, 0));
+
+        await service.UploadAsync(File(), "stock.xlsx", new DateTime(2026, 8, 10), 7, true, "user",
+            CancellationToken.None);
+
+        Assert.Equal(5, repository.Batches.Single().StockTemplateMappingId);
+    }
+
+    [Fact]
+    public async Task Preflight_reports_every_matched_worksheet_and_the_skipped_ones()
+    {
+        var (service, _, _) = CreateService(MultiSheetAnalysis());
+
+        var response = await service.PreflightAsync(File(), "stock.xlsx", new DateTime(2026, 8, 10), 7,
+            CancellationToken.None);
+
+        Assert.True(response.IsSuccess);
+        Assert.Equal(["Stok Gudang", "Stok Transit"],
+            response.Data!.Sheets.Select(sheet => sheet.WorksheetName));
+        Assert.Equal(["Cover"], response.Data.IgnoredWorksheetNames);
+        Assert.Equal("Gudang (Stok Gudang), Transit (Stok Transit)", response.Data.MappingName);
     }
 
     private static (StockUploadService Service, Repository Repository, Transaction Transaction) CreateService(StockWorkbookAnalysisDto analysis)
@@ -129,6 +220,41 @@ public sealed class StockUploadServiceTests
             RowErrors = invalid == 0 ? [] : [new StockStagingErrorDto { SourceRowNumber = valid + 3, Reason = "negative" }]
         };
     }
+
+    /// <summary>
+    /// One workbook contributing two mapped worksheets plus one worksheet nothing maps.
+    /// </summary>
+    private static StockWorkbookAnalysisDto MultiSheetAnalysis() => new()
+    {
+        Mapping = null,
+        Sheets =
+        [
+            new StockSheetAnalysisDto
+            {
+                WorksheetName = "Stok Gudang", MappingId = 11, MappingName = "Gudang",
+                TotalRows = 1, ValidRows = 1
+            },
+            new StockSheetAnalysisDto
+            {
+                WorksheetName = "Stok Transit", MappingId = 12, MappingName = "Transit",
+                TotalRows = 1, ValidRows = 1
+            }
+        ],
+        IgnoredWorksheetNames = ["Cover"],
+        Rows =
+        [
+            new StockStagingRowDto
+            {
+                SourceRowNumber = 3, ProductId = "P1", ProductName = "Gudang row", SaldoAkhir = 1, IsValid = true,
+                StockTemplateMappingId = 11, SourceWorksheetName = "Stok Gudang"
+            },
+            new StockStagingRowDto
+            {
+                SourceRowNumber = 3, ProductId = "P2", ProductName = "Transit row", SaldoAkhir = 2, IsValid = true,
+                StockTemplateMappingId = 12, SourceWorksheetName = "Stok Transit"
+            }
+        ]
+    };
 
     private static MemoryStream File() => new([1, 2, 3]);
 

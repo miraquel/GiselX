@@ -12,6 +12,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ISalesTransactionService, SalesTransactionService>();
         services.AddScoped<IStockService, StockService>();
         services.AddScoped<ICompanyService, CompanyService>();
+        services.AddScoped<IBusinessUnitService, BusinessUnitService>();
         services.AddScoped<IUploadCheckService, UploadCheckService>();
         services.AddScoped<IEmailService, EmailService>();
         services.AddScoped<ReminderJob>();
@@ -26,6 +27,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ISelloutWorkbookAnalysisService, SelloutWorkbookAnalysisService>();
         services.AddScoped<ISelloutUploadService, SelloutUploadService>();
         services.AddScoped<IItemMappingService, ItemMappingService>();
+        services.AddScoped<IChannelService, ChannelService>();
+        services.AddScoped<ISalesmanService, SalesmanService>();
         services.AddScoped<ItemMappingWorkbookParser>();
         services.AddScoped<IItemMappingImportService, ItemMappingImportService>();
         services.AddScoped<IItemMappingResolver, ItemMappingResolver>();

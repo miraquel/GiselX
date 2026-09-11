@@ -74,49 +74,44 @@ public class ServiceLevelsController : Controller
         var response = await _serviceLevelService.SelectByCustPeriodAsync(user.UserName, year, month, cancellationToken);
         if (response is { IsSuccess: true, Data: not null })
         {
+            var includeDistributor = User.IsInRole("Administrator");
+            var columnOffset = includeDistributor ? 1 : 0;
             var stream = ExcelHelper.ExportExcel(response.Data, (row, dto) =>
             {
                 if (row.RowNumber() == 1)
                 {
-                    row.Cell(1).Value = "SO ID";
-                    row.Cell(2).Value = "SO Create Date";
-                    row.Cell(3).Value = "Lead Time Dlv";
-                    row.Cell(4).Value = "Lead Time Rct";
-                    row.Cell(5).Value = "Item ID";
-                    row.Cell(6).Value = "Item Name";
-                    row.Cell(7).Value = "SO Qty";
-                    row.Cell(8).Value = "Unit";
-                    row.Cell(9).Value = "Kg Per Unit";
-                    row.Cell(10).Value = "Dlv Date Request";
-                    row.Cell(11).Value = "Rct Date Request";
-                    row.Cell(12).Value = "DO Qty";
-                    row.Cell(13).Value = "DO Date";
-                    row.Cell(14).Value = "Receipt Date";
+                    var headers = new[] { "SO ID", "SO Create Date", "Lead Time Dlv", "Lead Time Rct", "Item ID",
+                        "Item Name", "SO Qty", "Unit", "Kg Per Unit", "Dlv Date Request", "Rct Date Request",
+                        "DO Qty", "DO Date", "Receipt Date" };
+                    if (includeDistributor) row.Cell(1).Value = "Distributor";
+                    for (var index = 0; index < headers.Length; index++)
+                        row.Cell(index + 1 + columnOffset).Value = headers[index];
                 }
                 else
                 {
-                    row.Cell(1).Value = dto.SoId;
-                    row.Cell(2).Value = dto.SoCreateDate == SqlDateTime.MinValue.Value
+                    if (includeDistributor) row.Cell(1).Value = dto.CompanyName;
+                    row.Cell(1 + columnOffset).Value = dto.SoId;
+                    row.Cell(2 + columnOffset).Value = dto.SoCreateDate == SqlDateTime.MinValue.Value
                         ? null
                         : dto.SoCreateDate.ToString("yyyy-MM-dd");
-                    row.Cell(3).Value = dto.LeadTimeDlv;
-                    row.Cell(4).Value = dto.LeadTimeRct;
-                    row.Cell(5).Value = dto.ItemId;
-                    row.Cell(6).Value = dto.ItemName;
-                    row.Cell(7).Value = dto.SoQty;
-                    row.Cell(8).Value = dto.Unit;
-                    row.Cell(9).Value = dto.KgPerUnit;
-                    row.Cell(10).Value = dto.DlvDateRequest == SqlDateTime.MinValue.Value
+                    row.Cell(3 + columnOffset).Value = dto.LeadTimeDlv;
+                    row.Cell(4 + columnOffset).Value = dto.LeadTimeRct;
+                    row.Cell(5 + columnOffset).Value = dto.ItemId;
+                    row.Cell(6 + columnOffset).Value = dto.ItemName;
+                    row.Cell(7 + columnOffset).Value = dto.SoQty;
+                    row.Cell(8 + columnOffset).Value = dto.Unit;
+                    row.Cell(9 + columnOffset).Value = dto.KgPerUnit;
+                    row.Cell(10 + columnOffset).Value = dto.DlvDateRequest == SqlDateTime.MinValue.Value
                         ? null
                         : dto.DlvDateRequest.ToString("yyyy-MM-dd");
-                    row.Cell(11).Value = dto.RctDateRequest == SqlDateTime.MinValue.Value
+                    row.Cell(11 + columnOffset).Value = dto.RctDateRequest == SqlDateTime.MinValue.Value
                         ? null
                         : dto.RctDateRequest.ToString("yyyy-MM-dd");
-                    row.Cell(12).Value = dto.DoQty;
-                    row.Cell(13).Value = dto.DoDate == SqlDateTime.MinValue.Value
+                    row.Cell(12 + columnOffset).Value = dto.DoQty;
+                    row.Cell(13 + columnOffset).Value = dto.DoDate == SqlDateTime.MinValue.Value
                         ? null
                         : dto.DoDate.ToString("yyyy-MM-dd");
-                    row.Cell(14).Value = dto.ReceiptDate == SqlDateTime.MinValue.Value
+                    row.Cell(14 + columnOffset).Value = dto.ReceiptDate == SqlDateTime.MinValue.Value
                         ? null
                         : dto.ReceiptDate.ToString("yyyy-MM-dd");
                 }
@@ -124,7 +119,8 @@ public class ServiceLevelsController : Controller
 
             // format the file name as ServiceLevels_CompanyId_Month_Year.xlsx
             var monthYear = new DateTime(year, month, 1);
-            var fileName = $"ServiceLevels_{user.Company.Name}_{monthYear:MMMM_yyyy}.xlsx";
+            var companyLabel = includeDistributor ? "All_Distributors" : user.Company.Name;
+            var fileName = $"ServiceLevels_{companyLabel}_{monthYear:MMMM_yyyy}.xlsx";
             return File(stream, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
         }
 

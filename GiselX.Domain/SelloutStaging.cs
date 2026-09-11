@@ -16,7 +16,7 @@ public sealed class SelloutStaging
     public string? DistributorProductName { get; set; }
     public int? ItemMappingId { get; set; }
     public string? ProductPackaging { get; set; }
-    public int? ProductPcsInCtn { get; set; }
+    public decimal? ProductPcsInCtn { get; set; }
     public string? BatchNumber { get; set; }
     public DateTime? ExpiredDate { get; set; }
     public string? InvoiceNo { get; set; }

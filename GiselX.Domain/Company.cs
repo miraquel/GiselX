@@ -6,6 +6,21 @@ public partial class Company
 
     public string Name { get; set; } = null!;
 
+    public int? BusinessUnitId { get; set; }
+
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public string? BusinessUnitName { get; set; }
+
+    public int? ChannelId { get; set; }
+
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public string? ChannelName { get; set; }
+
+    public int? SalesmanId { get; set; }
+
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public string? SalesmanName { get; set; }
+
     public string? Address { get; set; }
 
     public string? ContactEmail { get; set; }
@@ -17,6 +32,12 @@ public partial class Company
     public int ReminderLeadDays { get; set; } = 3;
 
     public bool ItemMappingEnabled { get; set; }
+
+    public virtual BusinessUnit? BusinessUnit { get; set; }
+
+    public virtual Channel? Channel { get; set; }
+
+    public virtual Salesman? Salesman { get; set; }
 
     public virtual ICollection<TransDist> TransDist { get; set; } = new List<TransDist>();
     public virtual ICollection<ServelDeliveryEx> ServelDeliveryEx { get; set; } = new List<ServelDeliveryEx>();

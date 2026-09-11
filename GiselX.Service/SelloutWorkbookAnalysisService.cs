@@ -59,7 +59,9 @@ public sealed class SelloutWorkbookAnalysisService(
             .Select(group => new SelloutWeekSummaryDto
             {
                 ReportingWeekStart = group.Key,
-                RowCount = group.Count()
+                RowCount = group.Count(),
+                CoveredFrom = group.Min(row => row.InvoiceDate!.Value.Date),
+                CoveredTo = group.Max(row => row.InvoiceDate!.Value.Date)
             })
             .ToList();
         return new SelloutWorkbookAnalysisDto

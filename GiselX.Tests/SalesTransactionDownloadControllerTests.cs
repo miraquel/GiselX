@@ -59,6 +59,24 @@ public sealed class SalesTransactionDownloadControllerTests
         Assert.Equal(expectedDistributorMode, service.UseDistributorIdentity);
     }
 
+    [Theory]
+    [InlineData("Administrator", "Distributor", "Test Distributor")]
+    [InlineData("Distributor", "Customer ID", "C-1")]
+    public async Task Download_adds_distributor_column_only_for_administrator(string role,
+        string expectedHeader, string expectedValue)
+    {
+        var service = new RoleAwareSalesServiceFake();
+        var controller = CreateMvcController(service, role);
+
+        var result = Assert.IsType<FileStreamResult>(await controller.DownloadSelectByCustPeriod(2026, 8,
+            CancellationToken.None));
+        using var workbook = new XLWorkbook(result.FileStream);
+        var sheet = workbook.Worksheet(1);
+
+        Assert.Equal(expectedHeader, sheet.Cell(1, 1).GetString());
+        Assert.Equal(expectedValue, sheet.Cell(2, 1).GetString());
+    }
+
     private static GiselX.Web.Controllers.SalesTransactionsController CreateMvcController(
         RoleAwareSalesServiceFake service, string role)
     {
@@ -107,7 +125,8 @@ public sealed class SalesTransactionDownloadControllerTests
                     {
                         CustomerId = "C-1", CustomerName = "Customer", ProductId = useDistributorIdentity ? "P-DIST" : "4100039",
                         ProductName = useDistributorIdentity ? "Distributor Product" : "GMK Product", InvoiceNo = "I-1",
-                        InvoiceDate = new DateTime(2026, 8, 1), CompanyId = companyId
+                        InvoiceDate = new DateTime(2026, 8, 1), CompanyId = companyId,
+                        CompanyName = "Test Distributor"
                     }
                 ]
             });

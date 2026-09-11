@@ -27,6 +27,15 @@ public class StocksController : ControllerBase
     }
 
     [HttpGet]
+    [Authorize(Roles = "Administrator")]
+    public async Task<IActionResult> SummaryAsync([FromQuery] PagedListRequestDto listRequest,
+        CancellationToken cancellationToken)
+    {
+        var response = await _stockService.SelectSummaryAsync(listRequest, false, cancellationToken);
+        return StatusCode(response.StatusCode, response);
+    }
+
+    [HttpGet]
     [Authorize(PermissionConstants.Stocks.Index)]
     public async Task<IActionResult> SelectPeriodsAsync(CancellationToken cancellationToken)
     {

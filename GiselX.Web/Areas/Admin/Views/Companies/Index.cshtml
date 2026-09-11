@@ -37,6 +37,7 @@
             <thead>
                 <tr>
                     <th>Name</th>
+                    <th>Business Unit</th>
                     <th>Address</th>
                     <th>Actions</th>
                 </tr>
@@ -44,6 +45,7 @@
             <tfoot>
                 <tr>
                     <th>Name</th>
+                    <th>Business Unit</th>
                     <th>Address</th>
                     <th>Actions</th>
                 </tr>
@@ -160,6 +162,7 @@
                 },
                 columns: [
                     { data: 'name', name: 'Name' },
+                    { data: 'businessUnitName', name: 'BusinessUnitName' },
                     { data: 'address', name: 'Address' },
                     {
                         data: null,
@@ -179,7 +182,7 @@
                 ],
                 columnDefs: [
                     {
-                        targets: [0, 1],
+                        targets: [0, 1, 2],
                         className: 'text-center'
                     }
                 ],
