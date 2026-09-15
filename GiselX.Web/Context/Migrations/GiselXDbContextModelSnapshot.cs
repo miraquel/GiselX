@@ -237,8 +237,8 @@ namespace GiselX.Web.Context.Migrations
                         .HasColumnType("int");
 
                     b.Property<string>("ContactEmail")
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
 
                     b.Property<int?>("DeadlineDayOfMonth")
                         .HasColumnType("int");

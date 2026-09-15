@@ -38,10 +38,20 @@ public class EmailTestController : Controller
             return RedirectToAction(nameof(Index));
         }
 
+        // Parsed the same way a company's ContactEmail is, so this screen can be used to prove a
+        // multi-address list actually delivers before it is saved against a company.
+        var recipients = GiselX.Service.NotificationRecipients.Parse(toEmail);
+        if (recipients.Count == 0)
+        {
+            TempData["ErrorMessage"] =
+                $"'{toEmail}' contains no valid email address. Separate multiple addresses with ';'.";
+            return RedirectToAction(nameof(Index));
+        }
+
         try
         {
-            await _emailService.SendReminderAsync(toEmail, companyName, deadline, isFinalReminder);
-            TempData["StatusMessage"] = $"Test email sent to {toEmail} successfully.";
+            await _emailService.SendReminderAsync(recipients, companyName, deadline, isFinalReminder);
+            TempData["StatusMessage"] = $"Test email sent to {string.Join(", ", recipients)} successfully.";
         }
         catch (Exception ex)
         {

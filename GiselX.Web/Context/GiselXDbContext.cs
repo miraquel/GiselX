@@ -82,7 +82,7 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
             entity.Property(e => e.Name).HasMaxLength(100);
 
             // New reminder fields
-            entity.Property(e => e.ContactEmail).HasMaxLength(255);
+            entity.Property(e => e.ContactEmail).HasMaxLength(1000);
             entity.Property(e => e.ReminderLeadDays).HasDefaultValue(3);
             entity.Property(e => e.ItemMappingEnabled).HasDefaultValue(false);
             entity.Property(e => e.DeadlineDaysOfWeek).HasConversion<int?>();

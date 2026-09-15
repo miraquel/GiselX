@@ -1,6 +1,6 @@
 CREATE OR ALTER PROCEDURE [dbo].[Company_Insert]
     @Name NVARCHAR(100), @BusinessUnitId INT = NULL, @ChannelId INT = NULL, @SalesmanId INT = NULL,
-    @Address NVARCHAR(255) = NULL, @ContactEmail NVARCHAR(255) = NULL, @DeadlineDayOfMonth INT = NULL,
+    @Address NVARCHAR(255) = NULL, @ContactEmail NVARCHAR(1000) = NULL, @DeadlineDayOfMonth INT = NULL,
     @DeadlineDaysOfWeek INT = NULL, @ReminderLeadDays INT = 3, @ItemMappingEnabled BIT = 0
 AS
 BEGIN

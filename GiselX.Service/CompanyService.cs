@@ -30,6 +30,8 @@ public class CompanyService : ICompanyService
 
     public async Task<ServiceResponse<CompanyDto>> CreateCompanyAsync(CompanyDto companyDto, CancellationToken cancellationToken)
     {
+        if (ValidateContactEmail(companyDto) is { } contactEmailError) return contactEmailError;
+
         if (!await IsSelectableBusinessUnitAsync(companyDto.BusinessUnitId, cancellationToken))
             return InvalidBusinessUnitResponse();
 
@@ -54,6 +56,45 @@ public class CompanyService : ICompanyService
             Message = "Company created successfully.",
             StatusCode = StatusCodes.Status200OK
         };
+    }
+
+    /// <summary>
+    /// Checks the contact list and rewrites it into its canonical form on the DTO, or returns the
+    /// failure response. ContactEmail may hold several addresses delimited by ';' — the reminder job
+    /// and the upload notification both send to all of them — so a single bad entry has to be named
+    /// rather than reported as "invalid email", and the list must not be stored as typed.
+    /// </summary>
+    private static ServiceResponse<CompanyDto>? ValidateContactEmail(CompanyDto companyDto)
+    {
+        var invalid = NotificationRecipients.FindInvalid(companyDto.ContactEmail);
+        if (invalid.Count > 0)
+        {
+            return new ServiceResponse<CompanyDto>
+            {
+                Errors =
+                [
+                    $"These are not valid email addresses: {string.Join(", ", invalid)}. " +
+                    "Separate multiple addresses with ';'."
+                ],
+                StatusCode = StatusCodes.Status400BadRequest
+            };
+        }
+
+        var normalized = NotificationRecipients.Normalize(companyDto.ContactEmail);
+        if (normalized is { Length: > NotificationRecipients.MaxLength })
+        {
+            return new ServiceResponse<CompanyDto>
+            {
+                Errors =
+                [
+                    $"The contact email list must not exceed {NotificationRecipients.MaxLength} characters."
+                ],
+                StatusCode = StatusCodes.Status400BadRequest
+            };
+        }
+
+        companyDto.ContactEmail = normalized;
+        return null;
     }
 
     public async Task<ServiceResponse<CompanyDto?>> GetCompanyByIdAsync(int id, CancellationToken cancellationToken)
@@ -82,6 +123,8 @@ public class CompanyService : ICompanyService
 
     public async Task<ServiceResponse<CompanyDto>> UpdateCompanyAsync(CompanyDto companyDto, CancellationToken cancellationToken)
     {
+        if (ValidateContactEmail(companyDto) is { } contactEmailError) return contactEmailError;
+
         var existing = await _companyRepository.GetCompanyByIdAsync(companyDto.Id, cancellationToken);
         if (existing is null)
         {

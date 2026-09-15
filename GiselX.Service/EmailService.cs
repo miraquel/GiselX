@@ -15,8 +15,11 @@ public class EmailService : IEmailService
         _settings = settings.Value;
     }
 
-    public async Task SendReminderAsync(string toEmail, string companyName, DateTime deadline, bool isFinalReminder)
+    public async Task SendReminderAsync(IReadOnlyCollection<string> recipients, string companyName,
+        DateTime deadline, bool isFinalReminder)
     {
+        if (recipients.Count == 0) return;
+
         var daysUntil = (deadline.Date - DateTime.Today).Days;
         var subject = isFinalReminder
             ? $"[Action Required] Data upload deadline is today — {companyName}"
@@ -24,7 +27,12 @@ public class EmailService : IEmailService
 
         var message = new MimeMessage();
         message.From.Add(new MailboxAddress(_settings.FromName, _settings.FromAddress));
-        message.To.Add(new MailboxAddress(companyName, toEmail));
+        foreach (var recipient in recipients)
+        {
+            // Parse, not the (name, address) constructor: everyone here belongs to the same company,
+            // so labelling each address with the company name reads oddly in a multi-recipient To.
+            message.To.Add(MailboxAddress.Parse(recipient));
+        }
         message.Subject = subject;
         message.Body = new TextPart("plain") { Text = BuildBody(companyName, deadline, isFinalReminder) };
 

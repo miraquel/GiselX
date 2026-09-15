@@ -2,7 +2,7 @@ CREATE OR ALTER PROCEDURE [dbo].[Company_Select]
     @PageNumber INT = 1, @PageSize INT = 10, @SortColumn NVARCHAR(100) = NULL, @SortOrder NVARCHAR(4) = 'ASC',
     @Name NVARCHAR(100) = NULL, @BusinessUnitName NVARCHAR(100) = NULL, @ChannelName NVARCHAR(200) = NULL,
     @SalesmanName NVARCHAR(200) = NULL, @Address NVARCHAR(255) = NULL,
-    @ContactEmail NVARCHAR(255) = NULL, @Id INT = NULL, @DeadlineDayOfMonth INT = NULL,
+    @ContactEmail NVARCHAR(1000) = NULL, @Id INT = NULL, @DeadlineDayOfMonth INT = NULL,
     @DeadlineDaysOfWeek INT = NULL, @ReminderLeadDays INT = NULL, @ItemMappingEnabled BIT = NULL
 AS
 BEGIN

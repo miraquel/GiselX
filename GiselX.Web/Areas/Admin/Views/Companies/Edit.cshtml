@@ -75,9 +75,14 @@
             <div class="row mb-4">
                 <label asp-for="ContactEmail" class="col-sm-2 col-form-label"></label>
                 <div class="col-sm-10">
-                    <input asp-for="ContactEmail" class="form-control" type="email" />
+                    <textarea asp-for="ContactEmail" class="form-control" rows="2" maxlength="1000"
+                              placeholder="admin@distributor.co.id; gudang@distributor.co.id"></textarea>
                     <span asp-validation-for="ContactEmail" class="text-danger"></span>
-                    <small class="text-muted">Leave blank to disable reminders for this company.</small>
+                    <small class="text-muted">
+                        Receives the upload deadline reminders and the confirmation sent when an upload
+                        completes. Separate multiple addresses with <code>;</code>.
+                        Leave blank to disable both for this company.
+                    </small>
                 </div>
             </div>
             <div class="row mb-4">
