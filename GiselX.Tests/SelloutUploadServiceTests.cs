@@ -307,8 +307,60 @@ public sealed class SelloutUploadServiceTests
         };
     }
 
+    [Fact]
+    public async Task A_completed_upload_notifies_with_the_group_totals_and_its_weeks()
+    {
+        var notifications = new RecordingUploadNotificationDispatcher();
+        var (service, repository, _) = CreateService(
+            ValidAnalysis(multiWeek: false), notifications: notifications);
+
+        var response = await service.UploadAsync(Stream(), "sales.xlsx", 9, multiWeekConfirmed: true,
+            "budi", ConfirmedSha(), CancellationToken.None);
+
+        Assert.True(response.IsSuccess);
+        var notification = Assert.Single(notifications.Enqueued);
+        Assert.Equal(9, notification.CompanyId);
+        Assert.Equal(UploadNotificationKind.Sellout, notification.Kind);
+        Assert.Equal("budi", notification.UploadedBy);
+        Assert.Equal("sales.xlsx", notification.OriginalFileName);
+        Assert.Equal(repository.Groups.Single().Id, notification.Reference);
+        Assert.StartsWith("Week of ", notification.PeriodLabel);
+    }
+
+    [Fact]
+    public async Task A_multi_week_upload_names_the_range_it_replaced()
+    {
+        var notifications = new RecordingUploadNotificationDispatcher();
+        var (service, _, _) = CreateService(ValidAnalysis(multiWeek: true), notifications: notifications);
+
+        await service.UploadAsync(Stream(), "sales.xlsx", 9, multiWeekConfirmed: true,
+            "budi", ConfirmedSha(), CancellationToken.None);
+
+        var notification = Assert.Single(notifications.Enqueued);
+        Assert.Contains(" weeks, ", notification.PeriodLabel);
+    }
+
+    [Fact]
+    public async Task A_workbook_refused_for_too_many_invalid_rows_notifies_nobody()
+    {
+        // One row of two is invalid, which is above a 0% tolerance, so nothing is published.
+        var notifications = new RecordingUploadNotificationDispatcher();
+        var analysis = AnalysisOf([
+            (new DateTime(2026, 7, 4), true),
+            (new DateTime(2026, 7, 5), false)
+        ]);
+        var (service, _, _) = CreateService(
+            analysis, maxInvalidRowPercentage: 0m, notifications: notifications);
+
+        await service.UploadAsync(Stream(), "sales.xlsx", 9, multiWeekConfirmed: true,
+            "budi", ConfirmedSha(), CancellationToken.None);
+
+        Assert.Empty(notifications.Enqueued);
+    }
+
     private static (SelloutUploadService Service, FakeUploadRepository Repository, FakeTransaction Transaction)
-        CreateService(SelloutWorkbookAnalysisDto analysis, decimal maxInvalidRowPercentage = 5m)
+        CreateService(SelloutWorkbookAnalysisDto analysis, decimal maxInvalidRowPercentage = 5m,
+            IUploadNotificationDispatcher? notifications = null)
     {
         var repository = new FakeUploadRepository();
         var transaction = new FakeTransaction();
@@ -319,7 +371,8 @@ public sealed class SelloutUploadServiceTests
             Options.Create(new SelloutUploadOptions
             {
                 MaxFileSizeBytes = 1024, MaxInvalidRowPercentage = maxInvalidRowPercentage
-            }));
+            }),
+            notifications ?? new RecordingUploadNotificationDispatcher());
         return (service, repository, transaction);
     }
 

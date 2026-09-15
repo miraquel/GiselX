@@ -16,6 +16,18 @@
                 <span asp-validation-for="Name" class="text-danger"></span>
             </div>
             <div class="mb-3">
+                <label asp-for="NotificationEmails" class="form-label">Internal Notification Emails</label>
+                <textarea asp-for="NotificationEmails" class="form-control" rows="2" maxlength="1000"
+                          placeholder="scm@gandummas.co.id; b2b.admin@gandummas.co.id"></textarea>
+                <div class="form-text">
+                    Internal PT. GMK addresses notified whenever a distributor in this Business Unit
+                    completes a Sellout, Stock or Service Level upload. Separate addresses with
+                    <code>;</code>. Leave blank to notify nobody internally — the distributor still
+                    receives their own confirmation.
+                </div>
+                <span asp-validation-for="NotificationEmails" class="text-danger"></span>
+            </div>
+            <div class="mb-3">
                 <label asp-for="IsActive" class="form-label"></label>
                 <select asp-for="IsActive" class="form-select">
                     <option value="true">Active</option>

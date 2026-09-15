@@ -96,7 +96,8 @@ public sealed class SelloutPartialWeekWarningTests
             new StubRepository(),
             new StubAnalysisService(analysis),
             new StubTransaction(),
-            Options.Create(new SelloutUploadOptions { MaxFileSizeBytes = 1024 }));
+            Options.Create(new SelloutUploadOptions { MaxFileSizeBytes = 1024 }),
+            new RecordingUploadNotificationDispatcher());
         return service.PreflightAsync(new MemoryStream([1, 2, 3, 4]), "book.xlsx", 1, CancellationToken.None);
     }
 

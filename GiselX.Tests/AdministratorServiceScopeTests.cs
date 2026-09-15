@@ -77,7 +77,8 @@ public sealed class AdministratorServiceScopeTests
         string expectedUploader)
     {
         var repository = new CapturingServiceLevelRepository();
-        var service = new ServiceLevelService(repository, null!, Claims(isAdministrator), UserManager());
+        var service = new ServiceLevelService(repository, null!, Claims(isAdministrator), UserManager(),
+            new RecordingUploadNotificationDispatcher());
 
         await service.SelectAsync(new PagedListRequestDto(), CancellationToken.None);
 
@@ -119,7 +120,8 @@ public sealed class AdministratorServiceScopeTests
         string suppliedUploader, string expectedUploader)
     {
         var repository = new CapturingServiceLevelRepository();
-        var service = new ServiceLevelService(repository, null!, Claims(isAdministrator), UserManager());
+        var service = new ServiceLevelService(repository, null!, Claims(isAdministrator), UserManager(),
+            new RecordingUploadNotificationDispatcher());
 
         await service.SelectByCustPeriodAsync(suppliedUploader, 2026, 8, CancellationToken.None);
 

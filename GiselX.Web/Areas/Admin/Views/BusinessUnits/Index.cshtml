@@ -23,11 +23,11 @@
         }
         <div class="table-responsive">
             <table class="table align-middle">
-                <thead><tr><th>No</th><th>Name</th><th>Status</th><th>Actions</th></tr></thead>
+                <thead><tr><th>No</th><th>Name</th><th>Internal Notification Emails</th><th>Status</th><th>Actions</th></tr></thead>
                 <tbody>
                 @if (Model.Count == 0)
                 {
-                    <tr><td colspan="4" class="text-muted">No Business Units have been added.</td></tr>
+                    <tr><td colspan="5" class="text-muted">No Business Units have been added.</td></tr>
                 }
                 else
                 {
@@ -37,6 +37,16 @@
                         <tr>
                             <td>@(index + 1)</td>
                             <td>@value.Name</td>
+                            <td>
+                                @if (string.IsNullOrWhiteSpace(value.NotificationEmails))
+                                {
+                                    <span class="text-muted">Nobody internal is notified</span>
+                                }
+                                else
+                                {
+                                    <span class="small">@value.NotificationEmails</span>
+                                }
+                            </td>
                             <td><span class="badge @(value.IsActive ? "bg-success" : "bg-secondary")">@(value.IsActive ? "Active" : "Inactive")</span></td>
                             <td class="text-nowrap">
                                 <a asp-action="Edit" asp-route-id="@value.Id" class="btn btn-sm btn-outline-primary">Edit</a>

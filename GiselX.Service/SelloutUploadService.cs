@@ -15,7 +15,8 @@ public sealed class SelloutUploadService(
     ISelloutUploadRepository uploadRepository,
     ISelloutWorkbookAnalysisService analysisService,
     IDbTransaction transaction,
-    IOptions<SelloutUploadOptions> options) : ISelloutUploadService
+    IOptions<SelloutUploadOptions> options,
+    IUploadNotificationDispatcher notifications) : ISelloutUploadService
 {
     private const string MultiWeekConfirmationMessage =
         "This workbook contains multiple reporting weeks. Review the affected weeks and confirm the upload before continuing.";
@@ -132,6 +133,21 @@ public sealed class SelloutUploadService(
         await uploadRepository.PromoteGroupAsync(group.Id, cancellationToken);
         transaction.Commit();
 
+        // Queued only after the commit: a notification for rows that rolled back would be a lie.
+        notifications.Enqueue(new UploadNotificationDto
+        {
+            CompanyId = companyId,
+            Kind = UploadNotificationKind.Sellout,
+            Reference = group.Id,
+            TotalRows = totalRows,
+            ValidRows = validRows,
+            InvalidRows = invalidRows,
+            UploadedBy = uploadedBy,
+            CompletedAtUtc = DateTime.UtcNow,
+            OriginalFileName = group.OriginalFileName,
+            PeriodLabel = DescribeWeeks(analysis)
+        });
+
         var status = invalidRows > 0
             ? SelloutUploadBatchStatus.CompletedWithWarnings
             : SelloutUploadBatchStatus.Completed;
@@ -153,6 +169,26 @@ public sealed class SelloutUploadService(
                 Message = message
             },
             Message = message
+        };
+    }
+
+    /// <summary>
+    /// Names the reporting weeks the upload replaced, because "Sellout upload received" without the
+    /// period does not tell a reader whether the week they care about was the one that moved. A
+    /// multi-week workbook is described by its range rather than listing every Monday.
+    /// </summary>
+    private static string? DescribeWeeks(SelloutWorkbookAnalysisDto analysis)
+    {
+        var weeks = analysis.WeekSummaries
+            .Select(week => week.ReportingWeekStart)
+            .OrderBy(start => start)
+            .ToList();
+
+        return weeks.Count switch
+        {
+            0 => null,
+            1 => $"Week of {weeks[0]:dd MMMM yyyy}",
+            _ => $"{weeks.Count} weeks, {weeks[0]:dd MMMM yyyy} to {weeks[^1]:dd MMMM yyyy}"
         };
     }
 

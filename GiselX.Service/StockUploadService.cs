@@ -15,7 +15,8 @@ public sealed class StockUploadService(
     IStockUploadRepository repository,
     IStockWorkbookAnalysisService analysisService,
     IDbTransaction transaction,
-    IOptions<StockUploadOptions> options) : IStockUploadService
+    IOptions<StockUploadOptions> options,
+    IUploadNotificationDispatcher notifications) : IStockUploadService
 {
     public async Task<ServiceResponse<StockUploadPreflightDto>> PreflightAsync(Stream file,
         string originalFileName, DateTime stockDate, int companyId, CancellationToken cancellationToken)
@@ -83,6 +84,22 @@ public sealed class StockUploadService(
             : StockUploadBatchStatus.Completed;
         await repository.PublishValidRowsAsync(batch.Id, companyId, status, cancellationToken);
         transaction.Commit();
+
+        // Queued only after the commit: a notification for rows that rolled back would be a lie.
+        notifications.Enqueue(new UploadNotificationDto
+        {
+            CompanyId = companyId,
+            Kind = UploadNotificationKind.Stock,
+            Reference = batch.Id,
+            TotalRows = batch.TotalRows,
+            ValidRows = batch.ValidRows,
+            InvalidRows = batch.InvalidRows,
+            UploadedBy = uploadedBy,
+            CompletedAtUtc = DateTime.UtcNow,
+            OriginalFileName = batch.OriginalFileName,
+            PeriodLabel = $"Stock date {stockDate:dd MMMM yyyy}"
+        });
+
         var successMessage = status == StockUploadBatchStatus.Completed
             ? "Stock snapshot uploaded successfully."
             : $"Stock snapshot uploaded with {analysis.InvalidRows} invalid row(s) excluded from the final Stock table.";

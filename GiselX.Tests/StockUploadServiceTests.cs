@@ -196,12 +196,62 @@ public sealed class StockUploadServiceTests
         Assert.Equal("Gudang (Stok Gudang), Transit (Stok Transit)", response.Data.MappingName);
     }
 
-    private static (StockUploadService Service, Repository Repository, Transaction Transaction) CreateService(StockWorkbookAnalysisDto analysis)
+    [Fact]
+    public async Task A_completed_upload_notifies_with_the_batch_totals()
+    {
+        var notifications = new RecordingUploadNotificationDispatcher();
+        var (service, repository, transaction) = CreateService(Analysis(2, 1), notifications);
+
+        var response = await service.UploadAsync(File(), "stock.xlsx", new DateTime(2026, 8, 10), 7,
+            true, "budi", ConfirmedSha(), CancellationToken.None);
+
+        Assert.True(response.IsSuccess);
+        var notification = Assert.Single(notifications.Enqueued);
+        Assert.Equal(7, notification.CompanyId);
+        Assert.Equal(UploadNotificationKind.Stock, notification.Kind);
+        Assert.Equal((3, 2, 1), (notification.TotalRows, notification.ValidRows, notification.InvalidRows));
+        Assert.Equal("budi", notification.UploadedBy);
+        Assert.Equal("stock.xlsx", notification.OriginalFileName);
+        Assert.Equal(repository.Batches.Single().Id, notification.Reference);
+        Assert.Equal("Stock date 10 August 2026", notification.PeriodLabel);
+        Assert.Equal(1, transaction.CommitCount);
+    }
+
+    [Fact]
+    public async Task A_refused_upload_notifies_nobody()
+    {
+        // Every row invalid: the batch is recorded as Failed and nothing is published, so telling
+        // anyone their stock arrived would be false.
+        var notifications = new RecordingUploadNotificationDispatcher();
+        var (service, _, _) = CreateService(Analysis(0, 2), notifications);
+
+        var response = await service.UploadAsync(File(), "stock.xlsx", new DateTime(2026, 8, 10), 7,
+            true, "budi", ConfirmedSha(), CancellationToken.None);
+
+        Assert.False(response.IsSuccess);
+        Assert.Empty(notifications.Enqueued);
+    }
+
+    [Fact]
+    public async Task An_unconfirmed_upload_notifies_nobody()
+    {
+        var notifications = new RecordingUploadNotificationDispatcher();
+        var (service, _, _) = CreateService(Analysis(2, 0), notifications);
+
+        await service.UploadAsync(File(), "stock.xlsx", new DateTime(2026, 8, 10), 7,
+            false, "budi", ConfirmedSha(), CancellationToken.None);
+
+        Assert.Empty(notifications.Enqueued);
+    }
+
+    private static (StockUploadService Service, Repository Repository, Transaction Transaction) CreateService(
+        StockWorkbookAnalysisDto analysis, IUploadNotificationDispatcher? notifications = null)
     {
         var repository = new Repository();
         var transaction = new Transaction();
         return (new StockUploadService(repository, new AnalysisService(analysis), transaction,
-            Options.Create(new StockUploadOptions())), repository, transaction);
+            Options.Create(new StockUploadOptions()),
+            notifications ?? new RecordingUploadNotificationDispatcher()), repository, transaction);
     }
 
     private static StockWorkbookAnalysisDto Analysis(int valid, int invalid)

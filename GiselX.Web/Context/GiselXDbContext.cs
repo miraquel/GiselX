@@ -99,6 +99,9 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
         {
             entity.HasIndex(e => e.Name).IsUnique();
             entity.Property(e => e.Name).HasMaxLength(100).IsRequired();
+            // Delimited list of internal notification addresses; nullable, so a unit that notifies
+            // nobody stays NULL rather than holding an empty string.
+            entity.Property(e => e.NotificationEmails).HasMaxLength(1000);
             entity.Property(e => e.CreatedBy).HasMaxLength(256).IsRequired();
             entity.Property(e => e.ModifiedBy).HasMaxLength(256);
             entity.Property(e => e.CreatedDate).HasColumnType("datetime2");

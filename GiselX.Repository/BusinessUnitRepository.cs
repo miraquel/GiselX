@@ -13,7 +13,7 @@ public sealed class BusinessUnitRepository(IDbConnection connection, IDbTransact
         CancellationToken cancellationToken)
     {
         const string sql = """
-            SELECT Id, Name, IsActive, CreatedDate, CreatedBy, ModifiedDate, ModifiedBy
+            SELECT Id, Name, NotificationEmails, IsActive, CreatedDate, CreatedBy, ModifiedDate, ModifiedBy
             FROM BusinessUnit
             WHERE @ActiveOnly = 0 OR IsActive = 1
             ORDER BY Name;
@@ -25,7 +25,7 @@ public sealed class BusinessUnitRepository(IDbConnection connection, IDbTransact
 
     public Task<BusinessUnit?> GetAsync(int id, CancellationToken cancellationToken) =>
         connection.QuerySingleOrDefaultAsync<BusinessUnit>(new CommandDefinition("""
-            SELECT Id, Name, IsActive, CreatedDate, CreatedBy, ModifiedDate, ModifiedBy
+            SELECT Id, Name, NotificationEmails, IsActive, CreatedDate, CreatedBy, ModifiedDate, ModifiedBy
             FROM BusinessUnit WHERE Id = @Id;
             """, new { Id = id }, transaction, cancellationToken: cancellationToken));
 
@@ -34,9 +34,9 @@ public sealed class BusinessUnitRepository(IDbConnection connection, IDbTransact
         try
         {
             return await connection.ExecuteScalarAsync<int>(new CommandDefinition("""
-                INSERT INTO BusinessUnit (Name, IsActive, CreatedDate, CreatedBy)
+                INSERT INTO BusinessUnit (Name, NotificationEmails, IsActive, CreatedDate, CreatedBy)
                 OUTPUT INSERTED.Id
-                VALUES (@Name, @IsActive, @CreatedDate, @CreatedBy);
+                VALUES (@Name, @NotificationEmails, @IsActive, @CreatedDate, @CreatedBy);
                 """, businessUnit, transaction, cancellationToken: cancellationToken));
         }
         catch (SqlException exception) when (exception.Number is 2601 or 2627)
@@ -51,7 +51,8 @@ public sealed class BusinessUnitRepository(IDbConnection connection, IDbTransact
         {
             var affected = await connection.ExecuteAsync(new CommandDefinition("""
                 UPDATE BusinessUnit
-                SET Name = @Name, IsActive = @IsActive, ModifiedDate = @ModifiedDate, ModifiedBy = @ModifiedBy
+                SET Name = @Name, NotificationEmails = @NotificationEmails, IsActive = @IsActive,
+                    ModifiedDate = @ModifiedDate, ModifiedBy = @ModifiedBy
                 WHERE Id = @Id;
                 """, businessUnit, transaction, cancellationToken: cancellationToken));
             if (affected == 0) throw new InvalidOperationException("The business unit was not found.");

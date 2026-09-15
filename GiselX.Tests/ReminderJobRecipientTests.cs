@@ -107,6 +107,10 @@ public sealed class ReminderJobRecipientTests
             Recipients = recipients;
             return Task.CompletedTask;
         }
+
+        public Task SendUploadCompletedAsync(UploadNotificationDto notification, string companyName,
+            IReadOnlyCollection<string> distributorRecipients, IReadOnlyCollection<string> internalRecipients,
+            CancellationToken cancellationToken) => Task.CompletedTask;
     }
 
     private sealed class StubCompanyRepository(Company company) : ICompanyRepository

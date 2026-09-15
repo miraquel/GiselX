@@ -37,6 +37,17 @@ public sealed class BusinessUnitService(IBusinessUnitRepository repository, IDbT
             return Invalid(name.Length == 0 ? "Business Unit Name is required." :
                 "Business Unit Name must not exceed 100 characters.");
 
+        // Naming the bad entries beats a generic "invalid email": these lists are pasted in by hand
+        // and a single stray character in a five-address list is otherwise a hunt.
+        var invalidEmails = NotificationRecipients.FindInvalid(dto.NotificationEmails);
+        if (invalidEmails.Count > 0)
+            return Invalid($"These are not valid email addresses: {string.Join(", ", invalidEmails)}. " +
+                           "Separate multiple addresses with ';'.");
+
+        var notificationEmails = NotificationRecipients.Normalize(dto.NotificationEmails);
+        if (notificationEmails is { Length: > NotificationRecipients.MaxLength })
+            return Invalid($"The notification email list must not exceed {NotificationRecipients.MaxLength} characters.");
+
         var duplicate = (await repository.ListAsync(false, token)).Any(value => value.Id != dto.Id &&
             string.Equals(value.Name.Trim(), name, StringComparison.OrdinalIgnoreCase));
         if (duplicate) return Invalid("A business unit with this name already exists.");
@@ -54,6 +65,7 @@ public sealed class BusinessUnitService(IBusinessUnitRepository repository, IDbT
                         Errors = ["The business unit was not found."]
                     };
                 current.Name = name;
+                current.NotificationEmails = notificationEmails;
                 current.IsActive = dto.IsActive;
                 current.ModifiedBy = username;
                 current.ModifiedDate = now;
@@ -64,7 +76,8 @@ public sealed class BusinessUnitService(IBusinessUnitRepository repository, IDbT
 
             var id = await repository.InsertAsync(new BusinessUnit
             {
-                Name = name, IsActive = dto.IsActive, CreatedBy = username, CreatedDate = now
+                Name = name, NotificationEmails = notificationEmails, IsActive = dto.IsActive,
+                CreatedBy = username, CreatedDate = now
             }, token);
             transaction.Commit();
             return new ServiceResponse<int> { Data = id, Message = "Business unit saved successfully." };
@@ -111,5 +124,10 @@ public sealed class BusinessUnitService(IBusinessUnitRepository repository, IDbT
     };
 
     private static BusinessUnitDto ToDto(BusinessUnit value) => new()
-        { Id = value.Id, Name = value.Name, IsActive = value.IsActive };
+    {
+        Id = value.Id,
+        Name = value.Name,
+        NotificationEmails = value.NotificationEmails,
+        IsActive = value.IsActive
+    };
 }

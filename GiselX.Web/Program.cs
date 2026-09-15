@@ -4,6 +4,7 @@ using GiselX.Domain;
 using GiselX.Repository;
 using GiselX.Service;
 using GiselX.Service.Dto.Common;
+using GiselX.Service.Interface;
 using GiselX.Web;
 using GiselX.Web.Context;
 using Hangfire;
@@ -60,6 +61,10 @@ builder.Services.AddHangfireServer();
 
 builder.Services.AddGiselXRepository();
 builder.Services.AddGiselXService();
+
+// The Service layer raises upload notifications through an abstraction so it carries no Hangfire
+// dependency; this is the implementation that actually queues them.
+builder.Services.AddScoped<IUploadNotificationDispatcher, HangfireUploadNotificationDispatcher>();
 
 builder.Services.AddScoped(serviceProvider =>
 {
