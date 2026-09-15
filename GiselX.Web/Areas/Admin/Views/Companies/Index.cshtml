@@ -12,6 +12,27 @@
     <link href="/lib/datatables-rowgroup-bs5/rowgroup.bootstrap5.css" rel="stylesheet" type="text/css" />
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <link href="/lib/select2-bootstrap-5-theme/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
+    <style>
+        /* Cells wrap instead of widening the table past the viewport, which used to push the
+           Actions buttons behind a horizontal scrollbar. */
+        #companies-table td,
+        #companies-table th {
+            white-space: normal;
+        }
+
+        /* Address is free text: break a long run of characters rather than widen the table.
+           Only the data cells — breaking mid-word in the header mangles "Business Unit". */
+        #companies-table td.company-address {
+            overflow-wrap: anywhere;
+        }
+
+        /* The action buttons stay on one line and claim only the width they need. */
+        #companies-table td.company-actions,
+        #companies-table th:last-child {
+            white-space: nowrap;
+            width: 1%;
+        }
+    </style>
 }
 
 @Html.AntiForgeryToken()
@@ -32,8 +53,8 @@
 }
 
 <div class="card">
-    <div class="card-datatable text-nowrap">
-        <table id="companies-table" class="datatables-basic table table-bordered table-responsive" style="width: 100%;">
+    <div class="card-datatable">
+        <table id="companies-table" class="datatables-basic table table-bordered" style="width: 100%;">
             <thead>
                 <tr>
                     <th>Name</th>
@@ -76,7 +97,7 @@
             }
             let r = document.createElement("h5");
             r.classList.add("card-title", "mb-0");
-            r.innerHTML = "Users";
+            r.innerHTML = "Companies";
             table = $('#companies-table').DataTable({
                 searchDelay: 1000,
                 destroy: true,
@@ -122,7 +143,10 @@
                 searching: true,
                 ordering: true,
                 autoWidth: false,
-                scrollX: true,
+                // The table fits the card instead of scrolling sideways; when the viewport is too
+                // narrow for every column, Responsive collapses the low-priority ones into an
+                // expandable child row rather than hiding the action buttons off-screen.
+                responsive: true,
                 ajax: {
                     url: '/api/Companies',
                     type: 'GET',
@@ -180,11 +204,13 @@
                         }
                     }
                 ],
+                // Name and Actions are what the screen is for, so they survive a narrow viewport;
+                // Address is the widest column and the first one Responsive collapses.
                 columnDefs: [
-                    {
-                        targets: [0, 1, 2],
-                        className: 'text-center'
-                    }
+                    { targets: 0, className: 'text-center', responsivePriority: 1 },
+                    { targets: 1, className: 'text-center' },
+                    { targets: 2, className: 'text-center company-address', responsivePriority: 10000 },
+                    { targets: -1, className: 'text-center company-actions', responsivePriority: 2 }
                 ],
                 initComplete: function () {
                     $('.dt-layout-table').removeClass('mt-2');
