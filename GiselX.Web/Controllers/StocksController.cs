@@ -57,6 +57,27 @@ public sealed class StocksController(
         return StatusCode(response.StatusCode, response);
     }
 
+    /// <summary>
+    /// Hands back the workbook as it was uploaded. Scoped to the signed-in user's own company, so the
+    /// link in a forwarded notification email is useless to anyone outside it.
+    /// </summary>
+    [HttpGet]
+    [Authorize(PermissionConstants.Stocks.Index)]
+    public async Task<IActionResult> DownloadSource(long batchId, CancellationToken cancellationToken)
+    {
+        var user = await userManager.GetUserAsync(User);
+        if (user is null) return Challenge();
+
+        var response = await uploadService.DownloadSourceAsync(batchId, user.CompanyId, cancellationToken);
+        if (!response.IsSuccess || response.Data is null)
+        {
+            TempData["ErrorMessage"] = string.Join(" ", response.Errors);
+            return RedirectToAction(nameof(Index));
+        }
+
+        return File(response.Data.Content, response.Data.ContentType, response.Data.FileName);
+    }
+
     [HttpGet]
     [Authorize(PermissionConstants.Stocks.Index)]
     public async Task<IActionResult> Result(long batchId, CancellationToken cancellationToken)

@@ -97,7 +97,7 @@ public sealed class SelloutPartialWeekWarningTests
             new StubAnalysisService(analysis),
             new StubTransaction(),
             Options.Create(new SelloutUploadOptions { MaxFileSizeBytes = 1024 }),
-            new RecordingUploadNotificationDispatcher());
+            new RecordingUploadNotificationDispatcher(), new RecordingUploadArchive());
         return service.PreflightAsync(new MemoryStream([1, 2, 3, 4]), "book.xlsx", 1, CancellationToken.None);
     }
 
@@ -133,7 +133,16 @@ public sealed class SelloutPartialWeekWarningTests
         public Task InsertStagingAsync(IReadOnlyCollection<SelloutStaging> rows, CancellationToken cancellationToken) =>
             Task.CompletedTask;
         public Task PromoteGroupAsync(long groupId, CancellationToken cancellationToken) => Task.CompletedTask;
-        public Task MarkGroupFailedAsync(long groupId, int totalRows, int invalidRows, string message,
+        public string? ArchivedFilePath { get; private set; }
+
+    public Task SetArchivedFilePathAsync(long groupId, string archivedFilePath,
+        CancellationToken cancellationToken)
+    {
+        ArchivedFilePath = archivedFilePath;
+        return Task.CompletedTask;
+    }
+
+    public Task MarkGroupFailedAsync(long groupId, int totalRows, int invalidRows, string message,
             string validationErrorsJson, CancellationToken cancellationToken) => Task.CompletedTask;
         public Task<(SelloutUploadBatch Batch, IReadOnlyList<SelloutStaging> Rows)?> GetBatchAsync(long batchId,
             int companyId, CancellationToken cancellationToken) =>

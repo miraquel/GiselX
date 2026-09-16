@@ -360,7 +360,7 @@ public sealed class SelloutUploadServiceTests
 
     private static (SelloutUploadService Service, FakeUploadRepository Repository, FakeTransaction Transaction)
         CreateService(SelloutWorkbookAnalysisDto analysis, decimal maxInvalidRowPercentage = 5m,
-            IUploadNotificationDispatcher? notifications = null)
+            IUploadNotificationDispatcher? notifications = null, IUploadArchive? archive = null)
     {
         var repository = new FakeUploadRepository();
         var transaction = new FakeTransaction();
@@ -372,7 +372,8 @@ public sealed class SelloutUploadServiceTests
             {
                 MaxFileSizeBytes = 1024, MaxInvalidRowPercentage = maxInvalidRowPercentage
             }),
-            notifications ?? new RecordingUploadNotificationDispatcher());
+            notifications ?? new RecordingUploadNotificationDispatcher(),
+            archive ?? new RecordingUploadArchive());
         return (service, repository, transaction);
     }
 
@@ -488,7 +489,16 @@ public sealed class SelloutUploadServiceTests
             return Task.CompletedTask;
         }
 
-        public Task MarkGroupFailedAsync(long groupId, int totalRows, int invalidRows, string errorSummary,
+        public string? ArchivedFilePath { get; private set; }
+
+    public Task SetArchivedFilePathAsync(long groupId, string archivedFilePath,
+        CancellationToken cancellationToken)
+    {
+        ArchivedFilePath = archivedFilePath;
+        return Task.CompletedTask;
+    }
+
+    public Task MarkGroupFailedAsync(long groupId, int totalRows, int invalidRows, string errorSummary,
             string validationErrorsJson, CancellationToken cancellationToken) => Task.CompletedTask;
 
         public Task<(SelloutUploadGroup Group, IReadOnlyList<SelloutUploadBatch> Batches, IReadOnlyList<SelloutStaging> Rows)?> GetGroupAsync(

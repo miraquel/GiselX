@@ -50,4 +50,10 @@ public sealed class UploadNotificationDto
 
     /// <summary>Distinct products among the published rows; null where the pipeline has none.</summary>
     public int? ProductCount { get; set; }
+
+    /// <summary>
+    /// True when the uploaded workbook itself was archived, so the mail can offer a link to download
+    /// the very file that was sent rather than only describing it.
+    /// </summary>
+    public bool SourceFileArchived { get; set; }
 }

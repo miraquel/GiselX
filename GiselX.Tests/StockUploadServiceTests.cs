@@ -245,13 +245,15 @@ public sealed class StockUploadServiceTests
     }
 
     private static (StockUploadService Service, Repository Repository, Transaction Transaction) CreateService(
-        StockWorkbookAnalysisDto analysis, IUploadNotificationDispatcher? notifications = null)
+        StockWorkbookAnalysisDto analysis, IUploadNotificationDispatcher? notifications = null,
+        IUploadArchive? archive = null)
     {
         var repository = new Repository();
         var transaction = new Transaction();
         return (new StockUploadService(repository, new AnalysisService(analysis), transaction,
             Options.Create(new StockUploadOptions()),
-            notifications ?? new RecordingUploadNotificationDispatcher()), repository, transaction);
+            notifications ?? new RecordingUploadNotificationDispatcher(),
+            archive ?? new RecordingUploadArchive()), repository, transaction);
     }
 
     private static StockWorkbookAnalysisDto Analysis(int valid, int invalid)
@@ -369,7 +371,17 @@ public sealed class StockUploadServiceTests
         }
         public Task InsertStagingAsync(IReadOnlyCollection<StockStaging> rows, CancellationToken cancellationToken)
         { StagingRows.AddRange(rows); return Task.CompletedTask; }
-        public Task MarkFailedAsync(long batchId, string errorSummary, CancellationToken cancellationToken)
+        public string? ArchivedFilePath { get; private set; }
+
+    public Task SetArchivedFilePathAsync(long batchId, string archivedFilePath,
+        CancellationToken cancellationToken)
+    {
+        ArchivedFilePath = archivedFilePath;
+        Batches.Single(value => value.Id == batchId).ArchivedFilePath = archivedFilePath;
+        return Task.CompletedTask;
+    }
+
+    public Task MarkFailedAsync(long batchId, string errorSummary, CancellationToken cancellationToken)
         { Batches.Single().Status = StockUploadBatchStatus.Failed; return Task.CompletedTask; }
         public Task PublishValidRowsAsync(long batchId, int companyId, StockUploadBatchStatus status, CancellationToken cancellationToken)
         { PublishedSourceRows.AddRange(StagingRows.Where(row => row.IsValid).Select(row => row.SourceRowNumber)); Batches.Single().Status = status; return Task.CompletedTask; }

@@ -18,6 +18,12 @@ public sealed class SelloutUploadRepository(IDbConnection connection, IDbTransac
                 @UploadedBy, @UploadedDate, NULL)
             """, group, transaction, cancellationToken: cancellationToken));
 
+    public Task SetArchivedFilePathAsync(long groupId, string archivedFilePath,
+        CancellationToken cancellationToken) => connection.ExecuteAsync(new CommandDefinition(
+            "UPDATE SelloutUploadGroup SET ArchivedFilePath = @Path WHERE Id = @GroupId;",
+            new { GroupId = groupId, Path = archivedFilePath }, transaction,
+            cancellationToken: cancellationToken));
+
     public Task<long> InsertBatchAsync(SelloutUploadBatch batch, CancellationToken cancellationToken) =>
         connection.ExecuteScalarAsync<long>(new CommandDefinition("""
             INSERT INTO SelloutUploadBatch (CompanyId, DistributorTemplateMappingId, SelloutUploadGroupId,

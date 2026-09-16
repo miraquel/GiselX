@@ -15,10 +15,7 @@ public class EmailService(IEmailSettingsProvider settingsProvider) : IEmailServi
 
         var settings = await settingsProvider.GetAsync(CancellationToken.None);
 
-        var daysUntil = (deadline.Date - DateTime.Today).Days;
-        var subject = isFinalReminder
-            ? $"[Action Required] Data upload deadline is today — {companyName}"
-            : $"[Reminder] Data upload due in {daysUntil} days — {companyName}";
+        var subject = ReminderMessage.BuildSubject(companyName, deadline, isFinalReminder);
 
         var message = new MimeMessage();
         message.From.Add(new MailboxAddress(settings.FromName, settings.FromAddress));
@@ -29,7 +26,10 @@ public class EmailService(IEmailSettingsProvider settingsProvider) : IEmailServi
             message.To.Add(MailboxAddress.Parse(recipient));
         }
         message.Subject = subject;
-        message.Body = new TextPart("plain") { Text = BuildBody(companyName, deadline, isFinalReminder) };
+        message.Body = new TextPart("plain")
+        {
+            Text = ReminderMessage.BuildBody(companyName, deadline, isFinalReminder, settings)
+        };
 
         using var client = new SmtpClient();
         await client.ConnectAsync(
@@ -109,26 +109,4 @@ public class EmailService(IEmailSettingsProvider settingsProvider) : IEmailServi
         return message;
     }
 
-    private static string BuildBody(string companyName, DateTime deadline, bool isFinalReminder)
-    {
-        var intro = isFinalReminder
-            ? "This is a final reminder that your data upload deadline is TODAY."
-            : $"This is a reminder that your data upload deadline is on {deadline:dd MMMM yyyy}.";
-
-        return $"""
-            Dear {companyName},
-
-            {intro}
-
-            Please ensure the following data has been uploaded before the deadline:
-              - Sales Transactions
-              - Stock Data
-              - Service Level Data (TransDist)
-
-            If you have already completed your upload, please disregard this message.
-
-            Regards,
-            GiselX System
-            """;
-    }
 }

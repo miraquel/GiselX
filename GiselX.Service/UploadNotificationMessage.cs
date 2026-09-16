@@ -91,6 +91,13 @@ public static class UploadNotificationMessage
             body.Append(link).Append("\r\n");
         }
 
+        var sourceLink = BuildSourceFileLink(notification, settings);
+        if (sourceLink is not null)
+        {
+            body.Append("\r\nUntuk mengunduh kembali file yang Anda unggah:\r\n");
+            body.Append(sourceLink).Append("\r\n");
+        }
+
         if (!forInternalTeam)
         {
             var support = BuildSupportSentence(settings);
@@ -134,6 +141,27 @@ public static class UploadNotificationMessage
         {
             UploadNotificationKind.Sellout => $"{root}/SalesTransactions/UploadResult?groupId={notification.Reference}",
             UploadNotificationKind.Stock => $"{root}/Stocks/Result?batchId={notification.Reference}",
+            _ => null
+        };
+    }
+
+    /// <summary>
+    /// Link to the archived workbook, offered only when one was actually kept — an upload made while
+    /// archiving was switched off has nothing behind the link. The page itself requires a login and
+    /// is scoped to the reader's own company, so the link in a forwarded mail grants nothing.
+    /// </summary>
+    private static string? BuildSourceFileLink(UploadNotificationDto notification, EmailSettings settings)
+    {
+        if (!notification.SourceFileArchived) return null;
+        if (string.IsNullOrWhiteSpace(settings.DashboardBaseUrl) || notification.Reference is null) return null;
+
+        var root = settings.DashboardBaseUrl.TrimEnd('/');
+        return notification.Kind switch
+        {
+            UploadNotificationKind.Sellout =>
+                $"{root}/SalesTransactions/DownloadSource?groupId={notification.Reference}",
+            UploadNotificationKind.Stock =>
+                $"{root}/Stocks/DownloadSource?batchId={notification.Reference}",
             _ => null
         };
     }

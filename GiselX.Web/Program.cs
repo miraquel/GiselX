@@ -53,6 +53,7 @@ builder.Services.ConfigureApplicationCookie(options =>
 builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("Email"));
 builder.Services.Configure<SelloutUploadOptions>(builder.Configuration.GetSection(SelloutUploadOptions.SectionName));
 builder.Services.Configure<StockUploadOptions>(builder.Configuration.GetSection(StockUploadOptions.SectionName));
+builder.Services.Configure<UploadArchiveOptions>(builder.Configuration.GetSection(UploadArchiveOptions.SectionName));
 
 // Hangfire
 builder.Services.AddHangfire(config =>

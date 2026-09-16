@@ -17,6 +17,12 @@ public sealed class StockUploadRepository(IDbConnection connection, IDbTransacti
              @ValidationErrorsJson, NULL, @UploadedBy, @UploadedDate, NULL)
             """, batch, transaction, cancellationToken: cancellationToken));
 
+    public Task SetArchivedFilePathAsync(long batchId, string archivedFilePath,
+        CancellationToken cancellationToken) => connection.ExecuteAsync(new CommandDefinition(
+            "UPDATE StockUploadBatch SET ArchivedFilePath = @Path WHERE Id = @BatchId;",
+            new { BatchId = batchId, Path = archivedFilePath }, transaction,
+            cancellationToken: cancellationToken));
+
     public async Task InsertStagingAsync(IReadOnlyCollection<StockStaging> rows,
         CancellationToken cancellationToken)
     {

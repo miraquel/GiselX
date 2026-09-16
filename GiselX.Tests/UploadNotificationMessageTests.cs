@@ -82,6 +82,40 @@ public sealed class UploadNotificationMessageTests
     }
 
     [Fact]
+    public void An_archived_upload_offers_a_link_to_the_file_itself()
+    {
+        var notification = Sellout();
+        notification.SourceFileArchived = true;
+
+        var rendered = UploadNotificationMessage.ForDistributor(notification, "Cahaya Setia Utama", Settings());
+
+        Assert.Contains("mengunduh kembali file yang Anda unggah", rendered.Body);
+        Assert.Contains("https://giselx-dev.gandummas.co.id/SalesTransactions/DownloadSource?groupId=4512",
+            rendered.Body);
+    }
+
+    [Fact]
+    public void An_upload_made_while_archiving_was_off_offers_no_file_link()
+    {
+        // The link would 404: there is nothing behind it for that upload.
+        var rendered = UploadNotificationMessage.ForDistributor(Sellout(), "Cahaya Setia Utama", Settings());
+
+        Assert.DoesNotContain("mengunduh kembali", rendered.Body);
+        Assert.DoesNotContain("DownloadSource", rendered.Body);
+    }
+
+    [Fact]
+    public void A_stock_file_link_points_at_the_stock_download()
+    {
+        var notification = Stock();
+        notification.SourceFileArchived = true;
+
+        var rendered = UploadNotificationMessage.ForDistributor(notification, "Anak Mas", Settings());
+
+        Assert.Contains("https://giselx-dev.gandummas.co.id/Stocks/DownloadSource?batchId=901", rendered.Body);
+    }
+
+    [Fact]
     public void An_unconfigured_dashboard_omits_the_link_rather_than_sending_a_broken_one()
     {
         var settings = Settings();

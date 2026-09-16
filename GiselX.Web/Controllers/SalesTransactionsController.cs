@@ -193,6 +193,27 @@ public class SalesTransactionsController : Controller
 
     [HttpGet]
     [Authorize(PermissionConstants.SalesTransactions.Upload)]
+    /// <summary>
+    /// Hands back the workbook as it was uploaded. Scoped to the signed-in user's own company, so the
+    /// link in a forwarded notification email is useless to anyone outside it.
+    /// </summary>
+    [HttpGet]
+    [Authorize(PermissionConstants.SalesTransactions.Index)]
+    public async Task<IActionResult> DownloadSource(long groupId, CancellationToken cancellationToken)
+    {
+        var user = await _userManager.GetUserAsync(User);
+        if (user is null) return Challenge();
+
+        var response = await _selloutUploadService.DownloadSourceAsync(groupId, user.CompanyId, cancellationToken);
+        if (!response.IsSuccess || response.Data is null)
+        {
+            TempData["ErrorMessage"] = string.Join(" ", response.Errors);
+            return RedirectToAction(nameof(Index));
+        }
+
+        return File(response.Data.Content, response.Data.ContentType, response.Data.FileName);
+    }
+
     public async Task<IActionResult> UploadResult(long? groupId, long? batchId, CancellationToken cancellationToken)
     {
         var user = await _userManager.GetUserAsync(User);

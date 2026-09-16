@@ -16,7 +16,8 @@ public sealed class StockUploadService(
     IStockWorkbookAnalysisService analysisService,
     IDbTransaction transaction,
     IOptions<StockUploadOptions> options,
-    IUploadNotificationDispatcher notifications) : IStockUploadService
+    IUploadNotificationDispatcher notifications,
+    IUploadArchive archive) : IStockUploadService
 {
     public async Task<ServiceResponse<StockUploadPreflightDto>> PreflightAsync(Stream file,
         string originalFileName, DateTime stockDate, int companyId, CancellationToken cancellationToken)
@@ -63,6 +64,16 @@ public sealed class StockUploadService(
         };
         batch.Id = await repository.InsertBatchAsync(batch, cancellationToken);
 
+        // Archived once the id exists, and before the commit, so a stored path never outlives a
+        // rolled-back batch. A failed write returns null and the upload carries on regardless.
+        var archivedPath = await archive.StoreAsync(UploadNotificationKind.Stock, batch.Id,
+            batch.OriginalFileName, content, cancellationToken);
+        if (archivedPath is not null)
+        {
+            batch.ArchivedFilePath = archivedPath;
+            await repository.SetArchivedFilePathAsync(batch.Id, archivedPath, cancellationToken);
+        }
+
         var staging = analysis.Rows.Select(row => ToStaging(row, batch.Id)).ToList();
         await repository.InsertStagingAsync(staging, cancellationToken);
         if (analysis.ValidRows == 0 || analysis.Errors.Count > 0)
@@ -100,6 +111,7 @@ public sealed class StockUploadService(
             PeriodLabel = $"Snapshot {stockDate.ToString("dd MMMM yyyy", UploadNotificationMessage.Culture)}",
             // No OutletCount: a Stock workbook is the distributor's own warehouse position and
             // carries no customer, so the mail omits that line rather than reporting zero outlets.
+            SourceFileArchived = batch.ArchivedFilePath is not null,
             ProductCount = CountDistinctProducts(analysis)
         });
 
@@ -112,6 +124,34 @@ public sealed class StockUploadService(
             Message = successMessage
         };
     }
+
+    public async Task<ServiceResponse<ArchivedUploadFileDto>> DownloadSourceAsync(long batchId, int companyId,
+        CancellationToken cancellationToken)
+    {
+        // The company id comes from the signed-in user, never from the request, and the lookup is
+        // scoped by it — a distributor guessing another batch id gets "not found", not a file.
+        var found = await repository.GetBatchAsync(batchId, companyId, cancellationToken);
+        if (found is null)
+            return NotFound("Stock upload batch was not found.");
+
+        var batch = found.Value.Batch;
+        if (string.IsNullOrWhiteSpace(batch.ArchivedFilePath))
+            return NotFound("The uploaded file for this batch was not archived.");
+
+        var content = await archive.OpenAsync(batch.ArchivedFilePath, cancellationToken);
+        if (content is null)
+            return NotFound("The archived file is no longer available on the server.");
+
+        return new ServiceResponse<ArchivedUploadFileDto>
+        {
+            Data = new ArchivedUploadFileDto { Content = content, FileName = batch.OriginalFileName }
+        };
+    }
+
+    private static ServiceResponse<ArchivedUploadFileDto> NotFound(string error) => new()
+    {
+        Errors = [error], Message = error, StatusCode = StatusCodes.Status404NotFound
+    };
 
     public async Task<ServiceResponse<StockUploadBatchDto>> GetResultAsync(long batchId, int companyId,
         CancellationToken cancellationToken)

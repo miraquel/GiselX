@@ -18,6 +18,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IEmailSettingService, EmailSettingService>();
         services.AddScoped<IEmailService, EmailService>();
         services.AddScoped<IUploadNotificationService, UploadNotificationService>();
+        services.AddScoped<IUploadArchive, FileSystemUploadArchive>();
         services.AddScoped<ReminderJob>();
         services.AddScoped<IDistributorTemplateMappingService, DistributorTemplateMappingService>();
         services.AddScoped<IStockTemplateMappingService, StockTemplateMappingService>();

@@ -260,6 +260,8 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
             entity.HasIndex(e => e.Status);
             entity.Property(e => e.StockDate).HasColumnType("date");
             entity.Property(e => e.OriginalFileName).HasMaxLength(260);
+            // Relative path inside the archive folder; nullable, because archiving is optional.
+            entity.Property(e => e.ArchivedFilePath).HasMaxLength(500);
             entity.Property(e => e.FileSha256).HasMaxLength(64).IsFixedLength();
             entity.Property(e => e.Status).HasConversion<int>();
             entity.Property(e => e.IgnoredSummaryRowsJson).HasColumnType("nvarchar(max)").HasDefaultValue("[]");
@@ -335,6 +337,8 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
         {
             entity.HasIndex(e => new { e.CompanyId, e.UploadedDate });
             entity.Property(e => e.OriginalFileName).HasMaxLength(260);
+            // Relative path inside the archive folder; nullable, because archiving is optional.
+            entity.Property(e => e.ArchivedFilePath).HasMaxLength(500);
             entity.Property(e => e.FileSha256).HasMaxLength(64).IsFixedLength();
             entity.Property(e => e.Status).HasConversion<int>();
             entity.Property(e => e.IgnoredSummaryRowsJson).HasColumnType("nvarchar(max)");

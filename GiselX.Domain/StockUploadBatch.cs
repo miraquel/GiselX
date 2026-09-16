@@ -10,6 +10,13 @@ public sealed class StockUploadBatch
     public DateTime StockDate { get; set; }
     public string OriginalFileName { get; set; } = string.Empty;
     public string FileSha256 { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Where the uploaded workbook was archived, relative to the configured archive folder. Null
+    /// when archiving is off, or when the write failed and the data was accepted regardless.
+    /// </summary>
+    public string? ArchivedFilePath { get; set; }
+
     public StockUploadBatchStatus Status { get; set; } = StockUploadBatchStatus.Processing;
     public int TotalRows { get; set; }
     public int ValidRows { get; set; }

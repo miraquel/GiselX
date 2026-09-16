@@ -16,7 +16,8 @@ public sealed class SelloutUploadService(
     ISelloutWorkbookAnalysisService analysisService,
     IDbTransaction transaction,
     IOptions<SelloutUploadOptions> options,
-    IUploadNotificationDispatcher notifications) : ISelloutUploadService
+    IUploadNotificationDispatcher notifications,
+    IUploadArchive archive) : ISelloutUploadService
 {
     private const string MultiWeekConfirmationMessage =
         "This workbook contains multiple reporting weeks. Review the affected weeks and confirm the upload before continuing.";
@@ -82,6 +83,16 @@ public sealed class SelloutUploadService(
             UploadedDate = DateTime.UtcNow
         };
         group.Id = await uploadRepository.InsertGroupAsync(group, cancellationToken);
+
+        // Archived once the id exists, and before the commit, so a stored path never outlives a
+        // rolled-back group. A failed write returns null and the upload carries on regardless.
+        var archivedPath = await archive.StoreAsync(UploadNotificationKind.Sellout, group.Id,
+            group.OriginalFileName, content, cancellationToken);
+        if (archivedPath is not null)
+        {
+            group.ArchivedFilePath = archivedPath;
+            await uploadRepository.SetArchivedFilePathAsync(group.Id, archivedPath, cancellationToken);
+        }
 
         var refusal = DescribeRefusal(analysis, totalRows, validRows, invalidRows);
         if (refusal is not null)
@@ -149,6 +160,7 @@ public sealed class SelloutUploadService(
             // Counted over published rows only, so the mail never credits an outlet whose rows were
             // all rejected. Blank identifiers are dropped rather than counted as one nameless outlet.
             OutletCount = CountDistinct(analysis.Rows, row => row.CustomerId ?? row.CustomerName),
+            SourceFileArchived = group.ArchivedFilePath is not null,
             ProductCount = CountDistinct(analysis.Rows, row => row.ProductId ?? row.DistributorProductId)
         });
 
@@ -239,6 +251,33 @@ public sealed class SelloutUploadService(
             : $"{invalidRows:N0} of {totalRows:N0} row(s) ({share:0.#}%) failed validation, which is at or "
               + $"above the {limit:0.#}% limit. No data was published.";
     }
+
+    public async Task<ServiceResponse<ArchivedUploadFileDto>> DownloadSourceAsync(long groupId, int companyId,
+        CancellationToken cancellationToken)
+    {
+        // The company id comes from the signed-in user, never from the request, and the lookup is
+        // scoped by it — a distributor guessing another group id gets "not found", not a file.
+        var found = await uploadRepository.GetGroupAsync(groupId, companyId, cancellationToken);
+        if (found is null) return NotFoundFile("Sellout upload group was not found.");
+
+        var group = found.Value.Group;
+        if (string.IsNullOrWhiteSpace(group.ArchivedFilePath))
+            return NotFoundFile("The uploaded file for this upload was not archived.");
+
+        var content = await archive.OpenAsync(group.ArchivedFilePath, cancellationToken);
+        if (content is null)
+            return NotFoundFile("The archived file is no longer available on the server.");
+
+        return new ServiceResponse<ArchivedUploadFileDto>
+        {
+            Data = new ArchivedUploadFileDto { Content = content, FileName = group.OriginalFileName }
+        };
+    }
+
+    private static ServiceResponse<ArchivedUploadFileDto> NotFoundFile(string error) => new()
+    {
+        Errors = [error], Message = error, StatusCode = StatusCodes.Status404NotFound
+    };
 
     public async Task<ServiceResponse<SelloutUploadBatchDto>> GetBatchAsync(long batchId, int companyId, CancellationToken cancellationToken)
     {
