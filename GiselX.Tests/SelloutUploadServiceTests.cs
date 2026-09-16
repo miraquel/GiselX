@@ -324,7 +324,7 @@ public sealed class SelloutUploadServiceTests
         Assert.Equal("budi", notification.UploadedBy);
         Assert.Equal("sales.xlsx", notification.OriginalFileName);
         Assert.Equal(repository.Groups.Single().Id, notification.Reference);
-        Assert.StartsWith("Week of ", notification.PeriodLabel);
+        Assert.StartsWith("Minggu ", notification.PeriodLabel);
     }
 
     [Fact]
@@ -337,7 +337,7 @@ public sealed class SelloutUploadServiceTests
             "budi", ConfirmedSha(), CancellationToken.None);
 
         var notification = Assert.Single(notifications.Enqueued);
-        Assert.Contains(" weeks, ", notification.PeriodLabel);
+        Assert.Contains(" minggu, ", notification.PeriodLabel);
     }
 
     [Fact]

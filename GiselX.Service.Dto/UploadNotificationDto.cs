@@ -40,4 +40,14 @@ public sealed class UploadNotificationDto
     /// for Sellout. Null when the pipeline has no period concept.
     /// </summary>
     public string? PeriodLabel { get; set; }
+
+    /// <summary>
+    /// Distinct outlets among the published rows. Sellout only — a Stock workbook is one
+    /// distributor's own warehouse snapshot and carries no customer at all, so it stays null and the
+    /// mail omits the line rather than reporting zero outlets.
+    /// </summary>
+    public int? OutletCount { get; set; }
+
+    /// <summary>Distinct products among the published rows; null where the pipeline has none.</summary>
+    public int? ProductCount { get; set; }
 }

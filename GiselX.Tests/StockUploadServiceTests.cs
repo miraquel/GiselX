@@ -213,7 +213,7 @@ public sealed class StockUploadServiceTests
         Assert.Equal("budi", notification.UploadedBy);
         Assert.Equal("stock.xlsx", notification.OriginalFileName);
         Assert.Equal(repository.Batches.Single().Id, notification.Reference);
-        Assert.Equal("Stock date 10 August 2026", notification.PeriodLabel);
+        Assert.Equal("Snapshot 10 Agustus 2026", notification.PeriodLabel);
         Assert.Equal(1, transaction.CommitCount);
     }
 

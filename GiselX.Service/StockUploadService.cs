@@ -97,7 +97,10 @@ public sealed class StockUploadService(
             UploadedBy = uploadedBy,
             CompletedAtUtc = DateTime.UtcNow,
             OriginalFileName = batch.OriginalFileName,
-            PeriodLabel = $"Stock date {stockDate:dd MMMM yyyy}"
+            PeriodLabel = $"Snapshot {stockDate.ToString("dd MMMM yyyy", UploadNotificationMessage.Culture)}",
+            // No OutletCount: a Stock workbook is the distributor's own warehouse position and
+            // carries no customer, so the mail omits that line rather than reporting zero outlets.
+            ProductCount = CountDistinctProducts(analysis)
         });
 
         var successMessage = status == StockUploadBatchStatus.Completed
@@ -133,6 +136,23 @@ public sealed class StockUploadService(
                 Errors = rows.SelectMany(row => Deserialize<StockStagingErrorDto>(row.ValidationErrorsJson)).ToList()
             }
         };
+    }
+
+    /// <summary>
+    /// Distinct products among the rows that were published, or null when none carry an identifier —
+    /// the mail then omits the line rather than reporting a misleading zero.
+    /// </summary>
+    private static int? CountDistinctProducts(StockWorkbookAnalysisDto analysis)
+    {
+        var count = analysis.Rows
+            .Where(row => row.IsValid)
+            .Select(row => row.ProductId ?? row.DistributorProductId)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value!.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count();
+
+        return count == 0 ? null : count;
     }
 
     private async Task<(byte[]? Content, string? SourceSha256, string? Error)> ReadRequestAsync(Stream file,

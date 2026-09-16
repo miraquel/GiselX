@@ -82,7 +82,10 @@ public class EmailService : IEmailService
         IReadOnlyCollection<string> recipients,
         bool forInternalTeam)
     {
-        var kindLabel = DescribeKind(notification.Kind);
+        var rendered = forInternalTeam
+            ? UploadNotificationMessage.ForInternalTeam(notification, companyName, _settings)
+            : UploadNotificationMessage.ForDistributor(notification, companyName, _settings);
+
         var message = new MimeMessage();
         message.From.Add(new MailboxAddress(_settings.FromName, _settings.FromAddress));
         foreach (var recipient in recipients)
@@ -90,65 +93,11 @@ public class EmailService : IEmailService
             message.To.Add(MailboxAddress.Parse(recipient));
         }
 
-        message.Subject = forInternalTeam
-            ? $"[Upload] {kindLabel} received from {companyName}"
-            : $"[GiselX] Your {kindLabel} upload was received";
-        message.Body = new TextPart("plain")
-        {
-            Text = BuildUploadBody(notification, companyName, kindLabel, forInternalTeam)
-        };
+        message.Subject = rendered.Subject;
+        message.Body = new TextPart("plain") { Text = rendered.Body };
         return message;
     }
 
-    private static string BuildUploadBody(
-        UploadNotificationDto notification,
-        string companyName,
-        string kindLabel,
-        bool forInternalTeam)
-    {
-        var greeting = forInternalTeam
-            ? $"{companyName} has completed a {kindLabel} upload."
-            : $"Dear {companyName},\r\n\r\nWe have received your {kindLabel} upload.";
-
-        var lines = new List<string>
-        {
-            $"  Distributor   : {companyName}",
-            $"  Data          : {kindLabel}"
-        };
-        if (!string.IsNullOrWhiteSpace(notification.PeriodLabel))
-            lines.Add($"  Period        : {notification.PeriodLabel}");
-        if (!string.IsNullOrWhiteSpace(notification.OriginalFileName))
-            lines.Add($"  File          : {notification.OriginalFileName}");
-        lines.Add($"  Rows accepted : {notification.ValidRows:N0} of {notification.TotalRows:N0}");
-        if (notification.InvalidRows > 0)
-            lines.Add($"  Rows rejected : {notification.InvalidRows:N0}");
-        lines.Add($"  Uploaded by   : {notification.UploadedBy}");
-        lines.Add($"  Completed at  : {notification.CompletedAtUtc:dd MMMM yyyy HH:mm} UTC");
-        if (notification.Reference is not null)
-            lines.Add($"  Reference     : #{notification.Reference}");
-
-        // A partial upload is the one case worth spelling out: the rows that did not load are gone
-        // unless somebody re-uploads them, and the plain totals above do not say that on their own.
-        var warning = notification.InvalidRows > 0
-            ? $"\r\n{notification.InvalidRows:N0} row(s) were rejected and are NOT in the system. " +
-              "Open the upload result in GiselX to see which rows failed and why, correct them, and " +
-              "upload the corrected file again.\r\n"
-            : string.Empty;
-
-        var closing = forInternalTeam
-            ? "This is an automated notification from GiselX."
-            : "No action is required if the totals above match your file.\r\n\r\nRegards,\r\nGiselX System";
-
-        return $"{greeting}\r\n\r\n{string.Join("\r\n", lines)}\r\n{warning}\r\n{closing}\r\n";
-    }
-
-    private static string DescribeKind(UploadNotificationKind kind) => kind switch
-    {
-        UploadNotificationKind.Sellout => "Sellout",
-        UploadNotificationKind.Stock => "Stock",
-        UploadNotificationKind.ServiceLevel => "Service Level",
-        _ => kind.ToString()
-    };
 
     private static string BuildBody(string companyName, DateTime deadline, bool isFinalReminder)
     {

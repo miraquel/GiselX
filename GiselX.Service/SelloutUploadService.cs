@@ -145,7 +145,11 @@ public sealed class SelloutUploadService(
             UploadedBy = uploadedBy,
             CompletedAtUtc = DateTime.UtcNow,
             OriginalFileName = group.OriginalFileName,
-            PeriodLabel = DescribeWeeks(analysis)
+            PeriodLabel = DescribeWeeks(analysis),
+            // Counted over published rows only, so the mail never credits an outlet whose rows were
+            // all rejected. Blank identifiers are dropped rather than counted as one nameless outlet.
+            OutletCount = CountDistinct(analysis.Rows, row => row.CustomerId ?? row.CustomerName),
+            ProductCount = CountDistinct(analysis.Rows, row => row.ProductId ?? row.DistributorProductId)
         });
 
         var status = invalidRows > 0
@@ -173,6 +177,23 @@ public sealed class SelloutUploadService(
     }
 
     /// <summary>
+    /// Distinct non-blank values among the valid rows, or null when none of them carry one — the
+    /// mail omits the line entirely rather than reporting a misleading zero.
+    /// </summary>
+    private static int? CountDistinct(IEnumerable<SelloutStaging> rows, Func<SelloutStaging, string?> select)
+    {
+        var count = rows
+            .Where(row => row.IsValid)
+            .Select(select)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value!.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count();
+
+        return count == 0 ? null : count;
+    }
+
+    /// <summary>
     /// Names the reporting weeks the upload replaced, because "Sellout upload received" without the
     /// period does not tell a reader whether the week they care about was the one that moved. A
     /// multi-week workbook is described by its range rather than listing every Monday.
@@ -184,11 +205,15 @@ public sealed class SelloutUploadService(
             .OrderBy(start => start)
             .ToList();
 
+        // Formatted in the same culture as the mail body, so the summary does not read
+        // "Minggu 06 July 2026" next to "Tanggal Upload : 15 September 2026".
+        var culture = UploadNotificationMessage.Culture;
         return weeks.Count switch
         {
             0 => null,
-            1 => $"Week of {weeks[0]:dd MMMM yyyy}",
-            _ => $"{weeks.Count} weeks, {weeks[0]:dd MMMM yyyy} to {weeks[^1]:dd MMMM yyyy}"
+            1 => $"Minggu {weeks[0].ToString("dd MMMM yyyy", culture)}",
+            _ => $"{weeks.Count} minggu, {weeks[0].ToString("dd MMMM yyyy", culture)} " +
+                 $"s.d. {weeks[^1].ToString("dd MMMM yyyy", culture)}"
         };
     }
 
