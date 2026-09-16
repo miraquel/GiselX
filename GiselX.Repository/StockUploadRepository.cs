@@ -52,8 +52,37 @@ public sealed class StockUploadRepository(IDbConnection connection, IDbTransacti
             """, new { BatchId = batchId, ErrorSummary = errorSummary }, transaction,
             cancellationToken: cancellationToken));
 
+    /// <summary>
+    /// Publishes a batch's valid rows, replacing whatever an earlier upload published for the same
+    /// company and snapshot date.
+    ///
+    /// Until this superseded, publication only inserted. Re-uploading a snapshot left both sets of
+    /// rows in Stock, so every product appeared twice and any total was silently doubled — a stock
+    /// position is a statement about one moment, and two statements about that moment cannot both
+    /// be true. Sellout has always worked this way for reporting weeks; Stock now matches it.
+    /// </summary>
     public Task PublishValidRowsAsync(long batchId, int companyId, StockUploadBatchStatus status,
         CancellationToken cancellationToken) => connection.ExecuteAsync(new CommandDefinition("""
+            DECLARE @StockDate date;
+            SELECT @StockDate = StockDate FROM StockUploadBatch WITH (UPDLOCK, HOLDLOCK)
+             WHERE Id=@BatchId AND CompanyId=@CompanyId AND Status=0;
+
+            -- Rows first, then the batches they belong to: deleting by status afterwards would also
+            -- catch batches replaced by some earlier upload, whose rows are already gone.
+            DELETE stock FROM Stock stock
+            JOIN StockUploadBatch prior ON prior.Id = stock.StockUploadBatchId
+            WHERE @StockDate IS NOT NULL
+              AND prior.CompanyId=@CompanyId AND prior.StockDate=@StockDate
+              AND prior.Id<>@BatchId AND prior.Status IN (2,3);
+
+            -- Status 4 is Replaced. Stock numbers it 4 because 3 is already CompletedWithWarnings
+            -- here; the Sellout enum uses the two the other way round.
+            UPDATE prior SET Status=4
+            FROM StockUploadBatch prior
+            WHERE @StockDate IS NOT NULL
+              AND prior.CompanyId=@CompanyId AND prior.StockDate=@StockDate
+              AND prior.Id<>@BatchId AND prior.Status IN (2,3);
+
             INSERT INTO Stock (ProductId, ProductName, DistributorProductId, DistributorProductName, ItemMappingId,
              ProductPackaging, ProductPcsInCtn, ProductNetto,
              ProductUnit, SmallestUnit, SmallestUnitQty, PriceUnit, SaldoAwal, SaldoMasukPO, SaldoAkhir,

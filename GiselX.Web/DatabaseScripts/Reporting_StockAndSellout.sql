@@ -1,57 +1,52 @@
 /*
-    Reporting procedures for published Stock and Sellout data.
+    Reporting objects for published Stock and Sellout data.
 
-    These are an ADD-ON for reporting and ad-hoc querying. Unlike the other files in this folder they
-    are NOT a mirror of an EF migration: the application never calls them, and they deliberately do
-    not write to dbo.__EFMigrationsHistory. Re-running this script is safe.
+    Two views and two procedures. The views hold the logic; the procedures are thin filters over
+    them, so both routes always agree.
 
-    Read this before writing your own query instead
-    ----------------------------------------------
-    Stock and Sellout behave DIFFERENTLY when a period is uploaded twice.
+        vw_GiselStock_Live            every live Stock row
+        vw_GiselSales_Live            every live Sellout row
+        GiselStock_SelectForReport    the same, filtered by company and snapshot date
+        GiselSales_SelectForReport    the same, filtered by company, invoice date or reporting week
 
-    Sellout  - SelloutUploadGroup promotion deletes the previous week's rows from SalesTransaction
-               before inserting the new ones. The table therefore holds exactly one live version per
-               company per reporting week, and a plain SELECT is correct.
+    For Power BI, point the dataset at the VIEWS. A view folds into the query Power BI sends, which
+    keeps refresh incremental and lets filters push down to SQL Server; EXEC of a procedure does
+    neither. Use the procedures for ad-hoc querying and for anything that wants parameters.
 
-    Stock    - publication only INSERTs. Nothing removes the rows of an earlier batch for the same
-               snapshot date, and StockUploadBatchStatus has no "Replaced" value. Uploading the same
-               StockDate twice leaves BOTH sets of rows in dbo.Stock, so
+    This file is an add-on and NOT a mirror of an EF migration: the application never calls these,
+    and nothing is written to dbo.__EFMigrationsHistory. Re-running the file is how it is updated.
 
-                   SELECT * FROM dbo.Stock WHERE StockDate = '2026-09-16'
+    Why the views exist at all
+    -------------------------
+    Stock and Sellout used to behave differently when a period was uploaded twice. Sellout has
+    always superseded: promoting a group deletes the previous week's rows before inserting. Stock
+    only inserted, so re-uploading a snapshot date left BOTH sets of rows and every total was
+    silently doubled.
 
-               double-counts. GiselStock_SelectForReport below keeps only the most recently completed
-               batch per company and snapshot date. Use it rather than reading dbo.Stock directly.
-
-    Both procedures return row-level data. Aggregate in your own query or in Power BI.
+    That is fixed at the source — publication now supersedes the way Sellout does. The views still
+    de-duplicate, for two reasons: rows uploaded BEFORE the fix are still duplicated in dbo.Stock
+    until Cleanup_DuplicateStockSnapshots.sql is run, and a report should not be the thing that
+    breaks if a future change reintroduces the problem.
 */
 
 SET NOCOUNT ON;
 GO
 
 /* ------------------------------------------------------------------------------------------------
-   Published Stock, de-duplicated to the latest completed batch per company and snapshot date.
-
-   @CompanyId        NULL = every company.
-   @FromDate/@ToDate NULL = unbounded. Filter on StockDate (the snapshot date), not the upload date.
-   @IncludeLegacy    Rows uploaded through the old direct-import path carry no batch and no
-                     StockDate. They cannot be de-duplicated and would be dropped by any date
-                     filter, so they are excluded unless asked for explicitly.
+   Live Stock: one row per product per company per snapshot date, from the most recently completed
+   batch for that date. Rows from the old direct-import path carry no batch and no StockDate; they
+   cannot be de-duplicated or filtered by date and are excluded here. Read dbo.Stock directly if you
+   need them.
 ------------------------------------------------------------------------------------------------ */
-CREATE OR ALTER PROCEDURE [dbo].[GiselStock_SelectForReport]
-    @CompanyId     INT  = NULL,
-    @FromDate      DATE = NULL,
-    @ToDate        DATE = NULL,
-    @IncludeLegacy BIT  = 0
+CREATE OR ALTER VIEW [dbo].[vw_GiselStock_Live]
 AS
-BEGIN
-    SET NOCOUNT ON;
-
-    ;WITH LiveBatch AS
+    WITH LiveBatch AS
     (
-        -- Status 2 = Completed, 3 = CompletedWithWarnings. Note these differ from the Sellout enum.
+        -- Status 2 = Completed, 3 = CompletedWithWarnings, 4 = Replaced. These numbers are NOT the
+        -- same as the Sellout enum, where 3 is Replaced and 4 is CompletedWithWarnings.
         SELECT  b.Id,
                 ROW_NUMBER() OVER (PARTITION BY b.CompanyId, b.StockDate
-                                   ORDER BY b.CompletedDate DESC, b.Id DESC) AS Rank
+                                   ORDER BY b.CompletedDate DESC, b.Id DESC) AS LiveRank
         FROM    dbo.StockUploadBatch b
         WHERE   b.Status IN (2, 3)
     )
@@ -84,64 +79,23 @@ BEGIN
             batch.UploadedBy,
             batch.CompletedDate         AS UploadCompletedDate
     FROM    dbo.Stock stock
-    JOIN    LiveBatch live       ON live.Id = stock.StockUploadBatchId AND live.Rank = 1
+    JOIN    LiveBatch live             ON live.Id = stock.StockUploadBatchId AND live.LiveRank = 1
     JOIN    dbo.StockUploadBatch batch ON batch.Id = stock.StockUploadBatchId
-    JOIN    dbo.Company company  ON company.Id = stock.CompanyId
+    JOIN    dbo.Company company        ON company.Id = stock.CompanyId
     LEFT JOIN dbo.BusinessUnit unit     ON unit.Id     = company.BusinessUnitId
     LEFT JOIN dbo.Channel      channel  ON channel.Id  = company.ChannelId
-    LEFT JOIN dbo.Salesman     salesman ON salesman.Id = company.SalesmanId
-    WHERE   (@CompanyId IS NULL OR stock.CompanyId = @CompanyId)
-      AND   (@FromDate  IS NULL OR stock.StockDate >= @FromDate)
-      AND   (@ToDate    IS NULL OR stock.StockDate <= @ToDate)
-
-    UNION ALL
-
-    SELECT  stock.Id,
-            stock.CompanyId,
-            company.Name, unit.Name, channel.Name, salesman.Name,
-            stock.StockDate,
-            stock.ProductId, stock.ProductName,
-            stock.DistributorProductId, stock.DistributorProductName, stock.ItemMappingId,
-            stock.ProductPackaging, stock.ProductPcsInCtn, stock.ProductNetto, stock.ProductUnit,
-            stock.SmallestUnit, stock.SmallestUnitQty, stock.PriceUnit,
-            stock.SaldoAwal, stock.SaldoMasukPO, stock.SaldoAkhir,
-            stock.BatchNumber, stock.ExpiredDate,
-            stock.StockUploadBatchId,
-            NULL, NULL, NULL
-    FROM    dbo.Stock stock
-    JOIN    dbo.Company company  ON company.Id = stock.CompanyId
-    LEFT JOIN dbo.BusinessUnit unit     ON unit.Id     = company.BusinessUnitId
-    LEFT JOIN dbo.Channel      channel  ON channel.Id  = company.ChannelId
-    LEFT JOIN dbo.Salesman     salesman ON salesman.Id = company.SalesmanId
-    WHERE   @IncludeLegacy = 1
-      AND   stock.StockUploadBatchId IS NULL
-      AND   (@CompanyId IS NULL OR stock.CompanyId = @CompanyId)
-
-    ORDER BY CompanyName, StockDate, ProductId;
-END
+    LEFT JOIN dbo.Salesman     salesman ON salesman.Id = company.SalesmanId;
 GO
 
 /* ------------------------------------------------------------------------------------------------
-   Published Sellout. SalesTransaction already holds one live version per reporting week, because
-   re-uploading a week deletes the previous rows before inserting. The join to the batch is a
-   safeguard and a label, not a de-duplication: it filters to live batches and carries the upload
-   details through.
+   Live Sellout. SalesTransaction already holds one version per reporting week, because re-uploading
+   a week deletes the previous rows first. The batch join filters to live batches and carries the
+   upload details through; it is a safeguard and a label, not a de-duplication.
 
-   @CompanyId        NULL = every company.
-   @FromDate/@ToDate NULL = unbounded, filtered on InvoiceDate.
-   @WeekStart        Optional exact reporting week (a Monday), when you want one week rather than a
-                     date range that may straddle two.
+   Status 2 = Completed, 4 = CompletedWithWarnings, 3 = Replaced — again, not the Stock numbering.
 ------------------------------------------------------------------------------------------------ */
-CREATE OR ALTER PROCEDURE [dbo].[GiselSales_SelectForReport]
-    @CompanyId     INT  = NULL,
-    @FromDate      DATE = NULL,
-    @ToDate        DATE = NULL,
-    @WeekStart     DATE = NULL,
-    @IncludeLegacy BIT  = 0
+CREATE OR ALTER VIEW [dbo].[vw_GiselSales_Live]
 AS
-BEGIN
-    SET NOCOUNT ON;
-
     SELECT  sales.Id,
             sales.CompanyId,
             company.Name                AS CompanyName,
@@ -181,24 +135,60 @@ BEGIN
             batch.UploadedBy,
             batch.CompletedDate         AS UploadCompletedDate
     FROM    dbo.SalesTransaction sales
-    -- Status 2 = Completed, 4 = CompletedWithWarnings, 3 = Replaced. A replaced batch's rows are
-    -- deleted on promotion, so this filter should never remove anything; it is here so a stale row
-    -- from a future change cannot quietly enter a report.
-    LEFT JOIN dbo.SelloutUploadBatch batch
-           ON batch.Id = sales.SelloutUploadBatchId AND batch.Status IN (2, 4)
-    JOIN    dbo.Company company  ON company.Id = sales.CompanyId
+    JOIN    dbo.SelloutUploadBatch batch ON batch.Id = sales.SelloutUploadBatchId
+                                        AND batch.Status IN (2, 4)
+    JOIN    dbo.Company company          ON company.Id = sales.CompanyId
     LEFT JOIN dbo.BusinessUnit unit     ON unit.Id     = company.BusinessUnitId
     LEFT JOIN dbo.Channel      channel  ON channel.Id  = company.ChannelId
-    LEFT JOIN dbo.Salesman     salesman ON salesman.Id = company.SalesmanId
-    WHERE   (sales.SelloutUploadBatchId IS NULL AND @IncludeLegacy = 1
-             OR batch.Id IS NOT NULL)
-      AND   (@CompanyId IS NULL OR sales.CompanyId = @CompanyId)
-      AND   (@WeekStart IS NULL OR sales.ReportingWeekStart = @WeekStart)
-      AND   (@FromDate  IS NULL OR sales.InvoiceDate >= @FromDate)
-      AND   (@ToDate    IS NULL OR sales.InvoiceDate <= @ToDate)
-    ORDER BY CompanyName, sales.InvoiceDate, sales.InvoiceNo, sales.ProductId;
+    LEFT JOIN dbo.Salesman     salesman ON salesman.Id = company.SalesmanId;
+GO
+
+/* ------------------------------------------------------------------------------------------------
+   Stock for a company and snapshot-date range. All parameters optional; NULL means unfiltered.
+   @FromDate / @ToDate filter on StockDate, the date the stock position describes — not the day the
+   file happened to be uploaded.
+------------------------------------------------------------------------------------------------ */
+CREATE OR ALTER PROCEDURE [dbo].[GiselStock_SelectForReport]
+    @CompanyId INT  = NULL,
+    @FromDate  DATE = NULL,
+    @ToDate    DATE = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT  *
+    FROM    dbo.vw_GiselStock_Live
+    WHERE   (@CompanyId IS NULL OR CompanyId = @CompanyId)
+      AND   (@FromDate  IS NULL OR StockDate >= @FromDate)
+      AND   (@ToDate    IS NULL OR StockDate <= @ToDate)
+    ORDER BY CompanyName, StockDate, ProductId;
 END
 GO
 
-PRINT 'Reporting procedures GiselStock_SelectForReport and GiselSales_SelectForReport installed.';
+/* ------------------------------------------------------------------------------------------------
+   Sellout for a company, by invoice-date range or by exact reporting week.
+
+   @WeekStart is the Monday a reporting week begins on. Prefer it over a date range when you want
+   whole weeks: a range chosen by calendar month will cut the weeks that straddle the month end.
+------------------------------------------------------------------------------------------------ */
+CREATE OR ALTER PROCEDURE [dbo].[GiselSales_SelectForReport]
+    @CompanyId INT  = NULL,
+    @FromDate  DATE = NULL,
+    @ToDate    DATE = NULL,
+    @WeekStart DATE = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT  *
+    FROM    dbo.vw_GiselSales_Live
+    WHERE   (@CompanyId IS NULL OR CompanyId = @CompanyId)
+      AND   (@WeekStart IS NULL OR ReportingWeekStart = @WeekStart)
+      AND   (@FromDate  IS NULL OR InvoiceDate >= @FromDate)
+      AND   (@ToDate    IS NULL OR InvoiceDate <= @ToDate)
+    ORDER BY CompanyName, InvoiceDate, InvoiceNo, ProductId;
+END
+GO
+
+PRINT 'Reporting views and procedures installed.';
 GO
