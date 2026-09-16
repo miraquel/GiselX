@@ -78,6 +78,26 @@ public sealed class NotificationRecipientsTests
     }
 
     [Fact]
+    public void Combine_merges_several_lists_in_order_without_repeats()
+    {
+        var combined = NotificationRecipients.Combine(
+            "scm@gandummas.co.id; budi@gandummas.co.id",
+            "BUDI@Gandummas.co.id",
+            null,
+            "mt@gandummas.co.id");
+
+        Assert.Equal(
+            ["scm@gandummas.co.id", "budi@gandummas.co.id", "mt@gandummas.co.id"],
+            combined);
+    }
+
+    [Fact]
+    public void Combine_of_nothing_is_empty()
+    {
+        Assert.Empty(NotificationRecipients.Combine(null, "", "  ;  "));
+    }
+
+    [Fact]
     public void FindInvalid_is_empty_for_a_clean_list()
     {
         Assert.Empty(NotificationRecipients.FindInvalid("a@gandummas.co.id; b@gandummas.co.id"));

@@ -17,4 +17,17 @@ public sealed class UploadNotificationRecipients
 
     /// <summary>Delimited internal list from the company's Business Unit. Null when unset.</summary>
     public string? InternalNotificationEmails { get; set; }
+
+    public string? ChannelName { get; set; }
+
+    /// <summary>Delimited internal list from the company's Channel. Null when unset.</summary>
+    public string? ChannelNotificationEmails { get; set; }
+
+    public string? SalesmanName { get; set; }
+
+    /// <summary>
+    /// Delimited internal list from the company's Salesman — the GMK person accountable for this
+    /// distributor, who wants to know the moment their data lands. Null when unset.
+    /// </summary>
+    public string? SalesmanNotificationEmails { get; set; }
 }

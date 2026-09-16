@@ -213,6 +213,10 @@ namespace GiselX.Web.Context.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<string>("NotificationEmails")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("Code")
@@ -734,6 +738,10 @@ namespace GiselX.Web.Context.Migrations
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("NotificationEmails")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
 
                     b.HasKey("Id");
 

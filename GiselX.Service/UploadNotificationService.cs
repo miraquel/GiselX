@@ -40,16 +40,29 @@ public sealed class UploadNotificationService(
         }
 
         var distributor = NotificationRecipients.Parse(recipients.ContactEmail);
-        var internalTeam = NotificationRecipients.Parse(recipients.InternalNotificationEmails);
+
+        // The internal side is assembled from three masters: the Business Unit, the Channel and the
+        // Salesman accountable for this distributor. They overlap in practice — one person can be
+        // listed on a unit and on their own salesman record — so the combined list is de-duplicated
+        // rather than mailing them twice.
+        var internalTeam = NotificationRecipients.Combine(
+            recipients.InternalNotificationEmails,
+            recipients.ChannelNotificationEmails,
+            recipients.SalesmanNotificationEmails);
 
         if (distributor.Count == 0 && internalTeam.Count == 0)
         {
             // Worth saying out loud: the upload succeeded and nobody was told, which looks like a
-            // broken notification until you know the master data is simply empty.
+            // broken notification until you know the master data is simply empty. Naming all four
+            // sources saves the reader guessing which one to go and fill in.
             logger.LogWarning(
                 "Upload notification for {Company} ({Kind}) sent to nobody: the company has no " +
-                "ContactEmail and its business unit '{BusinessUnit}' has no notification emails.",
-                recipients.CompanyName, notification.Kind, recipients.BusinessUnitName ?? "(none)");
+                "ContactEmail, and neither business unit '{BusinessUnit}', channel '{Channel}' nor " +
+                "salesman '{Salesman}' has notification emails.",
+                recipients.CompanyName, notification.Kind,
+                recipients.BusinessUnitName ?? "(none)",
+                recipients.ChannelName ?? "(none)",
+                recipients.SalesmanName ?? "(none)");
             return;
         }
 

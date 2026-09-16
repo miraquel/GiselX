@@ -14,8 +14,10 @@ public sealed class UploadNotificationRepository(IStandaloneConnectionFactory co
     : IUploadNotificationRepository
 {
     /// <summary>
-    /// The join to BusinessUnit is a LEFT JOIN because Company.BusinessUnitId is nullable: a company
-    /// with no unit still notifies its own contact, just nobody internal.
+    /// Every join is a LEFT JOIN because Company.BusinessUnitId, ChannelId and SalesmanId are all
+    /// nullable: a company with none of them still notifies its own contact, just nobody internal.
+    /// The three internal lists are returned separately rather than concatenated in SQL so the
+    /// service can say which master a recipient came from when none of them yields an address.
     /// </summary>
     public async Task<UploadNotificationRecipients?> GetRecipientsAsync(int companyId,
         CancellationToken cancellationToken)
@@ -26,9 +28,15 @@ public sealed class UploadNotificationRepository(IStandaloneConnectionFactory co
                 company.Name          AS CompanyName,
                 company.ContactEmail  AS ContactEmail,
                 unit.Name             AS BusinessUnitName,
-                unit.NotificationEmails AS InternalNotificationEmails
+                unit.NotificationEmails AS InternalNotificationEmails,
+                channel.Name          AS ChannelName,
+                channel.NotificationEmails AS ChannelNotificationEmails,
+                salesman.Name         AS SalesmanName,
+                salesman.NotificationEmails AS SalesmanNotificationEmails
             FROM Company company
             LEFT JOIN BusinessUnit unit ON unit.Id = company.BusinessUnitId
+            LEFT JOIN Channel channel  ON channel.Id = company.ChannelId
+            LEFT JOIN Salesman salesman ON salesman.Id = company.SalesmanId
             WHERE company.Id = @CompanyId;
             """;
         await using var connection = connectionFactory.CreateConnection();

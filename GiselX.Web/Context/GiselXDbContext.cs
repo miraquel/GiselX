@@ -150,6 +150,7 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
             entity.HasIndex(e => e.Code).IsUnique().HasDatabaseName("UX_Channel_Code");
             entity.Property(e => e.Code).HasMaxLength(50).IsRequired();
             entity.Property(e => e.Name).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.NotificationEmails).HasMaxLength(1000);
             entity.Property(e => e.IsActive).HasDefaultValue(true);
             entity.Property(e => e.CreatedBy).HasMaxLength(256).IsRequired();
             entity.Property(e => e.ModifiedBy).HasMaxLength(256);
@@ -162,6 +163,7 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
             entity.HasIndex(e => e.Code).IsUnique().HasDatabaseName("UX_Salesman_Code");
             entity.Property(e => e.Code).HasMaxLength(50).IsRequired();
             entity.Property(e => e.Name).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.NotificationEmails).HasMaxLength(1000);
             entity.Property(e => e.IsActive).HasDefaultValue(true);
             entity.Property(e => e.CreatedBy).HasMaxLength(256).IsRequired();
             entity.Property(e => e.ModifiedBy).HasMaxLength(256);

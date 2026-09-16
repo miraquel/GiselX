@@ -31,6 +31,18 @@ public static class NotificationRecipients
     }
 
     /// <summary>
+    /// Merges several stored lists into one set of addresses, in the order given and without
+    /// repeats. Internal recipients come from more than one master — the Business Unit, the Channel
+    /// and the Salesman — and the same person is often listed on two of them; mailing them twice for
+    /// one upload would look like a fault.
+    /// </summary>
+    public static IReadOnlyList<string> Combine(params string?[] values) =>
+        values
+            .SelectMany(Parse)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+    /// <summary>
     /// Normalises a list for storage: trimmed, de-duplicated and separated by "; ". Returns null for
     /// an empty list so the column stays NULL rather than holding an empty string.
     /// </summary>

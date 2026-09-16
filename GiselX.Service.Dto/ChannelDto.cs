@@ -14,6 +14,10 @@ public sealed class ChannelDto
     [Display(Name = "Channel Name")]
     public string Name { get; set; } = string.Empty;
 
+    [StringLength(1000)]
+    [Display(Name = "Internal Notification Emails")]
+    public string? NotificationEmails { get; set; }
+
     [Display(Name = "Status")]
     public bool IsActive { get; set; } = true;
 }

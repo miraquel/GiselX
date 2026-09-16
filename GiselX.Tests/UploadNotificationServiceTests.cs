@@ -67,6 +67,65 @@ public sealed class UploadNotificationServiceTests
     }
 
     [Fact]
+    public async Task The_internal_list_is_assembled_from_all_three_masters()
+    {
+        var email = new CapturingEmailService();
+        var service = CreateService(email, new UploadNotificationRecipients
+        {
+            CompanyId = 7,
+            CompanyName = "Anak Mas",
+            ContactEmail = "admin@anakmas.co.id",
+            BusinessUnitName = "B2B",
+            InternalNotificationEmails = "scm@gandummas.co.id",
+            ChannelName = "Modern Trade",
+            ChannelNotificationEmails = "mt.admin@gandummas.co.id",
+            SalesmanName = "Budi",
+            SalesmanNotificationEmails = "budi@gandummas.co.id"
+        });
+
+        await service.NotifyUploadCompletedAsync(Notification(), CancellationToken.None);
+
+        Assert.Equal(
+            ["scm@gandummas.co.id", "mt.admin@gandummas.co.id", "budi@gandummas.co.id"],
+            email.InternalRecipients);
+    }
+
+    [Fact]
+    public async Task Someone_listed_on_two_masters_is_mailed_once()
+    {
+        // A salesman is commonly also on their unit's list; two copies of one upload notice reads
+        // as a fault rather than as thoroughness.
+        var email = new CapturingEmailService();
+        var service = CreateService(email, new UploadNotificationRecipients
+        {
+            CompanyId = 7,
+            CompanyName = "Anak Mas",
+            InternalNotificationEmails = "budi@gandummas.co.id; scm@gandummas.co.id",
+            ChannelNotificationEmails = "BUDI@Gandummas.co.id",
+            SalesmanNotificationEmails = "budi@gandummas.co.id"
+        });
+
+        await service.NotifyUploadCompletedAsync(Notification(), CancellationToken.None);
+
+        Assert.Equal(["budi@gandummas.co.id", "scm@gandummas.co.id"], email.InternalRecipients);
+    }
+
+    [Fact]
+    public async Task A_company_with_only_a_salesman_listed_still_notifies_internally()
+    {
+        var email = new CapturingEmailService();
+        var service = CreateService(email, new UploadNotificationRecipients
+        {
+            CompanyId = 7, CompanyName = "Anak Mas",
+            SalesmanNotificationEmails = "budi@gandummas.co.id"
+        });
+
+        await service.NotifyUploadCompletedAsync(Notification(), CancellationToken.None);
+
+        Assert.Equal(["budi@gandummas.co.id"], email.InternalRecipients);
+    }
+
+    [Fact]
     public async Task Nothing_is_sent_when_neither_side_has_an_address()
     {
         var email = new CapturingEmailService();

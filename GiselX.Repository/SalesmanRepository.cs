@@ -9,7 +9,8 @@ namespace GiselX.Repository;
 public sealed class SalesmanRepository(IDbConnection connection, IDbTransaction transaction)
     : ISalesmanRepository
 {
-    private const string Columns = "Id, Code, Name, IsActive, CreatedDate, CreatedBy, ModifiedDate, ModifiedBy";
+    private const string Columns =
+        "Id, Code, Name, NotificationEmails, IsActive, CreatedDate, CreatedBy, ModifiedDate, ModifiedBy";
 
     public async Task<IReadOnlyList<Salesman>> ListAsync(bool activeOnly, CancellationToken cancellationToken)
     {
@@ -34,9 +35,9 @@ public sealed class SalesmanRepository(IDbConnection connection, IDbTransaction 
         try
         {
             return await connection.ExecuteScalarAsync<int>(new CommandDefinition("""
-                INSERT INTO Salesman (Code, Name, IsActive, CreatedDate, CreatedBy)
+                INSERT INTO Salesman (Code, Name, NotificationEmails, IsActive, CreatedDate, CreatedBy)
                 OUTPUT INSERTED.Id
-                VALUES (@Code, @Name, @IsActive, @CreatedDate, @CreatedBy);
+                VALUES (@Code, @Name, @NotificationEmails, @IsActive, @CreatedDate, @CreatedBy);
                 """, salesman, transaction, cancellationToken: cancellationToken));
         }
         catch (SqlException exception) when (exception.Number is 2601 or 2627)
@@ -52,7 +53,7 @@ public sealed class SalesmanRepository(IDbConnection connection, IDbTransaction 
         {
             affected = await connection.ExecuteAsync(new CommandDefinition("""
                 UPDATE Salesman
-                SET Code = @Code, Name = @Name, IsActive = @IsActive,
+                SET Code = @Code, Name = @Name, NotificationEmails = @NotificationEmails, IsActive = @IsActive,
                     ModifiedDate = @ModifiedDate, ModifiedBy = @ModifiedBy
                 WHERE Id = @Id;
                 """, salesman, transaction, cancellationToken: cancellationToken));

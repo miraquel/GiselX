@@ -9,7 +9,8 @@ namespace GiselX.Repository;
 public sealed class ChannelRepository(IDbConnection connection, IDbTransaction transaction)
     : IChannelRepository
 {
-    private const string Columns = "Id, Code, Name, IsActive, CreatedDate, CreatedBy, ModifiedDate, ModifiedBy";
+    private const string Columns =
+        "Id, Code, Name, NotificationEmails, IsActive, CreatedDate, CreatedBy, ModifiedDate, ModifiedBy";
 
     public async Task<IReadOnlyList<Channel>> ListAsync(bool activeOnly, CancellationToken cancellationToken)
     {
@@ -34,9 +35,9 @@ public sealed class ChannelRepository(IDbConnection connection, IDbTransaction t
         try
         {
             return await connection.ExecuteScalarAsync<int>(new CommandDefinition("""
-                INSERT INTO Channel (Code, Name, IsActive, CreatedDate, CreatedBy)
+                INSERT INTO Channel (Code, Name, NotificationEmails, IsActive, CreatedDate, CreatedBy)
                 OUTPUT INSERTED.Id
-                VALUES (@Code, @Name, @IsActive, @CreatedDate, @CreatedBy);
+                VALUES (@Code, @Name, @NotificationEmails, @IsActive, @CreatedDate, @CreatedBy);
                 """, channel, transaction, cancellationToken: cancellationToken));
         }
         catch (SqlException exception) when (exception.Number is 2601 or 2627)
@@ -52,7 +53,7 @@ public sealed class ChannelRepository(IDbConnection connection, IDbTransaction t
         {
             affected = await connection.ExecuteAsync(new CommandDefinition("""
                 UPDATE Channel
-                SET Code = @Code, Name = @Name, IsActive = @IsActive,
+                SET Code = @Code, Name = @Name, NotificationEmails = @NotificationEmails, IsActive = @IsActive,
                     ModifiedDate = @ModifiedDate, ModifiedBy = @ModifiedBy
                 WHERE Id = @Id;
                 """, channel, transaction, cancellationToken: cancellationToken));

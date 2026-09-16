@@ -45,7 +45,15 @@ public sealed class ChannelService(IChannelRepository repository, IDbTransaction
         if (code.Length == 0 && dto.Id == 0) code = NextCode(existing);
 
         var errors = Validate(code, name);
+        // Named individually: these lists are pasted in by hand, and "invalid email" in a five-address
+        // list is a hunt. Same rule the Company and Business Unit screens use.
+        var invalidEmails = NotificationRecipients.FindInvalid(dto.NotificationEmails);
+        if (invalidEmails.Count > 0)
+            errors.Add($"These are not valid email addresses: {string.Join(", ", invalidEmails)}. " +
+                       "Separate multiple addresses with ';'.");
         if (errors.Count > 0) return Invalid(errors);
+
+        var notificationEmails = NotificationRecipients.Normalize(dto.NotificationEmails);
 
         var duplicate = existing.Any(value =>
             value.Id != dto.Id && string.Equals(value.Code.Trim(), code, StringComparison.OrdinalIgnoreCase));
@@ -65,6 +73,7 @@ public sealed class ChannelService(IChannelRepository repository, IDbTransaction
                     };
                 current.Code = code;
                 current.Name = name;
+                current.NotificationEmails = notificationEmails;
                 current.IsActive = dto.IsActive;
                 current.ModifiedBy = username;
                 current.ModifiedDate = now;
@@ -75,7 +84,8 @@ public sealed class ChannelService(IChannelRepository repository, IDbTransaction
 
             var id = await repository.InsertAsync(new Channel
             {
-                Code = code, Name = name, IsActive = dto.IsActive, CreatedBy = username, CreatedDate = now
+                Code = code, Name = name, NotificationEmails = notificationEmails,
+                IsActive = dto.IsActive, CreatedBy = username, CreatedDate = now
             }, token);
             transaction.Commit();
             return new ServiceResponse<int> { Data = id, Message = "Channel saved successfully." };
@@ -146,5 +156,8 @@ public sealed class ChannelService(IChannelRepository repository, IDbTransaction
     };
 
     private static ChannelDto ToDto(Channel value) => new()
-        { Id = value.Id, Code = value.Code, Name = value.Name, IsActive = value.IsActive };
+        {
+            Id = value.Id, Code = value.Code, Name = value.Name,
+            NotificationEmails = value.NotificationEmails, IsActive = value.IsActive
+        };
 }

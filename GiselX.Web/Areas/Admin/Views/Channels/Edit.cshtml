@@ -26,6 +26,17 @@
                 <span asp-validation-for="Name" class="text-danger"></span>
             </div>
             <div class="mb-3">
+                <label asp-for="NotificationEmails" class="form-label">Internal Notification Emails</label>
+                <textarea asp-for="NotificationEmails" class="form-control" rows="2" maxlength="1000"
+                          placeholder="nama@gandummas.co.id; nama2@gandummas.co.id"></textarea>
+                <div class="form-text">
+                    Internal PT. GMK addresses notified whenever a distributor assigned to this
+                    Channel completes an upload. Separate addresses with <code>;</code>. These are added
+                    to whatever the company's Business Unit already lists; duplicates are sent once.
+                </div>
+                <span asp-validation-for="NotificationEmails" class="text-danger"></span>
+            </div>
+            <div class="mb-3">
                 <label asp-for="IsActive" class="form-label"></label>
                 <select asp-for="IsActive" class="form-select">
                     <option value="true">Active</option>
