@@ -30,9 +30,9 @@
             <div class="row mb-4">
                 <label for="toEmail" class="col-sm-3 col-form-label">Recipient Email</label>
                 <div class="col-sm-9">
-                    <input type="email" id="toEmail" name="toEmail" class="form-control"
+                    <input type="text" id="toEmail" name="toEmail" class="form-control"
                            value="@ViewBag.ToEmail" placeholder="recipient@example.com" required />
-                    <small class="text-muted">The email address that will receive the test message.</small>
+                    <small class="text-muted">Recipient(s). Separate multiple addresses with <code>;</code>.</small>
                 </div>
             </div>
 
@@ -78,7 +78,85 @@
             <div class="row">
                 <div class="col-sm-9 offset-sm-3">
                     <button type="submit" class="btn btn-primary">
-                        <i class="ri-mail-send-line me-1"></i> Send Test Email
+                        <i class="ri-mail-send-line me-1"></i> Send Test Reminder
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card mt-4">
+    <div class="card-header d-flex align-items-center justify-content-between">
+        <h5 class="mb-0">Test Upload Notification</h5>
+        <small class="text-muted float-end">Send a sample upload confirmation</small>
+    </div>
+    <div class="card-body">
+        <p class="text-muted">
+            Sends the confirmation a distributor receives after a completed upload, using illustrative
+            figures. Nothing is uploaded and no batch is created, so the message carries no result link.
+        </p>
+        <form asp-action="SendUploadNotification" method="post">
+            @Html.AntiForgeryToken()
+
+            <div class="row mb-4">
+                <label for="notifyToEmail" class="col-sm-3 col-form-label">Recipient Email</label>
+                <div class="col-sm-9">
+                    <input type="text" id="notifyToEmail" name="toEmail" class="form-control"
+                           value="@ViewBag.ToEmail" placeholder="admin@distributor.co.id; gudang@distributor.co.id" required />
+                    <small class="text-muted">Separate multiple addresses with <code>;</code>.</small>
+                </div>
+            </div>
+
+            <div class="row mb-4">
+                <label for="notifyCompanyName" class="col-sm-3 col-form-label">Company Name</label>
+                <div class="col-sm-9">
+                    <input type="text" id="notifyCompanyName" name="companyName" class="form-control"
+                           placeholder="e.g. Anak Mas" required />
+                    <small class="text-muted">Shown as the greeting, the way a real distributor would see it.</small>
+                </div>
+            </div>
+
+            <div class="row mb-4">
+                <label for="kind" class="col-sm-3 col-form-label">Upload Type</label>
+                <div class="col-sm-9">
+                    <select id="kind" name="kind" class="form-select">
+                        <option value="Stock">Stock</option>
+                        <option value="Sellout">Sellout</option>
+                        <option value="ServiceLevel">Service Level</option>
+                    </select>
+                    <small class="text-muted">
+                        Stock omits the outlet count it has no data for; Service Level omits the period too.
+                    </small>
+                </div>
+            </div>
+
+            <div class="row mb-4">
+                <label class="col-sm-3 col-form-label">Outcome</label>
+                <div class="col-sm-9 pt-2">
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="withRejectedRows"
+                               id="outcomeClean" value="false" checked />
+                        <label class="form-check-label" for="outcomeClean">
+                            Fully successful
+                            <small class="text-muted d-block">Status: ✅ Berhasil</small>
+                        </label>
+                    </div>
+                    <div class="form-check form-check-inline ms-4">
+                        <input class="form-check-input" type="radio" name="withRejectedRows"
+                               id="outcomePartial" value="true" />
+                        <label class="form-check-label" for="outcomePartial">
+                            Partially accepted
+                            <small class="text-muted d-block">Status: ⚠️ Berhasil sebagian</small>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-sm-9 offset-sm-3">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="ri-mail-send-line me-1"></i> Send Sample Notification
                     </button>
                 </div>
             </div>

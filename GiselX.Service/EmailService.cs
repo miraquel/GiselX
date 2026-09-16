@@ -42,7 +42,7 @@ public class EmailService : IEmailService
             _settings.SmtpHost,
             _settings.SmtpPort,
             _settings.EnableSsl ? SecureSocketOptions.StartTls : SecureSocketOptions.None);
-        await client.AuthenticateAsync(_settings.Username, _settings.Password);
+        await AuthenticateIfConfiguredAsync(client, CancellationToken.None);
         await client.SendAsync(message);
         await client.DisconnectAsync(true);
     }
@@ -68,12 +68,25 @@ public class EmailService : IEmailService
             _settings.SmtpPort,
             _settings.EnableSsl ? SecureSocketOptions.StartTls : SecureSocketOptions.None,
             cancellationToken);
-        await client.AuthenticateAsync(_settings.Username, _settings.Password, cancellationToken);
+        await AuthenticateIfConfiguredAsync(client, cancellationToken);
         foreach (var message in messages)
         {
             await client.SendAsync(message, cancellationToken);
         }
         await client.DisconnectAsync(true, cancellationToken);
+    }
+
+    /// <summary>
+    /// Authenticates only when a username is configured. Internal relays commonly accept mail from
+    /// the application server with no credentials and advertise no AUTH at all; asking to
+    /// authenticate there fails the send outright with "The SMTP server does not support
+    /// authentication", which is a configuration that should simply work.
+    /// </summary>
+    private async Task AuthenticateIfConfiguredAsync(SmtpClient client, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(_settings.Username)) return;
+
+        await client.AuthenticateAsync(_settings.Username, _settings.Password, cancellationToken);
     }
 
     private MimeMessage BuildUploadMessage(
