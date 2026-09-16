@@ -66,6 +66,9 @@ builder.Services.AddGiselXService();
 // dependency; this is the implementation that actually queues them.
 builder.Services.AddScoped<IUploadNotificationDispatcher, HangfireUploadNotificationDispatcher>();
 
+// SMTP settings are stored encrypted, so the password is not readable from the database alone.
+builder.Services.AddScoped<IEmailSecretProtector, DataProtectionEmailSecretProtector>();
+
 builder.Services.AddScoped(serviceProvider =>
 {
     var httpContextAccessor = serviceProvider.GetRequiredService<IHttpContextAccessor>();

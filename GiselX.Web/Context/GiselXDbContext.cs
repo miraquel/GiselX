@@ -15,6 +15,8 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
 
     public virtual DbSet<BusinessUnit> BusinessUnit { get; set; }
 
+    public virtual DbSet<EmailSetting> EmailSetting { get; set; }
+
     public virtual DbSet<ServelDeliveryEx> ServelDeliveryEx { get; set; }
 
     public virtual DbSet<ServelReceiptEx> ServelReceiptEx { get; set; }
@@ -93,6 +95,25 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
             entity.HasOne(e => e.Salesman).WithMany(e => e.Companies)
                 .HasForeignKey(e => e.SalesmanId).OnDelete(DeleteBehavior.Restrict);
             // DeadlineDayOfMonth is int? — EF maps to INT NULL automatically
+        });
+
+        modelBuilder.Entity<EmailSetting>(entity =>
+        {
+            entity.Property(e => e.SmtpHost).HasMaxLength(255).IsRequired();
+            entity.Property(e => e.Username).HasMaxLength(255);
+            // Protected text, not the password: Data Protection output is base64 and grows with the
+            // key ring, so this is generous rather than sized to the secret.
+            entity.Property(e => e.PasswordProtected).HasMaxLength(2000);
+            entity.Property(e => e.FromAddress).HasMaxLength(255).IsRequired();
+            entity.Property(e => e.FromName).HasMaxLength(255).IsRequired();
+            entity.Property(e => e.DashboardBaseUrl).HasMaxLength(500);
+            entity.Property(e => e.SupportEmail).HasMaxLength(255);
+            entity.Property(e => e.SupportPhone).HasMaxLength(100);
+            entity.Property(e => e.TimeZoneId).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.ModifiedBy).HasMaxLength(256);
+            entity.Property(e => e.ModifiedDate).HasColumnType("datetime2");
+            // The key is assigned, never generated: there is one row and its Id is always 1.
+            entity.Property(e => e.Id).ValueGeneratedNever();
         });
 
         modelBuilder.Entity<BusinessUnit>(entity =>

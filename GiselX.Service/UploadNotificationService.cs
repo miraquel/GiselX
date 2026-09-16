@@ -2,7 +2,6 @@ using GiselX.Repository.Interface;
 using GiselX.Service.Dto;
 using GiselX.Service.Interface;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace GiselX.Service;
 
@@ -14,7 +13,7 @@ namespace GiselX.Service;
 public sealed class UploadNotificationService(
     IUploadNotificationRepository repository,
     IEmailService emailService,
-    IOptions<EmailSettings> emailSettings,
+    IEmailSettingsProvider settingsProvider,
     ILogger<UploadNotificationService> logger) : IUploadNotificationService
 {
     public async Task NotifyUploadCompletedAsync(UploadNotificationDto notification,
@@ -23,7 +22,8 @@ public sealed class UploadNotificationService(
         // A blank SmtpHost is the documented "email is not set up here" state (it ships blank in
         // appsettings.json). Retrying that ten times per upload would bury the real failures, so
         // this returns instead of throwing and lets Hangfire mark the job done.
-        if (string.IsNullOrWhiteSpace(emailSettings.Value.SmtpHost))
+        var settings = await settingsProvider.GetAsync(cancellationToken);
+        if (string.IsNullOrWhiteSpace(settings.SmtpHost))
         {
             logger.LogWarning(
                 "Upload notification for company {CompanyId} skipped: no SMTP host is configured.",

@@ -15,7 +15,7 @@ public sealed class EmailServiceDeliveryTests
     public async Task A_reminder_is_delivered_to_every_address_on_the_list()
     {
         using var sink = new SmtpSink();
-        var service = new EmailService(Options.Create(Settings(sink.Port)));
+        var service = new EmailService(new FixedEmailSettingsProvider(Settings(sink.Port)));
 
         await service.SendReminderAsync(
             ["admin@anakmas.co.id", "gudang@anakmas.co.id"], "Anak Mas",
@@ -31,7 +31,7 @@ public sealed class EmailServiceDeliveryTests
     public async Task An_upload_notification_delivers_one_message_per_audience()
     {
         using var sink = new SmtpSink();
-        var service = new EmailService(Options.Create(Settings(sink.Port)));
+        var service = new EmailService(new FixedEmailSettingsProvider(Settings(sink.Port)));
 
         await service.SendUploadCompletedAsync(Notification(), "Anak Mas",
             distributorRecipients: ["admin@anakmas.co.id"],
@@ -49,7 +49,7 @@ public sealed class EmailServiceDeliveryTests
     public async Task The_delivered_body_carries_the_indonesian_summary_intact()
     {
         using var sink = new SmtpSink();
-        var service = new EmailService(Options.Create(Settings(sink.Port)));
+        var service = new EmailService(new FixedEmailSettingsProvider(Settings(sink.Port)));
 
         await service.SendUploadCompletedAsync(Notification(), "Anak Mas",
             ["admin@anakmas.co.id"], [], CancellationToken.None);
@@ -73,7 +73,7 @@ public sealed class EmailServiceDeliveryTests
         var settings = Settings(sink.Port);
         settings.Username = "";
         settings.Password = "";
-        var service = new EmailService(Options.Create(settings));
+        var service = new EmailService(new FixedEmailSettingsProvider(settings));
 
         await service.SendReminderAsync(["admin@anakmas.co.id"], "Anak Mas",
             new DateTime(2026, 9, 28), isFinalReminder: true);
@@ -86,7 +86,7 @@ public sealed class EmailServiceDeliveryTests
     public async Task Credentials_are_used_when_they_are_configured()
     {
         using var sink = new SmtpSink();
-        var service = new EmailService(Options.Create(Settings(sink.Port)));
+        var service = new EmailService(new FixedEmailSettingsProvider(Settings(sink.Port)));
 
         await service.SendReminderAsync(["admin@anakmas.co.id"], "Anak Mas",
             new DateTime(2026, 9, 28), isFinalReminder: true);

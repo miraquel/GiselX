@@ -110,7 +110,7 @@ public sealed class UploadNotificationServiceTests
     private static UploadNotificationService CreateService(IEmailService email,
         UploadNotificationRecipients? recipients, string smtpHost = "smtp.gandummas.co.id") =>
         new(new StubRepository(recipients), email,
-            Options.Create(new EmailSettings { SmtpHost = smtpHost }),
+            new FixedEmailSettingsProvider(new EmailSettings { SmtpHost = smtpHost }),
             NullLogger<UploadNotificationService>.Instance);
 
     private static UploadNotificationDto Notification() => new()

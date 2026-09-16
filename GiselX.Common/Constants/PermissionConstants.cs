@@ -111,6 +111,13 @@ public static class PermissionConstants
         public const string Send = "EmailTest.Send";
     }
 
+    // Separate from EmailTest.Send: being allowed to fire a test message is not the same as being
+    // allowed to read and rewrite the SMTP credentials the whole system sends through.
+    public static class EmailSettings
+    {
+        public const string Manage = "EmailSettings.Manage";
+    }
+
     // Get all permissions from PermissionConstants
     public static List<string> GetAllPermissions()
     {

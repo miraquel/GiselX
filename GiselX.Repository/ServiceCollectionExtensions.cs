@@ -40,6 +40,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IUploadCheckRepository, UploadCheckRepository>();
         services.AddScoped<IStandaloneConnectionFactory, StandaloneConnectionFactory>();
         services.AddScoped<IUploadNotificationRepository, UploadNotificationRepository>();
+        services.AddScoped<IEmailSettingRepository, EmailSettingRepository>();
         services.AddScoped<IDistributorTemplateMappingRepository, DistributorTemplateMappingRepository>();
         services.AddScoped<IStockTemplateMappingRepository, StockTemplateMappingRepository>();
         services.AddScoped<ISelloutUploadRepository, SelloutUploadRepository>();

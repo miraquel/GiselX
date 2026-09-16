@@ -123,3 +123,11 @@ public sealed class SmtpSink : IDisposable
         _stopping.Dispose();
     }
 }
+
+/// <summary>Hands the mailer a fixed configuration, standing in for the stored settings.</summary>
+public sealed class FixedEmailSettingsProvider(GiselX.Service.EmailSettings settings)
+    : GiselX.Service.IEmailSettingsProvider
+{
+    public Task<GiselX.Service.EmailSettings> GetAsync(CancellationToken cancellationToken) =>
+        Task.FromResult(settings);
+}

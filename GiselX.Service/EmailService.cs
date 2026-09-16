@@ -2,24 +2,18 @@ using GiselX.Service.Dto;
 using GiselX.Service.Interface;
 using MailKit.Net.Smtp;
 using MailKit.Security;
-using Microsoft.Extensions.Options;
 using MimeKit;
 
 namespace GiselX.Service;
 
-public class EmailService : IEmailService
+public class EmailService(IEmailSettingsProvider settingsProvider) : IEmailService
 {
-    private readonly EmailSettings _settings;
-
-    public EmailService(IOptions<EmailSettings> settings)
-    {
-        _settings = settings.Value;
-    }
-
     public async Task SendReminderAsync(IReadOnlyCollection<string> recipients, string companyName,
         DateTime deadline, bool isFinalReminder)
     {
         if (recipients.Count == 0) return;
+
+        var settings = await settingsProvider.GetAsync(CancellationToken.None);
 
         var daysUntil = (deadline.Date - DateTime.Today).Days;
         var subject = isFinalReminder
@@ -27,7 +21,7 @@ public class EmailService : IEmailService
             : $"[Reminder] Data upload due in {daysUntil} days — {companyName}";
 
         var message = new MimeMessage();
-        message.From.Add(new MailboxAddress(_settings.FromName, _settings.FromAddress));
+        message.From.Add(new MailboxAddress(settings.FromName, settings.FromAddress));
         foreach (var recipient in recipients)
         {
             // Parse, not the (name, address) constructor: everyone here belongs to the same company,
@@ -39,10 +33,10 @@ public class EmailService : IEmailService
 
         using var client = new SmtpClient();
         await client.ConnectAsync(
-            _settings.SmtpHost,
-            _settings.SmtpPort,
-            _settings.EnableSsl ? SecureSocketOptions.StartTls : SecureSocketOptions.None);
-        await AuthenticateIfConfiguredAsync(client, CancellationToken.None);
+            settings.SmtpHost,
+            settings.SmtpPort,
+            settings.EnableSsl ? SecureSocketOptions.StartTls : SecureSocketOptions.None);
+        await AuthenticateIfConfiguredAsync(client, settings, CancellationToken.None);
         await client.SendAsync(message);
         await client.DisconnectAsync(true);
     }
@@ -56,19 +50,21 @@ public class EmailService : IEmailService
     {
         if (distributorRecipients.Count == 0 && internalRecipients.Count == 0) return;
 
+        var settings = await settingsProvider.GetAsync(cancellationToken);
+
         var messages = new List<MimeMessage>();
         if (distributorRecipients.Count > 0)
-            messages.Add(BuildUploadMessage(notification, companyName, distributorRecipients, forInternalTeam: false));
+            messages.Add(BuildUploadMessage(notification, companyName, distributorRecipients, false, settings));
         if (internalRecipients.Count > 0)
-            messages.Add(BuildUploadMessage(notification, companyName, internalRecipients, forInternalTeam: true));
+            messages.Add(BuildUploadMessage(notification, companyName, internalRecipients, true, settings));
 
         using var client = new SmtpClient();
         await client.ConnectAsync(
-            _settings.SmtpHost,
-            _settings.SmtpPort,
-            _settings.EnableSsl ? SecureSocketOptions.StartTls : SecureSocketOptions.None,
+            settings.SmtpHost,
+            settings.SmtpPort,
+            settings.EnableSsl ? SecureSocketOptions.StartTls : SecureSocketOptions.None,
             cancellationToken);
-        await AuthenticateIfConfiguredAsync(client, cancellationToken);
+        await AuthenticateIfConfiguredAsync(client, settings, cancellationToken);
         foreach (var message in messages)
         {
             await client.SendAsync(message, cancellationToken);
@@ -82,25 +78,27 @@ public class EmailService : IEmailService
     /// authenticate there fails the send outright with "The SMTP server does not support
     /// authentication", which is a configuration that should simply work.
     /// </summary>
-    private async Task AuthenticateIfConfiguredAsync(SmtpClient client, CancellationToken cancellationToken)
+    private static async Task AuthenticateIfConfiguredAsync(SmtpClient client, EmailSettings settings,
+        CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(_settings.Username)) return;
+        if (string.IsNullOrWhiteSpace(settings.Username)) return;
 
-        await client.AuthenticateAsync(_settings.Username, _settings.Password, cancellationToken);
+        await client.AuthenticateAsync(settings.Username, settings.Password, cancellationToken);
     }
 
-    private MimeMessage BuildUploadMessage(
+    private static MimeMessage BuildUploadMessage(
         UploadNotificationDto notification,
         string companyName,
         IReadOnlyCollection<string> recipients,
-        bool forInternalTeam)
+        bool forInternalTeam,
+        EmailSettings settings)
     {
         var rendered = forInternalTeam
-            ? UploadNotificationMessage.ForInternalTeam(notification, companyName, _settings)
-            : UploadNotificationMessage.ForDistributor(notification, companyName, _settings);
+            ? UploadNotificationMessage.ForInternalTeam(notification, companyName, settings)
+            : UploadNotificationMessage.ForDistributor(notification, companyName, settings);
 
         var message = new MimeMessage();
-        message.From.Add(new MailboxAddress(_settings.FromName, _settings.FromAddress));
+        message.From.Add(new MailboxAddress(settings.FromName, settings.FromAddress));
         foreach (var recipient in recipients)
         {
             message.To.Add(MailboxAddress.Parse(recipient));
@@ -110,7 +108,6 @@ public class EmailService : IEmailService
         message.Body = new TextPart("plain") { Text = rendered.Body };
         return message;
     }
-
 
     private static string BuildBody(string companyName, DateTime deadline, bool isFinalReminder)
     {
