@@ -41,16 +41,16 @@ BEGIN TRY
 
     -- "identity" is the T-SQL IDENTITY keyword, so the schema must be bracketed or this will not parse.
     INSERT INTO [identity].[AspNetRoleClaims] (RoleId, ClaimType, ClaimValue)
-    SELECT existing.RoleId, Npermission, NEmailSettings.Manage
+    SELECT existing.RoleId, N'permission', N'EmailSettings.Manage'
     FROM [identity].[AspNetRoleClaims] existing
-    WHERE existing.ClaimType = Npermission
-      AND existing.ClaimValue = NEmailTest.Send
+    WHERE existing.ClaimType = N'permission'
+      AND existing.ClaimValue = N'EmailTest.Send'
       AND NOT EXISTS
       (
           SELECT 1 FROM [identity].[AspNetRoleClaims] already
           WHERE already.RoleId = existing.RoleId
-            AND already.ClaimType = Npermission
-            AND already.ClaimValue = NEmailSettings.Manage
+            AND already.ClaimType = N'permission'
+            AND already.ClaimValue = N'EmailSettings.Manage'
       );
 
     IF NOT EXISTS
