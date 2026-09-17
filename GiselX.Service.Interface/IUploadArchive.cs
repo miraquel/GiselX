@@ -21,4 +21,12 @@ public interface IUploadArchive
 
     /// <summary>Opens a stored file, or null when it is missing — a folder can be pruned or restored.</summary>
     Task<Stream?> OpenAsync(string storedPath, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Writes, reads back and removes a probe file, so an operator can find out whether archiving
+    /// actually works before an upload depends on it. Storing is deliberately silent, so without
+    /// this the only way to discover a bad folder is a notification that quietly arrives with no
+    /// download link — months after the uploads it should have kept.
+    /// </summary>
+    Task<UploadArchiveCheck> CheckAsync(CancellationToken cancellationToken);
 }

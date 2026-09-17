@@ -132,7 +132,12 @@ public static class UploadNotificationMessage
         body.Append(label.PadRight(LabelWidth)).Append(": ").Append(value).Append("\r\n");
     }
 
-    private static string? BuildResultLink(UploadNotificationDto notification, EmailSettings settings)
+    /// <summary>
+    /// Public so the Email Test screen can show the very link the mail would carry. A screen that
+    /// built its own copy of these URLs could report a link that works while the mail sends one that
+    /// does not, which is exactly the kind of check that is worse than none.
+    /// </summary>
+    public static string? BuildResultLink(UploadNotificationDto notification, EmailSettings settings)
     {
         if (string.IsNullOrWhiteSpace(settings.DashboardBaseUrl) || notification.Reference is null) return null;
 
@@ -149,8 +154,10 @@ public static class UploadNotificationMessage
     /// Link to the archived workbook, offered only when one was actually kept — an upload made while
     /// archiving was switched off has nothing behind the link. The page itself requires a login and
     /// is scoped to the reader's own company, so the link in a forwarded mail grants nothing.
+    ///
+    /// Public for the same reason as <see cref="BuildResultLink"/>.
     /// </summary>
-    private static string? BuildSourceFileLink(UploadNotificationDto notification, EmailSettings settings)
+    public static string? BuildSourceFileLink(UploadNotificationDto notification, EmailSettings settings)
     {
         if (!notification.SourceFileArchived) return null;
         if (string.IsNullOrWhiteSpace(settings.DashboardBaseUrl) || notification.Reference is null) return null;

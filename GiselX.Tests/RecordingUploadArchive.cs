@@ -27,6 +27,11 @@ public sealed class RecordingUploadArchive(bool configured = true) : IUploadArch
         Task.FromResult<Stream?>(_files.TryGetValue(storedPath, out var bytes)
             ? new MemoryStream(bytes)
             : null);
+
+    public Task<UploadArchiveCheck> CheckAsync(CancellationToken cancellationToken) =>
+        Task.FromResult(configured
+            ? new UploadArchiveCheck { IsConfigured = true, ResolvedPath = "(in memory)", CanStore = true }
+            : UploadArchiveCheck.NotConfigured());
 }
 
 /// <summary>Stands in for an archive whose folder is unreachable — the write fails, silently.</summary>
@@ -39,4 +44,12 @@ public sealed class FailingUploadArchive : IUploadArchive
 
     public Task<Stream?> OpenAsync(string storedPath, CancellationToken cancellationToken) =>
         Task.FromResult<Stream?>(null);
+
+    public Task<UploadArchiveCheck> CheckAsync(CancellationToken cancellationToken) =>
+        Task.FromResult(new UploadArchiveCheck
+        {
+            IsConfigured = true,
+            ResolvedPath = @"D:\unreachable",
+            Error = "Access to the path is denied."
+        });
 }

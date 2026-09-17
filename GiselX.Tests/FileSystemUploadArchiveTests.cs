@@ -97,6 +97,67 @@ public sealed class FileSystemUploadArchiveTests : IDisposable
         Assert.Null(await Create().OpenAsync("Stock/2026/09/999.xlsx", CancellationToken.None));
     }
 
+    [Fact]
+    public async Task The_check_proves_the_round_trip_and_leaves_nothing_behind()
+    {
+        // Reporting on the configuration would pass for a folder the app pool cannot write to,
+        // which is the failure this is here to find. So it writes, reads back and deletes.
+        var archive = Create();
+
+        var check = await archive.CheckAsync(CancellationToken.None);
+
+        Assert.True(check.IsConfigured);
+        Assert.True(check.CanStore);
+        Assert.Null(check.Error);
+        Assert.Equal(Path.GetFullPath(_root), check.ResolvedPath);
+        Assert.Empty(Directory.GetFiles(_root, "*", SearchOption.AllDirectories));
+    }
+
+    [Fact]
+    public async Task The_check_reports_an_unconfigured_archive_rather_than_a_failure()
+    {
+        // Switched off is a decision, not a fault: the screen has to distinguish "nobody set this"
+        // from "this is set and broken", because the remedies are different.
+        var archive = new FileSystemUploadArchive(
+            Options.Create(new UploadArchiveOptions { Path = "" }),
+            NullLogger<FileSystemUploadArchive>.Instance);
+
+        var check = await archive.CheckAsync(CancellationToken.None);
+
+        Assert.False(check.IsConfigured);
+        Assert.False(check.CanStore);
+        Assert.Null(check.Error);
+    }
+
+    [Fact]
+    public async Task A_folder_that_cannot_be_written_to_is_reported_rather_than_thrown()
+    {
+        // A path with a character no file system accepts stands in for the unreachable share and the
+        // read-only folder: the check must answer, never throw, or the screen that calls it breaks
+        // for precisely the configuration it exists to diagnose.
+        var archive = new FileSystemUploadArchive(
+            Options.Create(new UploadArchiveOptions { Path = Path.Combine(_root, "in|valid") }),
+            NullLogger<FileSystemUploadArchive>.Instance);
+
+        var check = await archive.CheckAsync(CancellationToken.None);
+
+        Assert.True(check.IsConfigured);
+        Assert.False(check.CanStore);
+        Assert.False(string.IsNullOrWhiteSpace(check.Error));
+    }
+
+    [Fact]
+    public async Task The_check_and_a_real_upload_agree_about_the_same_folder()
+    {
+        // The whole point is that a green check predicts a working upload. If one could pass while
+        // the other failed the check would be worse than none.
+        var archive = Create();
+
+        Assert.True((await archive.CheckAsync(CancellationToken.None)).CanStore);
+        Assert.NotNull(await archive.StoreAsync(UploadNotificationKind.Stock, 5, "s.xlsx", [9],
+            CancellationToken.None));
+    }
+
     private FileSystemUploadArchive Create() => new(
         Options.Create(new UploadArchiveOptions { Path = _root }),
         NullLogger<FileSystemUploadArchive>.Instance);

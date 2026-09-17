@@ -21,7 +21,7 @@ public sealed class LatestUploadRepository(IStandaloneConnectionFactory connecti
     {
         // Status 2 = Completed, 3 = CompletedWithWarnings in the Stock enum.
         const string sql = """
-            SELECT TOP 1 Id AS Reference, OriginalFileName, TotalRows, ValidRows, InvalidRows,
+            SELECT TOP 1 Id AS Reference, CompanyId, OriginalFileName, TotalRows, ValidRows, InvalidRows,
                    UploadedBy, CompletedDate, ArchivedFilePath, StockDate
             FROM StockUploadBatch
             WHERE (@CompanyId IS NULL OR CompanyId = @CompanyId) AND Status IN (2, 3)
@@ -38,7 +38,7 @@ public sealed class LatestUploadRepository(IStandaloneConnectionFactory connecti
     {
         // The GROUP enum, not the batch one: 2 = Completed, 3 = CompletedWithWarnings here.
         const string sql = """
-            SELECT TOP 1 Id AS Reference, OriginalFileName, TotalRows, ValidRows, InvalidRows,
+            SELECT TOP 1 Id AS Reference, CompanyId, OriginalFileName, TotalRows, ValidRows, InvalidRows,
                    UploadedBy, CompletedDate, ArchivedFilePath, CAST(NULL AS date) AS StockDate
             FROM SelloutUploadGroup
             WHERE (@CompanyId IS NULL OR CompanyId = @CompanyId) AND Status IN (2, 3)

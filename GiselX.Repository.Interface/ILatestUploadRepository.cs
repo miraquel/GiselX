@@ -6,6 +6,14 @@ namespace GiselX.Repository.Interface;
 public sealed class LatestUploadSummary
 {
     public long Reference { get; set; }
+
+    /// <summary>
+    /// Who uploaded it. An Administrator's sample looks across companies, but the result and download
+    /// pages are scoped to the reader's own company, so this is what says whether the links in the
+    /// sample will open for the person looking at them.
+    /// </summary>
+    public int CompanyId { get; set; }
+
     public string OriginalFileName { get; set; } = string.Empty;
     public int TotalRows { get; set; }
     public int ValidRows { get; set; }

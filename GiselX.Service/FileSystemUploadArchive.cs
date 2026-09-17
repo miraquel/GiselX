@@ -70,6 +70,74 @@ public sealed class FileSystemUploadArchive(
         return Task.FromResult<Stream?>(File.OpenRead(absolute));
     }
 
+    /// <summary>
+    /// Proves the round trip rather than reporting on the configuration: the folder can exist and
+    /// still be read-only to the app pool identity, and a path typed with a stray space resolves to
+    /// somewhere nobody will ever look. Writes under a probe folder so a failed run leaves litter
+    /// that is obviously not an upload, and removes what it wrote either way.
+    /// </summary>
+    public async Task<UploadArchiveCheck> CheckAsync(CancellationToken cancellationToken)
+    {
+        if (!IsConfigured) return UploadArchiveCheck.NotConfigured();
+
+        string? resolved = null;
+        string? probe = null;
+        try
+        {
+            resolved = Path.GetFullPath(Root);
+            var folder = Path.Combine(resolved, ProbeFolder);
+            Directory.CreateDirectory(folder);
+
+            probe = Path.Combine(folder, $"{Guid.NewGuid():N}.probe");
+            var written = Guid.NewGuid().ToByteArray();
+            await File.WriteAllBytesAsync(probe, written, cancellationToken);
+            var read = await File.ReadAllBytesAsync(probe, cancellationToken);
+
+            return read.SequenceEqual(written)
+                ? new UploadArchiveCheck { IsConfigured = true, ResolvedPath = resolved, CanStore = true }
+                : new UploadArchiveCheck
+                {
+                    IsConfigured = true,
+                    ResolvedPath = resolved,
+                    Error = "The probe file read back different bytes than were written to it."
+                };
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException
+                                              or NotSupportedException or ArgumentException
+                                              or PathTooLongException)
+        {
+            logger.LogError(exception, "The upload archive at '{Path}' failed its write check.", Root);
+            return new UploadArchiveCheck
+            {
+                IsConfigured = true,
+                ResolvedPath = resolved,
+                Error = exception.Message
+            };
+        }
+        finally
+        {
+            TryDelete(probe);
+        }
+    }
+
+    private void TryDelete(string? probe)
+    {
+        if (probe is null) return;
+
+        try
+        {
+            File.Delete(probe);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // The check has already answered the question it was asked; a probe left behind is
+            // untidy, not a failure, and must not turn a successful result into an error.
+            logger.LogWarning(exception, "Could not remove the archive probe file '{Path}'.", probe);
+        }
+    }
+
+    private const string ProbeFolder = "_selftest";
+
     private string Root => options.Value.Path;
 
     /// <summary>
