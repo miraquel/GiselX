@@ -109,9 +109,9 @@ public sealed class StockUploadRepository(IDbConnection connection, IDbTransacti
         using var result = await connection.QueryMultipleAsync(new CommandDefinition("""
             SELECT b.*, m.Name MappingName FROM StockUploadBatch b
              LEFT JOIN StockTemplateMapping m ON m.Id=b.StockTemplateMappingId
-             WHERE b.Id=@BatchId AND b.CompanyId=@CompanyId;
+             WHERE b.Id=@BatchId AND (@CompanyId=0 OR b.CompanyId=@CompanyId);
             SELECT s.* FROM StockStaging s JOIN StockUploadBatch b ON b.Id=s.StockUploadBatchId
-             WHERE b.Id=@BatchId AND b.CompanyId=@CompanyId ORDER BY s.SourceRowNumber;
+             WHERE b.Id=@BatchId AND (@CompanyId=0 OR b.CompanyId=@CompanyId) ORDER BY s.SourceRowNumber;
             """, new { BatchId = batchId, CompanyId = companyId }, transaction,
             cancellationToken: cancellationToken));
         var batch = await result.ReadSingleOrDefaultAsync<StockUploadBatch>();

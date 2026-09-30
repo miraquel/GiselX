@@ -12,6 +12,8 @@ public interface IStockUploadRepository
     Task SetArchivedFilePathAsync(long batchId, string archivedFilePath, CancellationToken cancellationToken);
     Task PublishValidRowsAsync(long batchId, int companyId, StockUploadBatchStatus status,
         CancellationToken cancellationToken);
+
+    /// <summary>A <paramref name="companyId"/> of 0 matches any company — the Administrator scope.</summary>
     Task<(StockUploadBatch Batch, IReadOnlyList<StockStaging> Rows)?> GetBatchAsync(long batchId, int companyId,
         CancellationToken cancellationToken);
 }

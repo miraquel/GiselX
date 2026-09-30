@@ -58,8 +58,8 @@ public sealed class StocksController(
     }
 
     /// <summary>
-    /// Hands back the workbook as it was uploaded. Scoped to the signed-in user's own company, so the
-    /// link in a forwarded notification email is useless to anyone outside it.
+    /// Hands back the workbook as it was uploaded. Scoped to the signed-in user's own company (any company for
+    /// an Administrator), so the link in a forwarded notification email is useless to anyone outside it.
     /// </summary>
     [HttpGet]
     [Authorize(PermissionConstants.Stocks.Index)]
@@ -68,7 +68,7 @@ public sealed class StocksController(
         var user = await userManager.GetUserAsync(User);
         if (user is null) return Challenge();
 
-        var response = await uploadService.DownloadSourceAsync(batchId, user.CompanyId, cancellationToken);
+        var response = await uploadService.DownloadSourceAsync(batchId, UploadScope(user), cancellationToken);
         if (!response.IsSuccess || response.Data is null)
         {
             TempData["ErrorMessage"] = string.Join(" ", response.Errors);
@@ -84,7 +84,7 @@ public sealed class StocksController(
     {
         var user = await userManager.GetUserAsync(User);
         if (user is null) return Challenge();
-        var response = await uploadService.GetResultAsync(batchId, user.CompanyId, cancellationToken);
+        var response = await uploadService.GetResultAsync(batchId, UploadScope(user), cancellationToken);
         return response.Data is null ? NotFound() : View(response.Data);
     }
 
@@ -128,4 +128,11 @@ public sealed class StocksController(
         return File(stream, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             $"Stock_Batch_{batchId}.xlsx");
     }
+
+    /// <summary>
+    /// The company an upload result or archived workbook is looked up in. Administrators are PT. GMK
+    /// staff whose own CompanyId is not the distributor's, and the internal notification mail sends them
+    /// these same links — scoping them to their own company would 404 every one.
+    /// </summary>
+    private int UploadScope(AppIdentityUser user) => User.IsInRole("Administrator") ? 0 : user.CompanyId;
 }

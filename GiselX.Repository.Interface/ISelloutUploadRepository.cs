@@ -13,6 +13,10 @@ public interface ISelloutUploadRepository
 
     /// <summary>Records where the uploaded workbook was archived, once the group id is known.</summary>
     Task SetArchivedFilePathAsync(long groupId, string archivedFilePath, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// For both reads a <c>companyId</c> of 0 matches any company — the Administrator scope.
+    /// </summary>
     Task<(SelloutUploadGroup Group, IReadOnlyList<SelloutUploadBatch> Batches, IReadOnlyList<SelloutStaging> Rows)?> GetGroupAsync(
         long groupId, int companyId, CancellationToken cancellationToken);
     Task<(SelloutUploadBatch Batch, IReadOnlyList<SelloutStaging> Rows)?> GetBatchAsync(long batchId, int companyId, CancellationToken cancellationToken);

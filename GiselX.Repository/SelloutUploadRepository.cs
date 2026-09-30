@@ -151,9 +151,9 @@ public sealed class SelloutUploadRepository(IDbConnection connection, IDbTransac
     {
         using var result = await connection.QueryMultipleAsync(new CommandDefinition("""
             SELECT b.*, m.Name MappingName FROM SelloutUploadBatch b LEFT JOIN DistributorTemplateMapping m ON m.Id=b.DistributorTemplateMappingId
-             WHERE b.Id=@BatchId AND b.CompanyId=@CompanyId;
+             WHERE b.Id=@BatchId AND (@CompanyId=0 OR b.CompanyId=@CompanyId);
             SELECT s.* FROM SelloutStaging s JOIN SelloutUploadBatch b ON b.Id=s.SelloutUploadBatchId
-             WHERE b.Id=@BatchId AND b.CompanyId=@CompanyId ORDER BY s.SourceRowNumber;
+             WHERE b.Id=@BatchId AND (@CompanyId=0 OR b.CompanyId=@CompanyId) ORDER BY s.SourceRowNumber;
             """, new { BatchId = batchId, CompanyId = companyId }, transaction, cancellationToken: cancellationToken));
         var batch = await result.ReadSingleOrDefaultAsync<SelloutUploadBatch>();
         return batch is null ? null : (batch, (await result.ReadAsync<SelloutStaging>()).ToList());
@@ -163,11 +163,11 @@ public sealed class SelloutUploadRepository(IDbConnection connection, IDbTransac
         long groupId, int companyId, CancellationToken cancellationToken)
     {
         using var result = await connection.QueryMultipleAsync(new CommandDefinition("""
-            SELECT g.* FROM SelloutUploadGroup g WHERE g.Id=@GroupId AND g.CompanyId=@CompanyId;
+            SELECT g.* FROM SelloutUploadGroup g WHERE g.Id=@GroupId AND (@CompanyId=0 OR g.CompanyId=@CompanyId);
             SELECT b.* FROM SelloutUploadBatch b
-             WHERE b.SelloutUploadGroupId=@GroupId AND b.CompanyId=@CompanyId ORDER BY b.ReportingWeekStart;
+             WHERE b.SelloutUploadGroupId=@GroupId AND (@CompanyId=0 OR b.CompanyId=@CompanyId) ORDER BY b.ReportingWeekStart;
             SELECT s.* FROM SelloutStaging s JOIN SelloutUploadBatch b ON b.Id=s.SelloutUploadBatchId
-             WHERE b.SelloutUploadGroupId=@GroupId AND b.CompanyId=@CompanyId ORDER BY s.SourceRowNumber;
+             WHERE b.SelloutUploadGroupId=@GroupId AND (@CompanyId=0 OR b.CompanyId=@CompanyId) ORDER BY s.SourceRowNumber;
             """, new { GroupId = groupId, CompanyId = companyId }, transaction, cancellationToken: cancellationToken));
         var group = await result.ReadSingleOrDefaultAsync<SelloutUploadGroup>();
         if (group is null) return null;
