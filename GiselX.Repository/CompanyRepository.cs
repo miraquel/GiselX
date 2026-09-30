@@ -61,7 +61,7 @@ public class CompanyRepository : ICompanyRepository
             commandType: CommandType.StoredProcedure
         );
 
-        return await _dbConnection.QuerySingleAsync<Company>(command);
+        return await _dbConnection.QuerySingleOrDefaultAsync<Company>(command);
     }
 
     public async Task<PagedList<Company>> GetCompaniesAsync(PagedListRequest pagedListRequest, CancellationToken cancellationToken)
