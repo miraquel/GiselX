@@ -191,8 +191,6 @@ public class SalesTransactionsController : Controller
         return RedirectToAction(nameof(Index));
     }
 
-    [HttpGet]
-    [Authorize(PermissionConstants.SalesTransactions.Upload)]
     /// <summary>
     /// Hands back the workbook as it was uploaded. Scoped to the signed-in user's own company, so the
     /// link in a forwarded notification email is useless to anyone outside it.
@@ -214,6 +212,8 @@ public class SalesTransactionsController : Controller
         return File(response.Data.Content, response.Data.ContentType, response.Data.FileName);
     }
 
+    [HttpGet]
+    [Authorize(PermissionConstants.SalesTransactions.Upload)]
     public async Task<IActionResult> UploadResult(long? groupId, long? batchId, CancellationToken cancellationToken)
     {
         var user = await _userManager.GetUserAsync(User);
