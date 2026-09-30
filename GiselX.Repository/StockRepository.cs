@@ -197,13 +197,9 @@ public class StockRepository : IStockRepository
             : GetColumnExpression(sort, useDistributorIdentity);
         var direction = pagedListRequest.IsSortAscending ? "ASC" : "DESC";
         var projection = GetProjection(useDistributorIdentity);
+        var rankedBatches = StockSnapshotPeriod.RankedBatchesFor(pagedListRequest.Filters, parameters);
         var query = $"""
-            WITH RankedBatches AS (
-                SELECT Id, CompanyId,
-                       ROW_NUMBER() OVER (PARTITION BY CompanyId ORDER BY CompletedDate DESC, Id DESC) AS BatchRank
-                FROM StockUploadBatch
-                WHERE Status IN (2,3)
-            )
+            {rankedBatches}
             SELECT {projection}
             FROM Stock s
             INNER JOIN RankedBatches rb ON rb.Id=s.StockUploadBatchId AND rb.BatchRank=1
@@ -211,12 +207,7 @@ public class StockRepository : IStockRepository
             WHERE (@CompanyId=0 OR s.CompanyId=@CompanyId) {where}
              ORDER BY {sortExpression} {direction}, s.Id ASC
              OFFSET (@PageNumber-1)*@PageSize ROWS FETCH NEXT @PageSize ROWS ONLY;
-            WITH RankedBatches AS (
-                SELECT Id, CompanyId,
-                       ROW_NUMBER() OVER (PARTITION BY CompanyId ORDER BY CompletedDate DESC, Id DESC) AS BatchRank
-                FROM StockUploadBatch
-                WHERE Status IN (2,3)
-            )
+            {rankedBatches}
             SELECT COUNT(*)
             FROM Stock s
             INNER JOIN RankedBatches rb ON rb.Id=s.StockUploadBatchId AND rb.BatchRank=1
@@ -282,12 +273,9 @@ public class StockRepository : IStockRepository
                         "s.BatchNumber LIKE @Search OR c.Name LIKE @Search)");
         }
         var filters = clauses.Count == 0 ? string.Empty : " AND " + string.Join(" AND ", clauses);
+        var rankedBatches = StockSnapshotPeriod.RankedBatchesFor(request.Filters, parameters);
         return _dbConnection.QuerySingleAsync<StockSelectionSummary>(new CommandDefinition($"""
-            WITH RankedBatches AS (
-                SELECT Id, CompanyId,
-                       ROW_NUMBER() OVER (PARTITION BY CompanyId ORDER BY CompletedDate DESC, Id DESC) AS BatchRank
-                FROM StockUploadBatch WHERE Status IN (2,3)
-            )
+            {rankedBatches}
             SELECT COUNT(DISTINCT s.CompanyId) AS DistributorCount,
                    COUNT(*) AS [RowCount],
                    COALESCE(SUM(s.SaldoAwal),0) AS SaldoAwal,
@@ -301,30 +289,19 @@ public class StockRepository : IStockRepository
             """, parameters, _dbTransaction, cancellationToken: cancellationToken));
     }
 
+    /// <summary>
+    /// The months the Stock page can be browsed by: the snapshot dates of published batches. Upload
+    /// time would offer a month for a snapshot uploaded late and hide the month it describes, and
+    /// legacy rows with no batch cannot be shown by the grid at all.
+    /// </summary>
     public async Task<IEnumerable<Period>> SelectPeriodsAsync(int companyId, CancellationToken cancellationToken)
     {
-        if (companyId == 0)
-            return await _dbConnection.QueryAsync<Period>(new CommandDefinition("""
-                SELECT DISTINCT YEAR(CreatedDate) AS [Year], MONTH(CreatedDate) AS [Month]
-                FROM Stock
-                ORDER BY [Year] DESC, [Month] DESC;
-                """, transaction: _dbTransaction, cancellationToken: cancellationToken));
-
-        const string query = "GiselStock_SelectPeriods";
-
-        var parameters = new DynamicParameters();
-        parameters.Add("@CompanyId", companyId);
-
-        await _dbConnection.ExecuteAsync("SET ARITHABORT ON", transaction: _dbTransaction);
-        var command = new CommandDefinition(
-            query,
-            parameters,
-            _dbTransaction,
-            cancellationToken: cancellationToken,
-            commandType: CommandType.StoredProcedure
-        );
-
-        return await _dbConnection.QueryAsync<Period>(command);
+        return await _dbConnection.QueryAsync<Period>(new CommandDefinition("""
+            SELECT DISTINCT YEAR(StockDate) AS [Year], MONTH(StockDate) AS [Month]
+            FROM StockUploadBatch
+            WHERE Status IN (2,3) AND (@CompanyId=0 OR CompanyId=@CompanyId)
+            ORDER BY [Year] DESC, [Month] DESC;
+            """, new { CompanyId = companyId }, _dbTransaction, cancellationToken: cancellationToken));
     }
 
     public async Task<IReadOnlyList<StockUploadBatch>> ListCompletedUploadsAsync(int companyId,

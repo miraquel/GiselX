@@ -5,6 +5,8 @@
 @section styles {
     <link href="/lib/datatables-bs5/datatables.boostrap5.css" rel="stylesheet" />
     <link href="/lib/datatables-responsive-bs5/responsive.bootstrap5.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <link href="/lib/select2-bootstrap-5-theme/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
 }
 
 <div class="card">
@@ -38,10 +40,18 @@
                 </div>
             }
         </div>
+        <div class="row mt-4">
+            <div class="col-md-6">
+                <select id="yearSelect" name="year" class="form-control"></select>
+            </div>
+            <div class="col-md-6">
+                <select id="monthSelect" name="month" class="form-control"></select>
+            </div>
+        </div>
         @if (User.IsInRole("Administrator"))
         {
             <div class="mt-4">
-                <div class="d-flex justify-content-between align-items-center mb-2"><h6 class="mb-0">Selected data summary</h6><small class="text-muted">Updates with distributor and table filters</small></div>
+                <div class="d-flex justify-content-between align-items-center mb-2"><h6 class="mb-0">Selected data summary</h6><small class="text-muted">Latest snapshot in the selected month; updates with distributor and table filters</small></div>
                 <div class="row g-2" id="stockSelectionSummary">
                     <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Distributors</small><div class="fs-5 fw-semibold" id="stockSummaryDistributors">—</div></div></div>
                     <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Rows</small><div class="fs-5 fw-semibold" id="stockSummaryRows">—</div></div></div>
@@ -118,6 +128,7 @@
 <script src="/lib/datatables-bs5/datatables.bootstrap5.js"></script>
 <script src="/lib/moment/moment.js"></script>
 <script src="/js/helper.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
 $(function () {
  const form = document.getElementById('stockUploadForm');
@@ -152,7 +163,31 @@ $(function () {
      </text>
    }
  }
- const table = $('#stock-table').DataTable({
+ // Browsed by month like Sellout: the table stays hidden and unloaded until a year and a month are
+ // chosen, and the server shows each distributor's latest snapshot inside that month.
+ const yearSelect = $('#yearSelect');
+ const monthSelect = $('#monthSelect');
+ let table;
+ function periodsSelect(select, placeholder, toResults) {
+   select.select2({
+     placeholder: placeholder, theme: 'bootstrap-5', allowClear: true,
+     ajax: { url: '/api/Stocks/SelectPeriods', type: 'GET', dataType: 'json', delay: 500,
+             processResults: data => ({ results: toResults(data.data || []) }) }
+   });
+   select.val(null).trigger('change');
+ }
+ periodsSelect(yearSelect, 'Select Year', periods =>
+   [...new Set(periods.map(p => p.year))].map(year => ({ id: year, text: year.toString() })));
+ periodsSelect(monthSelect, 'Select Month', periods => {
+   const year = parseInt(yearSelect.val());
+   return [...new Set(periods.filter(p => p.year === year).map(p => p.month))]
+     .map(month => ({ id: month, text: moment().month(month - 1).format('MMMM') }));
+ });
+ monthSelect.prop('disabled', true);
+ function canLoadTable() { return yearSelect.val() && monthSelect.val(); }
+ function loadTable() {
+   if (table) { table.ajax.reload(); return; }
+   table = $('#stock-table').DataTable({
    processing:true, serverSide:true, searching:true, ordering:true, scrollX:true, order:[[0,'asc']],
    ajax:{
      url:'/api/Stocks/Select',
@@ -162,10 +197,12 @@ $(function () {
        const distributor=$('#stockDistributorFilter').val();
        if(distributor){q['Filters.CompanyName']=distributor;}
        if(d.order?.length){q.SortBy=d.columns[d.order[0].column].data;q.IsSortAscending=d.order[0].dir==='asc';}
+       q['Filters.Year']=yearSelect.val();
+       q['Filters.Month']=monthSelect.val();
        lastStockQuery=q;
        return q;
      },
-     dataSrc:function(json){ refreshStockSummary(lastStockQuery); if(json.data?.items){json.recordsTotal=json.data.totalCount;json.recordsFiltered=json.data.totalCount;return json.data.items;} return []; }
+     dataSrc:function(json){ if(!canLoadTable()) return []; refreshStockSummary(lastStockQuery); if(json.data?.items){json.recordsTotal=json.data.totalCount;json.recordsFiltered=json.data.totalCount;return json.data.items;} return []; }
    },
    columns:[
     @if (User.IsInRole("Administrator")) { <text>{data:'companyName'},</text> }
@@ -176,11 +213,26 @@ $(function () {
     {data:'expiredDate',render:d=>d&&d.substring(0,10)!=='1753-01-01'?moment(d).format('DD MMM YYYY'):''},
     {data:'stockDate',render:d=>d?moment(d).format('DD MMM YYYY'):''}
    ]
+   });
+ }
+ function refreshForPeriod() {
+   $('.card-datatable').toggle(!!canLoadTable());
+   if (canLoadTable()) loadTable();
+   else {
+     if (table) table.clear().draw();
+     $('#stockSelectionSummary .fw-semibold').text('—');
+   }
+ }
+ yearSelect.on('change', function () {
+   monthSelect.prop('disabled', !yearSelect.val());
+   monthSelect.val(null).trigger('change');
  });
+ monthSelect.on('change', refreshForPeriod);
+ refreshForPeriod();
  let distributorFilterTimer;
  $('#stockDistributorFilter').on('input', function () {
    clearTimeout(distributorFilterTimer);
-   distributorFilterTimer=setTimeout(()=>table.ajax.reload(),300);
+   distributorFilterTimer=setTimeout(()=>{ if (table) table.ajax.reload(); },300);
  });
  function render(preflight, message) {
    $('#summaryTotalRows').text(numberFormatter.format(preflight.totalRows || 0));
