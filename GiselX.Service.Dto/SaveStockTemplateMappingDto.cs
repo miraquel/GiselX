@@ -9,5 +9,7 @@ public sealed class SaveStockTemplateMappingDto
     public int HeaderRowNumber { get; set; }
     public int FirstDataRowNumber { get; set; }
     public string HeaderSignature { get; set; } = string.Empty;
+    public string? GoodConditionValues { get; set; }
+    public string? BadConditionValues { get; set; }
     public List<StockTemplateColumnDto> Columns { get; set; } = [];
 }

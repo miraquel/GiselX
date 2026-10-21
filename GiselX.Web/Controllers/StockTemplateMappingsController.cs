@@ -47,6 +47,8 @@ public sealed class StockTemplateMappingsController(
             WorksheetName = value.WorksheetName,
             HeaderRowNumber = value.HeaderRowNumber,
             FirstDataRowNumber = value.FirstDataRowNumber,
+            GoodConditionValues = value.GoodConditionValues,
+            BadConditionValues = value.BadConditionValues,
             Columns = BuildCanonicalRows(value.Columns)
         });
     }
@@ -95,6 +97,8 @@ public sealed class StockTemplateMappingsController(
             HeaderRowNumber = model.HeaderRowNumber,
             FirstDataRowNumber = model.FirstDataRowNumber,
             HeaderSignature = preview.HeaderSignature,
+            GoodConditionValues = model.GoodConditionValues,
+            BadConditionValues = model.BadConditionValues,
             Columns = assignments
         }, User.Identity?.Name ?? "unknown", cancellationToken);
         if (!response.IsSuccess)

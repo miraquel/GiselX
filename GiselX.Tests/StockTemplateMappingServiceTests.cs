@@ -99,6 +99,72 @@ public sealed class StockTemplateMappingServiceTests
         Assert.False(transaction.CommitCalled);
     }
 
+    [Fact]
+    public async Task Mapping_condition_requires_both_value_lists()
+    {
+        var dto = ConditionMapping("GOOD", null);
+        var (service, repository, transaction) = CreateService();
+
+        var response = await service.SaveAsync(dto, "admin", CancellationToken.None);
+
+        Assert.False(response.IsSuccess);
+        Assert.Contains("Map at least one Good value and one Bad value when Condition is mapped.", response.Errors);
+        Assert.Empty(repository.Inserted);
+        Assert.False(transaction.CommitCalled);
+    }
+
+    [Fact]
+    public async Task A_value_in_both_lists_is_rejected()
+    {
+        var dto = ConditionMapping("GS; BS", "bs;BAD");
+        var (service, repository, _) = CreateService();
+
+        var response = await service.SaveAsync(dto, "admin", CancellationToken.None);
+
+        Assert.False(response.IsSuccess);
+        Assert.Contains("These values are listed as both Good and Bad: BS.", response.Errors);
+        Assert.Empty(repository.Inserted);
+    }
+
+    [Fact]
+    public async Task Lists_are_ignored_and_cleared_when_condition_is_not_mapped()
+    {
+        var dto = ValidMapping();
+        dto.GoodConditionValues = "GOOD";
+        dto.BadConditionValues = "BAD";
+        var (service, repository, _) = CreateService();
+
+        var response = await service.SaveAsync(dto, "admin", CancellationToken.None);
+
+        Assert.True(response.IsSuccess);
+        var mapping = Assert.Single(repository.Inserted);
+        Assert.Null(mapping.GoodConditionValues);
+        Assert.Null(mapping.BadConditionValues);
+    }
+
+    [Fact]
+    public async Task Lists_are_stored_normalised()
+    {
+        var dto = ConditionMapping(" good ; GS;gs", "BAD;;  RUSAK ");
+        var (service, repository, _) = CreateService();
+
+        var response = await service.SaveAsync(dto, "admin", CancellationToken.None);
+
+        Assert.True(response.IsSuccess);
+        var mapping = Assert.Single(repository.Inserted);
+        Assert.Equal("good;GS", mapping.GoodConditionValues);
+        Assert.Equal("BAD;RUSAK", mapping.BadConditionValues);
+    }
+
+    private static SaveStockTemplateMappingDto ConditionMapping(string? good, string? bad)
+    {
+        var dto = ValidMapping();
+        dto.Columns.Add(Column(4, StockCanonicalField.Condition));
+        dto.GoodConditionValues = good;
+        dto.BadConditionValues = bad;
+        return dto;
+    }
+
     private static SaveStockTemplateMappingDto ValidMapping() => new()
     {
         CompanyId = 2,

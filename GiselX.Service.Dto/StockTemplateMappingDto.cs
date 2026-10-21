@@ -14,5 +14,7 @@ public sealed class StockTemplateMappingDto
     public string CreatedBy { get; set; } = string.Empty;
     public DateTime? ModifiedDate { get; set; }
     public string? ModifiedBy { get; set; }
+    public string? GoodConditionValues { get; set; }
+    public string? BadConditionValues { get; set; }
     public List<StockTemplateColumnDto> Columns { get; set; } = [];
 }

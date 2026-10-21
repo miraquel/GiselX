@@ -108,6 +108,8 @@ public sealed class StockWorkbookAnalysisService(
         WorksheetName = mapping.WorksheetName, HeaderRowNumber = mapping.HeaderRowNumber,
         FirstDataRowNumber = mapping.FirstDataRowNumber, HeaderSignature = mapping.HeaderSignature,
         IsActive = mapping.IsActive,
+        GoodConditionValues = mapping.GoodConditionValues,
+        BadConditionValues = mapping.BadConditionValues,
         Columns = mapping.Columns.Select(column => new StockTemplateColumnDto
         {
             SourceColumnNumber = column.SourceColumnNumber,

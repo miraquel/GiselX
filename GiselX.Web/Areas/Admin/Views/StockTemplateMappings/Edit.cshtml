@@ -38,6 +38,10 @@
         </tr>
     }
     </tbody></table></div>
+    <div id="conditionValues" class="row mb-3" hidden>
+        <div class="col-md-6"><label asp-for="GoodConditionValues" class="form-label">Values meaning Good stock</label><input asp-for="GoodConditionValues" class="form-control" maxlength="500"/><div class="form-text">Separate values with ;</div></div>
+        <div class="col-md-6"><label asp-for="BadConditionValues" class="form-label">Values meaning Bad stock</label><input asp-for="BadConditionValues" class="form-control" maxlength="500"/><div class="form-text">Separate values with ;</div></div>
+    </div>
     <button class="btn btn-primary" type="submit">Save Mapping</button> <a asp-controller="Companies" asp-action="Edit" asp-route-id="@Model.CompanyId" class="btn btn-secondary">Cancel</a>
 </form></div></div>
 <div class="modal fade" id="stockSourceReuseConfirmationModal" tabindex="-1" aria-labelledby="stockSourceReuseConfirmationTitle" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
@@ -63,6 +67,12 @@ const stockCanonicalFields = @Html.Raw(System.Text.Json.JsonSerializer.Serialize
         type = StockCanonicalFieldCatalog.GetValueTypeLabel(field),
         required = StockCanonicalFieldCatalog.RequiredFields.Contains(field)
     })));
+const stockConditionFieldValue = @((int)StockCanonicalField.Condition);
+const updateConditionValuesVisibility = () => {
+ const mapped = [...document.querySelectorAll('.source-header-select')]
+   .some(select => select.dataset.canonicalValue === String(stockConditionFieldValue) && select.value !== '0');
+ document.getElementById('conditionValues').hidden = !mapped;
+};
 const encode = value => { const span = document.createElement('span'); span.textContent = value ?? ''; return span.innerHTML; };
 const updateStockSourceHeaderValue = select => {
  const option = select.options[select.selectedIndex];
@@ -89,8 +99,9 @@ const handleStockSourceSelection = select => {
 const wireStockSourceSelects = () => {
  document.querySelectorAll('.source-header-select').forEach(select => {
    select.dataset.previousValue = select.value;
-   select.addEventListener('change', () => handleStockSourceSelection(select));
+   select.addEventListener('change', () => { handleStockSourceSelection(select); updateConditionValuesVisibility(); });
  });
+ updateConditionValuesVisibility();
 };
 document.getElementById('confirmStockSourceReuse').addEventListener('click', () => {
  if (!pendingStockSourceReuse) return;
@@ -102,6 +113,7 @@ document.getElementById('rejectStockSourceReuse').addEventListener('click', () =
  if (!pendingStockSourceReuse) return;
  pendingStockSourceReuse.select.value = pendingStockSourceReuse.previousValue;
  updateStockSourceHeaderValue(pendingStockSourceReuse.select);
+ updateConditionValuesVisibility();
  pendingStockSourceReuse = null;
  bootstrap.Modal.getInstance(document.getElementById('stockSourceReuseConfirmationModal'))?.hide();
 });

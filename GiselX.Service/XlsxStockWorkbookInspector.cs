@@ -127,6 +127,8 @@ public sealed class XlsxStockWorkbookInspector : IStockWorkbookInspector
         FirstDataRowNumber = mapping.FirstDataRowNumber,
         HeaderSignature = mapping.HeaderSignature,
         IsActive = mapping.IsActive,
+        GoodConditionValues = mapping.GoodConditionValues,
+        BadConditionValues = mapping.BadConditionValues,
         CreatedDate = mapping.CreatedDate,
         CreatedBy = mapping.CreatedBy,
         ModifiedDate = mapping.ModifiedDate,

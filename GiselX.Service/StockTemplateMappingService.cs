@@ -81,6 +81,8 @@ public sealed class StockTemplateMappingService(
                 FirstDataRowNumber = dto.FirstDataRowNumber,
                 HeaderSignature = dto.HeaderSignature,
                 IsActive = true,
+                GoodConditionValues = ConditionValues(dto, dto.GoodConditionValues),
+                BadConditionValues = ConditionValues(dto, dto.BadConditionValues),
                 CreatedBy = username,
                 CreatedDate = now,
                 Columns = ToEntities(dto.Columns)
@@ -143,6 +145,7 @@ public sealed class StockTemplateMappingService(
         errors.AddRange(StockCanonicalFieldCatalog.RequiredFields
             .Where(field => !mapped.Contains(field)).OrderBy(field => field)
             .Select(field => $"Required canonical field {field} must be mapped."));
+        ValidateConditionValues(dto, errors);
         if (existingMappings.Any(mapping => mapping.Id != dto.Id &&
             string.Equals(mapping.Name.Trim(), dto.Name.Trim(), StringComparison.OrdinalIgnoreCase)))
             errors.Add("A mapping with this name already exists for the company.");
@@ -156,7 +159,37 @@ public sealed class StockTemplateMappingService(
         mapping.HeaderRowNumber = dto.HeaderRowNumber;
         mapping.FirstDataRowNumber = dto.FirstDataRowNumber;
         mapping.HeaderSignature = dto.HeaderSignature;
+        mapping.GoodConditionValues = ConditionValues(dto, dto.GoodConditionValues);
+        mapping.BadConditionValues = ConditionValues(dto, dto.BadConditionValues);
         mapping.Columns = ToEntities(dto.Columns);
+    }
+
+    private static bool MapsCondition(SaveStockTemplateMappingDto dto) =>
+        dto.Columns.Any(column => column.CanonicalField == StockCanonicalField.Condition);
+
+    /// <summary>The stored form of a value list: normalised, ';'-joined, and null when empty or Condition is unmapped.</summary>
+    private static string? ConditionValues(SaveStockTemplateMappingDto dto, string? input)
+    {
+        if (!MapsCondition(dto)) return null;
+        var values = StockTextNormalizer.SplitList(input);
+        return values.Count == 0 ? null : string.Join(";", values);
+    }
+
+    private static void ValidateConditionValues(SaveStockTemplateMappingDto dto, List<string> errors)
+    {
+        if (!MapsCondition(dto)) return;
+        var good = StockTextNormalizer.SplitList(dto.GoodConditionValues);
+        var bad = StockTextNormalizer.SplitList(dto.BadConditionValues);
+        if (good.Count == 0 || bad.Count == 0)
+        {
+            errors.Add("Map at least one Good value and one Bad value when Condition is mapped.");
+            return;
+        }
+
+        var badNormalised = bad.Select(StockTextNormalizer.Normalize).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var both = good.Where(value => badNormalised.Contains(StockTextNormalizer.Normalize(value))).ToList();
+        if (both.Count > 0)
+            errors.Add($"These values are listed as both Good and Bad: {string.Join(", ", both)}.");
     }
 
     private static List<StockTemplateColumn> ToEntities(IEnumerable<StockTemplateColumnDto> columns) =>
@@ -177,6 +210,8 @@ public sealed class StockTemplateMappingService(
         FirstDataRowNumber = mapping.FirstDataRowNumber,
         HeaderSignature = mapping.HeaderSignature,
         IsActive = mapping.IsActive,
+        GoodConditionValues = mapping.GoodConditionValues,
+        BadConditionValues = mapping.BadConditionValues,
         CreatedDate = mapping.CreatedDate,
         CreatedBy = mapping.CreatedBy,
         ModifiedDate = mapping.ModifiedDate,
