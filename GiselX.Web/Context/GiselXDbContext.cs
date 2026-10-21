@@ -53,6 +53,8 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
 
     public virtual DbSet<StockStaging> StockStaging { get; set; }
 
+    public virtual DbSet<StockArea> StockArea { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -230,6 +232,8 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
             entity.Property(e => e.Name).HasMaxLength(100);
             entity.Property(e => e.WorksheetName).HasMaxLength(128);
             entity.Property(e => e.HeaderSignature).HasColumnType("nvarchar(max)");
+            entity.Property(e => e.GoodConditionValues).HasMaxLength(500);
+            entity.Property(e => e.BadConditionValues).HasMaxLength(500);
             entity.Property(e => e.CreatedBy).HasMaxLength(256);
             entity.Property(e => e.ModifiedBy).HasMaxLength(256);
             entity.Property(e => e.CreatedDate).HasColumnType("datetime2");
@@ -251,6 +255,19 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
             entity.Property(e => e.CanonicalField).HasConversion<int>();
             entity.HasOne(e => e.StockTemplateMapping).WithMany(e => e.Columns)
                 .HasForeignKey(e => e.StockTemplateMappingId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<StockArea>(entity =>
+        {
+            entity.HasIndex(e => new { e.CompanyId, e.Name }).IsUnique();
+            entity.Property(e => e.Name).HasMaxLength(100);
+            entity.Property(e => e.Aliases).HasMaxLength(1000);
+            entity.Property(e => e.CreatedBy).HasMaxLength(256);
+            entity.Property(e => e.ModifiedBy).HasMaxLength(256);
+            entity.Property(e => e.CreatedDate).HasColumnType("datetime2");
+            entity.Property(e => e.ModifiedDate).HasColumnType("datetime2");
+            entity.HasOne(e => e.Company).WithMany(e => e.StockAreas)
+                .HasForeignKey(e => e.CompanyId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<StockUploadBatch>(entity =>
@@ -296,7 +313,13 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
             entity.Property(e => e.SaldoMasukPO).HasColumnType("decimal(18, 4)");
             entity.Property(e => e.SaldoAkhir).HasColumnType("decimal(18, 4)");
             entity.Property(e => e.ExpiredDate).HasColumnType("datetime");
+            entity.Property(e => e.SourceAreaText).HasMaxLength(200);
+            entity.Property(e => e.SourceConditionText).HasMaxLength(200);
+            entity.Property(e => e.Condition).HasConversion<byte>().HasColumnType("tinyint").HasDefaultValue(StockCondition.Good);
             entity.Property(e => e.ValidationErrorsJson).HasColumnType("nvarchar(max)").HasDefaultValue("[]");
+            entity.HasIndex(e => e.StockAreaId);
+            entity.HasOne<StockArea>().WithMany()
+                .HasForeignKey(e => e.StockAreaId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(e => e.StockUploadBatch).WithMany(e => e.StagingRows)
                 .HasForeignKey(e => e.StockUploadBatchId).OnDelete(DeleteBehavior.Cascade);
             entity.HasOne<ItemMapping>().WithMany()
@@ -471,10 +494,16 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
             entity.Property(e => e.ExpiredDate).HasColumnType("datetime");
             entity.Property(e => e.CreatedDate).HasColumnType("datetime");
             entity.Property(e => e.StockDate).HasColumnType("date");
+            entity.Property(e => e.Condition).HasConversion<byte>().HasColumnType("tinyint").HasDefaultValue(StockCondition.Good);
 
             // GiselStock_* SPs filter by CompanyId and pick the latest CreatedDate batch
             entity.HasIndex(e => new { e.CompanyId, e.CreatedDate });
             entity.HasIndex(e => e.StockUploadBatchId);
+            entity.HasIndex(e => e.StockAreaId);
+
+            entity.HasOne(d => d.StockArea).WithMany()
+                .HasForeignKey(d => d.StockAreaId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             entity.HasOne(d => d.Company).WithMany(p => p.Stock)
                 .HasForeignKey(d => d.CompanyId)

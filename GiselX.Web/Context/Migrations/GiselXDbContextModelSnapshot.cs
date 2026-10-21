@@ -1196,6 +1196,11 @@ namespace GiselX.Web.Context.Migrations
                     b.Property<int>("CompanyId")
                         .HasColumnType("int");
 
+                    b.Property<byte>("Condition")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("tinyint")
+                        .HasDefaultValue((byte)0);
+
                     b.Property<DateTime>("CreatedDate")
                         .HasColumnType("datetime");
 
@@ -1258,6 +1263,9 @@ namespace GiselX.Web.Context.Migrations
                     b.Property<decimal?>("SmallestUnitQty")
                         .HasColumnType("decimal(18, 4)");
 
+                    b.Property<int?>("StockAreaId")
+                        .HasColumnType("int");
+
                     b.Property<DateTime?>("StockDate")
                         .HasColumnType("date");
 
@@ -1268,11 +1276,59 @@ namespace GiselX.Web.Context.Migrations
 
                     b.HasIndex("ItemMappingId");
 
+                    b.HasIndex("StockAreaId");
+
                     b.HasIndex("StockUploadBatchId");
 
                     b.HasIndex("CompanyId", "CreatedDate");
 
                     b.ToTable("Stock");
+                });
+
+            modelBuilder.Entity("GiselX.Domain.StockArea", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Aliases")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<DateTime?>("ModifiedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("StockArea");
                 });
 
             modelBuilder.Entity("GiselX.Domain.StockStaging", b =>
@@ -1286,6 +1342,11 @@ namespace GiselX.Web.Context.Migrations
                     b.Property<string>("BatchNumber")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<byte>("Condition")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("tinyint")
+                        .HasDefaultValue((byte)0);
 
                     b.Property<string>("DistributorProductId")
                         .HasMaxLength(100)
@@ -1345,12 +1406,23 @@ namespace GiselX.Web.Context.Migrations
                     b.Property<decimal?>("SmallestUnitQty")
                         .HasColumnType("decimal(18, 4)");
 
+                    b.Property<string>("SourceAreaText")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("SourceConditionText")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
                     b.Property<int>("SourceRowNumber")
                         .HasColumnType("int");
 
                     b.Property<string>("SourceWorksheetName")
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
+
+                    b.Property<int?>("StockAreaId")
+                        .HasColumnType("int");
 
                     b.Property<int?>("StockTemplateMappingId")
                         .HasColumnType("int");
@@ -1367,6 +1439,8 @@ namespace GiselX.Web.Context.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ItemMappingId");
+
+                    b.HasIndex("StockAreaId");
 
                     b.HasIndex("StockTemplateMappingId");
 
@@ -1415,6 +1489,10 @@ namespace GiselX.Web.Context.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("BadConditionValues")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<int>("CompanyId")
                         .HasColumnType("int");
 
@@ -1428,6 +1506,10 @@ namespace GiselX.Web.Context.Migrations
 
                     b.Property<int>("FirstDataRowNumber")
                         .HasColumnType("int");
+
+                    b.Property<string>("GoodConditionValues")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<int>("HeaderRowNumber")
                         .HasColumnType("int");
@@ -1931,6 +2013,11 @@ namespace GiselX.Web.Context.Migrations
                         .HasForeignKey("ItemMappingId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("GiselX.Domain.StockArea", "StockArea")
+                        .WithMany()
+                        .HasForeignKey("StockAreaId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("GiselX.Domain.StockUploadBatch", "StockUploadBatch")
                         .WithMany("Stocks")
                         .HasForeignKey("StockUploadBatchId")
@@ -1940,7 +2027,20 @@ namespace GiselX.Web.Context.Migrations
 
                     b.Navigation("ItemMapping");
 
+                    b.Navigation("StockArea");
+
                     b.Navigation("StockUploadBatch");
+                });
+
+            modelBuilder.Entity("GiselX.Domain.StockArea", b =>
+                {
+                    b.HasOne("GiselX.Domain.Company", "Company")
+                        .WithMany("StockAreas")
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Company");
                 });
 
             modelBuilder.Entity("GiselX.Domain.StockStaging", b =>
@@ -1948,6 +2048,11 @@ namespace GiselX.Web.Context.Migrations
                     b.HasOne("GiselX.Domain.ItemMapping", null)
                         .WithMany()
                         .HasForeignKey("ItemMappingId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("GiselX.Domain.StockArea", null)
+                        .WithMany()
+                        .HasForeignKey("StockAreaId")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("GiselX.Domain.StockTemplateMapping", null)
@@ -2095,6 +2200,8 @@ namespace GiselX.Web.Context.Migrations
                     b.Navigation("ServelReceiptEx");
 
                     b.Navigation("Stock");
+
+                    b.Navigation("StockAreas");
 
                     b.Navigation("StockTemplateMappings");
 

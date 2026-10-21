@@ -10,6 +10,8 @@ public sealed class StockTemplateMapping
     public int FirstDataRowNumber { get; set; }
     public string HeaderSignature { get; set; } = string.Empty;
     public bool IsActive { get; set; } = true;
+    public string? GoodConditionValues { get; set; }
+    public string? BadConditionValues { get; set; }
     public DateTime CreatedDate { get; set; }
     public string CreatedBy { get; set; } = string.Empty;
     public DateTime? ModifiedDate { get; set; }

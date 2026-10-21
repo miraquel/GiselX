@@ -47,6 +47,7 @@ public partial class Company
     public virtual ICollection<DistributorTemplateMapping> DistributorTemplateMappings { get; set; } = new List<DistributorTemplateMapping>();
     public virtual ICollection<StockTemplateMapping> StockTemplateMappings { get; set; } = new List<StockTemplateMapping>();
     public virtual ICollection<ItemMapping> ItemMappings { get; set; } = new List<ItemMapping>();
+    public virtual ICollection<StockArea> StockAreas { get; set; } = new List<StockArea>();
     public virtual ICollection<PowerBiReport> PowerBiReports { get; set; } = new List<PowerBiReport>();
     public virtual ICollection<StockUploadBatch> StockUploadBatches { get; set; } = new List<StockUploadBatch>();
     public virtual ICollection<SelloutUploadBatch> SelloutUploadBatches { get; set; } = new List<SelloutUploadBatch>();

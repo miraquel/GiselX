@@ -27,9 +27,13 @@ public class Stock
     public DateTime CreatedDate { get; set; } = SqlDateTime.MinValue.Value;
     public long? StockUploadBatchId { get; set; }
     public DateTime? StockDate { get; set; }
+    public int? StockAreaId { get; set; }
+    public StockCondition Condition { get; set; }
     [NotMapped] public string CompanyName { get; set; } = string.Empty;
+    [NotMapped] public string? AreaName { get; set; }
 
     public virtual Company Company { get; set; } = null!;
     public virtual ItemMapping? ItemMapping { get; set; }
+    public virtual StockArea? StockArea { get; set; }
     public virtual StockUploadBatch? StockUploadBatch { get; set; }
 }

@@ -24,6 +24,10 @@ public sealed class StockStaging
     public decimal? SaldoAkhir { get; set; }
     public string? BatchNumber { get; set; }
     public DateTime? ExpiredDate { get; set; }
+    public int? StockAreaId { get; set; }
+    public StockCondition Condition { get; set; }
+    public string? SourceAreaText { get; set; }
+    public string? SourceConditionText { get; set; }
     public bool IsValid { get; set; }
     public string ValidationErrorsJson { get; set; } = "[]";
 
