@@ -1,92 +1,61 @@
 CREATE OR ALTER PROCEDURE [dbo].[Company_Select]
-    -- Paging & sorting
-    @PageNumber     INT            = 1,
-    @PageSize       INT            = 10,
-    @SortColumn     NVARCHAR(100)  = NULL,
-    @SortOrder      NVARCHAR(4)    = 'ASC',
-    -- String column filters (support LIKE via %)
-    @Name           NVARCHAR(100)  = NULL,
-    @Address        NVARCHAR(255)  = NULL,
-    @ContactEmail   NVARCHAR(255)  = NULL,
-    -- Integer column filters
-    @Id                 INT        = NULL,
-    @DeadlineDayOfMonth INT        = NULL,
-    @DeadlineDaysOfWeek INT        = NULL,
-    @ReminderLeadDays   INT        = NULL,
-    @ItemMappingEnabled BIT        = NULL
+    @PageNumber INT = 1, @PageSize INT = 10, @SortColumn NVARCHAR(100) = NULL, @SortOrder NVARCHAR(4) = 'ASC',
+    @Name NVARCHAR(100) = NULL, @BusinessUnitName NVARCHAR(100) = NULL, @ChannelName NVARCHAR(200) = NULL,
+    @SalesmanName NVARCHAR(200) = NULL, @Address NVARCHAR(255) = NULL,
+    @ContactEmail NVARCHAR(1000) = NULL, @Id INT = NULL, @DeadlineDayOfMonth INT = NULL,
+    @DeadlineDaysOfWeek INT = NULL, @ReminderLeadDays INT = NULL, @ItemMappingEnabled BIT = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
     SET ARITHABORT ON;
-
     DECLARE @Offset INT = (@PageNumber - 1) * @PageSize;
-
-    -- ── DATA RESULT SET ─────────────────────────────────────────────────────────
-    SELECT
-        [Id],
-        [Name],
-        [Address],
-        [ContactEmail],
-        [DeadlineDayOfMonth],
-        [DeadlineDaysOfWeek],
-        [ReminderLeadDays],
-        [ItemMappingEnabled]
-    FROM [dbo].[Company]
-    WHERE 1 = 1
-      -- String filters
-      AND (@Name         IS NULL OR [Name]         LIKE @Name)
-      AND (@Address      IS NULL OR [Address]      LIKE @Address)
-      AND (@ContactEmail IS NULL OR [ContactEmail] LIKE @ContactEmail)
-      -- Integer filters
-      AND (@Id                 IS NULL OR [Id]                 = @Id)
-      AND (@DeadlineDayOfMonth IS NULL OR [DeadlineDayOfMonth] = @DeadlineDayOfMonth)
-      AND (@DeadlineDaysOfWeek IS NULL OR [DeadlineDaysOfWeek] = @DeadlineDaysOfWeek)
-      AND (@ReminderLeadDays   IS NULL OR [ReminderLeadDays]   = @ReminderLeadDays)
-      AND (@ItemMappingEnabled IS NULL OR [ItemMappingEnabled] = @ItemMappingEnabled)
+    SELECT company.Id, company.Name, company.BusinessUnitId, unit.Name AS BusinessUnitName,
+           company.ChannelId, channel.Name AS ChannelName,
+           company.SalesmanId, salesman.Name AS SalesmanName,
+           company.Address, company.ContactEmail, company.DeadlineDayOfMonth, company.DeadlineDaysOfWeek,
+           company.ReminderLeadDays, company.ItemMappingEnabled
+    FROM [dbo].[Company] company
+    LEFT JOIN [dbo].[BusinessUnit] unit ON unit.Id = company.BusinessUnitId
+    LEFT JOIN [dbo].[Channel] channel ON channel.Id = company.ChannelId
+    LEFT JOIN [dbo].[Salesman] salesman ON salesman.Id = company.SalesmanId
+    WHERE (@Name IS NULL OR company.Name LIKE @Name)
+      AND (@BusinessUnitName IS NULL OR unit.Name LIKE @BusinessUnitName)
+      AND (@ChannelName IS NULL OR channel.Name LIKE @ChannelName)
+      AND (@SalesmanName IS NULL OR salesman.Name LIKE @SalesmanName)
+      AND (@Address IS NULL OR company.Address LIKE @Address)
+      AND (@ContactEmail IS NULL OR company.ContactEmail LIKE @ContactEmail)
+      AND (@Id IS NULL OR company.Id = @Id)
+      AND (@DeadlineDayOfMonth IS NULL OR company.DeadlineDayOfMonth = @DeadlineDayOfMonth)
+      AND (@DeadlineDaysOfWeek IS NULL OR company.DeadlineDaysOfWeek = @DeadlineDaysOfWeek)
+      AND (@ReminderLeadDays IS NULL OR company.ReminderLeadDays = @ReminderLeadDays)
+      AND (@ItemMappingEnabled IS NULL OR company.ItemMappingEnabled = @ItemMappingEnabled)
     ORDER BY
-        -- String columns ASC
-        CASE WHEN @SortOrder = 'ASC' AND @SortColumn IN ('name', 'Name')
-            THEN [Name]         END ASC,
-        CASE WHEN @SortOrder = 'ASC' AND @SortColumn IN ('address', 'Address')
-            THEN [Address]      END ASC,
-        CASE WHEN @SortOrder = 'ASC' AND @SortColumn IN ('contactEmail', 'ContactEmail')
-            THEN [ContactEmail] END ASC,
-        -- String columns DESC
-        CASE WHEN @SortOrder = 'DESC' AND @SortColumn IN ('name', 'Name')
-            THEN [Name]         END DESC,
-        CASE WHEN @SortOrder = 'DESC' AND @SortColumn IN ('address', 'Address')
-            THEN [Address]      END DESC,
-        CASE WHEN @SortOrder = 'DESC' AND @SortColumn IN ('contactEmail', 'ContactEmail')
-            THEN [ContactEmail] END DESC,
-        -- Integer columns ASC
-        CASE WHEN @SortOrder = 'ASC' AND @SortColumn IN ('id', 'Id')
-            THEN [Id]                 END ASC,
-        CASE WHEN @SortOrder = 'ASC' AND @SortColumn IN ('deadlineDayOfMonth', 'DeadlineDayOfMonth')
-            THEN [DeadlineDayOfMonth] END ASC,
-        CASE WHEN @SortOrder = 'ASC' AND @SortColumn IN ('reminderLeadDays', 'ReminderLeadDays')
-            THEN [ReminderLeadDays]   END ASC,
-        -- Integer columns DESC
-        CASE WHEN @SortOrder = 'DESC' AND @SortColumn IN ('id', 'Id')
-            THEN [Id]                 END DESC,
-        CASE WHEN @SortOrder = 'DESC' AND @SortColumn IN ('deadlineDayOfMonth', 'DeadlineDayOfMonth')
-            THEN [DeadlineDayOfMonth] END DESC,
-        CASE WHEN @SortOrder = 'DESC' AND @SortColumn IN ('reminderLeadDays', 'ReminderLeadDays')
-            THEN [ReminderLeadDays]   END DESC,
-        -- Default fallback
-        [Name] ASC
-    OFFSET @Offset ROWS
-    FETCH NEXT @PageSize ROWS ONLY;
-
-    -- ── TOTAL COUNT RESULT SET ───────────────────────────────────────────────────
+      CASE WHEN @SortOrder = 'ASC' AND @SortColumn IN ('name','Name') THEN company.Name END ASC,
+      CASE WHEN @SortOrder = 'ASC' AND @SortColumn IN ('businessUnitName','BusinessUnitName') THEN unit.Name END ASC,
+      CASE WHEN @SortOrder = 'ASC' AND @SortColumn IN ('channelName','ChannelName') THEN channel.Name END ASC,
+      CASE WHEN @SortOrder = 'ASC' AND @SortColumn IN ('salesmanName','SalesmanName') THEN salesman.Name END ASC,
+      CASE WHEN @SortOrder = 'ASC' AND @SortColumn IN ('address','Address') THEN company.Address END ASC,
+      CASE WHEN @SortOrder = 'DESC' AND @SortColumn IN ('name','Name') THEN company.Name END DESC,
+      CASE WHEN @SortOrder = 'DESC' AND @SortColumn IN ('businessUnitName','BusinessUnitName') THEN unit.Name END DESC,
+      CASE WHEN @SortOrder = 'DESC' AND @SortColumn IN ('channelName','ChannelName') THEN channel.Name END DESC,
+      CASE WHEN @SortOrder = 'DESC' AND @SortColumn IN ('salesmanName','SalesmanName') THEN salesman.Name END DESC,
+      CASE WHEN @SortOrder = 'DESC' AND @SortColumn IN ('address','Address') THEN company.Address END DESC,
+      company.Name ASC
+    OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;
     SELECT COUNT(*)
-    FROM [dbo].[Company]
-    WHERE 1 = 1
-      AND (@Name         IS NULL OR [Name]         LIKE @Name)
-      AND (@Address      IS NULL OR [Address]      LIKE @Address)
-      AND (@ContactEmail IS NULL OR [ContactEmail] LIKE @ContactEmail)
-      AND (@Id                 IS NULL OR [Id]                 = @Id)
-      AND (@DeadlineDayOfMonth IS NULL OR [DeadlineDayOfMonth] = @DeadlineDayOfMonth)
-      AND (@DeadlineDaysOfWeek IS NULL OR [DeadlineDaysOfWeek] = @DeadlineDaysOfWeek)
-      AND (@ReminderLeadDays   IS NULL OR [ReminderLeadDays]   = @ReminderLeadDays)
-      AND (@ItemMappingEnabled IS NULL OR [ItemMappingEnabled] = @ItemMappingEnabled);
+    FROM [dbo].[Company] company
+    LEFT JOIN [dbo].[BusinessUnit] unit ON unit.Id = company.BusinessUnitId
+    LEFT JOIN [dbo].[Channel] channel ON channel.Id = company.ChannelId
+    LEFT JOIN [dbo].[Salesman] salesman ON salesman.Id = company.SalesmanId
+    WHERE (@Name IS NULL OR company.Name LIKE @Name)
+      AND (@BusinessUnitName IS NULL OR unit.Name LIKE @BusinessUnitName)
+      AND (@ChannelName IS NULL OR channel.Name LIKE @ChannelName)
+      AND (@SalesmanName IS NULL OR salesman.Name LIKE @SalesmanName)
+      AND (@Address IS NULL OR company.Address LIKE @Address)
+      AND (@ContactEmail IS NULL OR company.ContactEmail LIKE @ContactEmail)
+      AND (@Id IS NULL OR company.Id = @Id)
+      AND (@DeadlineDayOfMonth IS NULL OR company.DeadlineDayOfMonth = @DeadlineDayOfMonth)
+      AND (@DeadlineDaysOfWeek IS NULL OR company.DeadlineDaysOfWeek = @DeadlineDaysOfWeek)
+      AND (@ReminderLeadDays IS NULL OR company.ReminderLeadDays = @ReminderLeadDays)
+      AND (@ItemMappingEnabled IS NULL OR company.ItemMappingEnabled = @ItemMappingEnabled);
 END

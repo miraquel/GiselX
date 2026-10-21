@@ -27,6 +27,21 @@ public sealed class StockPersistenceModelTests
     }
 
     [Fact]
+    public void Model_maps_nullable_sheet_source_on_stock_staging()
+    {
+        using var db = CreateContext();
+        var staging = db.Model.FindEntityType(typeof(StockStaging))!;
+        var mappingProperty = staging.FindProperty(nameof(StockStaging.StockTemplateMappingId))!;
+        var worksheetProperty = staging.FindProperty(nameof(StockStaging.SourceWorksheetName))!;
+
+        Assert.True(mappingProperty.IsNullable);
+        Assert.True(worksheetProperty.IsNullable);
+        Assert.Equal(255, worksheetProperty.GetMaxLength());
+        Assert.Equal(DeleteBehavior.Restrict,
+            ForeignKey(staging, nameof(StockStaging.StockTemplateMappingId)).DeleteBehavior);
+    }
+
+    [Fact]
     public void Model_indexes_stock_audit_and_snapshot_queries()
     {
         using var db = CreateContext();
@@ -37,7 +52,11 @@ public sealed class StockPersistenceModelTests
             .SequenceEqual([nameof(StockUploadBatch.CompanyId), nameof(StockUploadBatch.CompletedDate), nameof(StockUploadBatch.Id)]));
         Assert.Contains(batch.GetIndexes(), index => Names(index)
             .SequenceEqual([nameof(StockUploadBatch.CompanyId), nameof(StockUploadBatch.StockDate)]));
-        Assert.Contains(stock.GetIndexes(), index => Names(index).SequenceEqual([nameof(Stock.StockUploadBatchId)]));
+        // Every Stock reader enumerates the distinct (batch, area) pairs, and publication looks up
+        // the area of a batch's rows, so the batch index leads into the area.
+        Assert.Contains(stock.GetIndexes(), index => Names(index)
+            .SequenceEqual([nameof(Stock.StockUploadBatchId), nameof(Stock.StockAreaId)]));
+        Assert.DoesNotContain(stock.GetIndexes(), index => Names(index).SequenceEqual([nameof(Stock.StockUploadBatchId)]));
     }
 
     [Fact]
@@ -53,6 +72,25 @@ public sealed class StockPersistenceModelTests
         Assert.True(stagingProperty.IsNullable);
         Assert.Equal("decimal(18,2)", stockProperty.GetColumnType()!.Replace(" ", string.Empty));
         Assert.Equal("decimal(18,2)", stagingProperty.GetColumnType()!.Replace(" ", string.Empty));
+    }
+
+    [Fact]
+    public void Model_maps_nullable_smallest_unit_fields_on_final_and_staging_stock()
+    {
+        using var db = CreateContext();
+        var stock = db.Model.FindEntityType(typeof(Stock))!;
+        var staging = db.Model.FindEntityType(typeof(StockStaging))!;
+
+        foreach (var entity in new[] { stock, staging })
+        {
+            var unit = entity.FindProperty(nameof(Stock.SmallestUnit))!;
+            var qty = entity.FindProperty(nameof(Stock.SmallestUnitQty))!;
+
+            Assert.True(unit.IsNullable);
+            Assert.Equal(50, unit.GetMaxLength());
+            Assert.True(qty.IsNullable);
+            Assert.Equal("decimal(18,4)", qty.GetColumnType()!.Replace(" ", string.Empty));
+        }
     }
 
     private static Microsoft.EntityFrameworkCore.Metadata.IForeignKey ForeignKey(

@@ -37,11 +37,13 @@ public sealed class StockTemplateMappingRepository(
         const string sql = """
             INSERT INTO StockTemplateMapping
                 (CompanyId, Name, WorksheetName, HeaderRowNumber, FirstDataRowNumber, HeaderSignature,
-                 IsActive, CreatedDate, CreatedBy, ModifiedDate, ModifiedBy)
+                 IsActive, CreatedDate, CreatedBy, ModifiedDate, ModifiedBy,
+                 GoodConditionValues, BadConditionValues)
             OUTPUT INSERTED.Id
             VALUES
                 (@CompanyId, @Name, @WorksheetName, @HeaderRowNumber, @FirstDataRowNumber, @HeaderSignature,
-                 @IsActive, @CreatedDate, @CreatedBy, @ModifiedDate, @ModifiedBy);
+                 @IsActive, @CreatedDate, @CreatedBy, @ModifiedDate, @ModifiedBy,
+                 @GoodConditionValues, @BadConditionValues);
             """;
         var id = await dbConnection.ExecuteScalarAsync<int>(new CommandDefinition(sql, mapping, dbTransaction,
             cancellationToken: cancellationToken));
@@ -54,7 +56,8 @@ public sealed class StockTemplateMappingRepository(
         const string sql = """
             UPDATE StockTemplateMapping SET Name = @Name, WorksheetName = @WorksheetName,
                 HeaderRowNumber = @HeaderRowNumber, FirstDataRowNumber = @FirstDataRowNumber,
-                HeaderSignature = @HeaderSignature, ModifiedDate = @ModifiedDate, ModifiedBy = @ModifiedBy
+                HeaderSignature = @HeaderSignature, ModifiedDate = @ModifiedDate, ModifiedBy = @ModifiedBy,
+                GoodConditionValues = @GoodConditionValues, BadConditionValues = @BadConditionValues
             WHERE Id = @Id AND CompanyId = @CompanyId;
             DELETE FROM StockTemplateColumn WHERE StockTemplateMappingId = @Id;
             """;

@@ -18,6 +18,12 @@ public sealed class SelloutUploadRepository(IDbConnection connection, IDbTransac
                 @UploadedBy, @UploadedDate, NULL)
             """, group, transaction, cancellationToken: cancellationToken));
 
+    public Task SetArchivedFilePathAsync(long groupId, string archivedFilePath,
+        CancellationToken cancellationToken) => connection.ExecuteAsync(new CommandDefinition(
+            "UPDATE SelloutUploadGroup SET ArchivedFilePath = @Path WHERE Id = @GroupId;",
+            new { GroupId = groupId, Path = archivedFilePath }, transaction,
+            cancellationToken: cancellationToken));
+
     public Task<long> InsertBatchAsync(SelloutUploadBatch batch, CancellationToken cancellationToken) =>
         connection.ExecuteScalarAsync<long>(new CommandDefinition("""
             INSERT INTO SelloutUploadBatch (CompanyId, DistributorTemplateMappingId, SelloutUploadGroupId,
@@ -61,6 +67,11 @@ public sealed class SelloutUploadRepository(IDbConnection connection, IDbTransac
                 ValidationErrorsJson = validationErrorsJson
             }, transaction, cancellationToken: cancellationToken));
 
+    /// <summary>
+    /// Publishes a group's valid staging rows, replacing every reporting week the group covers. Invalid
+    /// rows stay in staging as the record of what the workbook could not supply and are never published;
+    /// the batch they belong to completes with warnings rather than cleanly.
+    /// </summary>
     public async Task PromoteGroupAsync(long groupId, CancellationToken cancellationToken)
     {
         const string sql = """
@@ -70,24 +81,21 @@ public sealed class SelloutUploadRepository(IDbConnection connection, IDbTransac
             IF @CompanyId IS NULL THROW 50001, 'Upload group is missing or is not processing.', 1;
             IF NOT EXISTS (SELECT 1 FROM SelloutUploadBatch WHERE SelloutUploadGroupId=@GroupId AND Status=0)
              THROW 50002, 'Upload group contains no processing batches.', 1;
-            IF EXISTS (
-                SELECT 1 FROM SelloutStaging s
-                JOIN SelloutUploadBatch b ON b.Id=s.SelloutUploadBatchId
-                WHERE b.SelloutUploadGroupId=@GroupId AND s.IsValid=0)
-             THROW 50003, 'Upload group contains invalid staging rows.', 1;
 
+            -- Status 4 is CompletedWithWarnings: a batch that published its valid rows while excluding
+            -- others. It is as much a live batch as status 2 and must be superseded the same way.
             SELECT prior.Id FROM SelloutUploadBatch prior WITH (UPDLOCK,HOLDLOCK)
             JOIN SelloutUploadBatch currentBatch ON currentBatch.SelloutUploadGroupId=@GroupId
              AND currentBatch.CompanyId=prior.CompanyId
              AND currentBatch.ReportingWeekStart=prior.ReportingWeekStart
-            WHERE prior.Status=2;
+            WHERE prior.Status IN (2,4);
 
             UPDATE prior SET Status=3
             FROM SelloutUploadBatch prior
             JOIN SelloutUploadBatch currentBatch ON currentBatch.SelloutUploadGroupId=@GroupId
              AND currentBatch.CompanyId=prior.CompanyId
              AND currentBatch.ReportingWeekStart=prior.ReportingWeekStart
-            WHERE prior.Status=2;
+            WHERE prior.Status IN (2,4);
 
             DELETE staging FROM SelloutStaging staging
             JOIN SelloutUploadBatch replaced ON replaced.Id=staging.SelloutUploadBatchId
@@ -120,18 +128,20 @@ public sealed class SelloutUploadRepository(IDbConnection connection, IDbTransac
             FROM SelloutStaging s JOIN SelloutUploadBatch b ON b.Id=s.SelloutUploadBatchId
             WHERE b.SelloutUploadGroupId=@GroupId AND s.IsValid=1;
 
-            UPDATE b SET Status=2,
+            UPDATE b SET
+             Status=CASE WHEN (SELECT COUNT(*) FROM SelloutStaging s
+                               WHERE s.SelloutUploadBatchId=b.Id AND s.IsValid=0) > 0 THEN 4 ELSE 2 END,
              TotalRows=(SELECT COUNT(*) FROM SelloutStaging s WHERE s.SelloutUploadBatchId=b.Id),
              ValidRows=(SELECT COUNT(*) FROM SelloutStaging s WHERE s.SelloutUploadBatchId=b.Id AND s.IsValid=1),
-             InvalidRows=0, CompletedDate=SYSUTCDATETIME()
+             InvalidRows=(SELECT COUNT(*) FROM SelloutStaging s WHERE s.SelloutUploadBatchId=b.Id AND s.IsValid=0),
+             CompletedDate=SYSUTCDATETIME()
             FROM SelloutUploadBatch b WHERE b.SelloutUploadGroupId=@GroupId AND b.Status=0;
 
-            UPDATE SelloutUploadGroup SET Status=2,
-             TotalRows=(SELECT COUNT(*) FROM SelloutStaging s JOIN SelloutUploadBatch b ON b.Id=s.SelloutUploadBatchId
-                        WHERE b.SelloutUploadGroupId=@GroupId),
-             ValidRows=(SELECT COUNT(*) FROM SelloutStaging s JOIN SelloutUploadBatch b ON b.Id=s.SelloutUploadBatchId
-                        WHERE b.SelloutUploadGroupId=@GroupId AND s.IsValid=1),
-             InvalidRows=0, CompletedDate=SYSUTCDATETIME()
+            -- The group keeps the counts the analysis produced. Recomputing them from staging would lose
+            -- the rows that had no reporting week to be staged against, which the group still reports.
+            UPDATE SelloutUploadGroup SET
+             Status=CASE WHEN InvalidRows > 0 THEN 3 ELSE 2 END,
+             CompletedDate=SYSUTCDATETIME()
             WHERE Id=@GroupId AND Status=0;
             """;
         await connection.ExecuteAsync(new CommandDefinition(sql, new { GroupId = groupId }, transaction, cancellationToken: cancellationToken));
@@ -141,9 +151,9 @@ public sealed class SelloutUploadRepository(IDbConnection connection, IDbTransac
     {
         using var result = await connection.QueryMultipleAsync(new CommandDefinition("""
             SELECT b.*, m.Name MappingName FROM SelloutUploadBatch b LEFT JOIN DistributorTemplateMapping m ON m.Id=b.DistributorTemplateMappingId
-             WHERE b.Id=@BatchId AND b.CompanyId=@CompanyId;
+             WHERE b.Id=@BatchId AND (@CompanyId=0 OR b.CompanyId=@CompanyId);
             SELECT s.* FROM SelloutStaging s JOIN SelloutUploadBatch b ON b.Id=s.SelloutUploadBatchId
-             WHERE b.Id=@BatchId AND b.CompanyId=@CompanyId ORDER BY s.SourceRowNumber;
+             WHERE b.Id=@BatchId AND (@CompanyId=0 OR b.CompanyId=@CompanyId) ORDER BY s.SourceRowNumber;
             """, new { BatchId = batchId, CompanyId = companyId }, transaction, cancellationToken: cancellationToken));
         var batch = await result.ReadSingleOrDefaultAsync<SelloutUploadBatch>();
         return batch is null ? null : (batch, (await result.ReadAsync<SelloutStaging>()).ToList());
@@ -153,11 +163,11 @@ public sealed class SelloutUploadRepository(IDbConnection connection, IDbTransac
         long groupId, int companyId, CancellationToken cancellationToken)
     {
         using var result = await connection.QueryMultipleAsync(new CommandDefinition("""
-            SELECT g.* FROM SelloutUploadGroup g WHERE g.Id=@GroupId AND g.CompanyId=@CompanyId;
+            SELECT g.* FROM SelloutUploadGroup g WHERE g.Id=@GroupId AND (@CompanyId=0 OR g.CompanyId=@CompanyId);
             SELECT b.* FROM SelloutUploadBatch b
-             WHERE b.SelloutUploadGroupId=@GroupId AND b.CompanyId=@CompanyId ORDER BY b.ReportingWeekStart;
+             WHERE b.SelloutUploadGroupId=@GroupId AND (@CompanyId=0 OR b.CompanyId=@CompanyId) ORDER BY b.ReportingWeekStart;
             SELECT s.* FROM SelloutStaging s JOIN SelloutUploadBatch b ON b.Id=s.SelloutUploadBatchId
-             WHERE b.SelloutUploadGroupId=@GroupId AND b.CompanyId=@CompanyId ORDER BY s.SourceRowNumber;
+             WHERE b.SelloutUploadGroupId=@GroupId AND (@CompanyId=0 OR b.CompanyId=@CompanyId) ORDER BY s.SourceRowNumber;
             """, new { GroupId = groupId, CompanyId = companyId }, transaction, cancellationToken: cancellationToken));
         var group = await result.ReadSingleOrDefaultAsync<SelloutUploadGroup>();
         if (group is null) return null;

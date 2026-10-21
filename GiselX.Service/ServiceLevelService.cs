@@ -17,13 +17,15 @@ public class ServiceLevelService : IServiceLevelService
     private readonly UserClaimDto _userClaimDto;
     private readonly MapperlyMapper _mapper = new();
     private readonly UserManager<AppIdentityUser> _userManager;
+    private readonly IUploadNotificationDispatcher _notifications;
 
-    public ServiceLevelService(IServiceLevelRepository serviceLevelRepository, IDbTransaction dbTransaction, UserClaimDto userClaimDto, UserManager<AppIdentityUser> userManager)
+    public ServiceLevelService(IServiceLevelRepository serviceLevelRepository, IDbTransaction dbTransaction, UserClaimDto userClaimDto, UserManager<AppIdentityUser> userManager, IUploadNotificationDispatcher notifications)
     {
         _serviceLevelRepository = serviceLevelRepository;
         _dbTransaction = dbTransaction;
         _userClaimDto = userClaimDto;
         _userManager = userManager;
+        _notifications = notifications;
     }
 
     public async Task<ServiceResponse> UploadAsync(IEnumerable<ServiceLevelDto> serviceLevels, int companyId, CancellationToken cancellationToken)
@@ -37,6 +39,10 @@ public class ServiceLevelService : IServiceLevelService
             throw new ArgumentException("No transaction distributions to upload.", nameof(serviceLevels));
         }
         
+        // Counted before the filter below drops rows with no SoId/ItemId, so the completion mail can
+        // report how many rows the file held rather than only how many survived.
+        var submittedRows = transDistDtos.Length;
+
         transDistDtos = transDistDtos.Where(t => !string.IsNullOrWhiteSpace(t.SoId) && !string.IsNullOrWhiteSpace(t.ItemId)).ToArray();
         
         // Validate each transaction distribution
@@ -122,7 +128,20 @@ public class ServiceLevelService : IServiceLevelService
         
         // Commit the transaction
         _dbTransaction.Commit();
-        
+
+        // Queued only after the commit: a notification for rows that rolled back would be a lie.
+        // This pipeline has no upload batch, so there is no Reference to quote.
+        _notifications.Enqueue(new UploadNotificationDto
+        {
+            CompanyId = companyId,
+            Kind = UploadNotificationKind.ServiceLevel,
+            TotalRows = submittedRows,
+            ValidRows = transDistDtos.Length,
+            InvalidRows = submittedRows - transDistDtos.Length,
+            UploadedBy = _userClaimDto.Username,
+            CompletedAtUtc = DateTime.UtcNow
+        });
+
         return new ServiceResponse
         {
             Message = $"{transDistDtos.Length} transaction distributions uploaded successfully."
@@ -131,7 +150,8 @@ public class ServiceLevelService : IServiceLevelService
 
     public async Task<ServiceResponse<PagedListDto<ServiceLevelDto>>> SelectAsync(PagedListRequestDto pagedListRequest, CancellationToken cancellationToken)
     {
-        var pagedList = await _serviceLevelRepository.SelectAsync(_mapper.MapToEntity(pagedListRequest), _userClaimDto.Username, cancellationToken);
+        var uploader = ResolveUploaderScope();
+        var pagedList = await _serviceLevelRepository.SelectAsync(_mapper.MapToEntity(pagedListRequest), uploader, cancellationToken);
         
         return new ServiceResponse<PagedListDto<ServiceLevelDto>>
         {
@@ -143,7 +163,8 @@ public class ServiceLevelService : IServiceLevelService
 
     public async Task<ServiceResponse<IEnumerable<ServiceLevelDto>>> SelectByCustPeriodAsync(string custCode, int year, int month, CancellationToken cancellationToken)
     {
-        var serviceLevels = await _serviceLevelRepository.SelectByCustPeriodAsync(custCode, year, month, cancellationToken);
+        var uploader = ResolveUploaderScope();
+        var serviceLevels = await _serviceLevelRepository.SelectByCustPeriodAsync(uploader, year, month, cancellationToken);
         
         return new ServiceResponse<IEnumerable<ServiceLevelDto>>
         {
@@ -155,7 +176,8 @@ public class ServiceLevelService : IServiceLevelService
 
     public async Task<ServiceResponse<IEnumerable<PeriodDto>>> SelectPeriodsAsync(CancellationToken cancellationToken)
     {
-        var periods = await _serviceLevelRepository.SelectPeriodsAsync(_userClaimDto.Username, cancellationToken);
+        var uploader = ResolveUploaderScope();
+        var periods = await _serviceLevelRepository.SelectPeriodsAsync(uploader, cancellationToken);
         
         return new ServiceResponse<IEnumerable<PeriodDto>>
         {
@@ -163,5 +185,14 @@ public class ServiceLevelService : IServiceLevelService
             Message = "Periods retrieved successfully.",
             StatusCode = StatusCodes.Status200OK
         };
+    }
+
+    private string ResolveUploaderScope()
+    {
+        if (_userClaimDto.IsAdministrator) return string.Empty;
+        if (string.IsNullOrWhiteSpace(_userClaimDto.Username))
+            throw new InvalidOperationException("Authenticated username is required.");
+
+        return _userClaimDto.Username;
     }
 }

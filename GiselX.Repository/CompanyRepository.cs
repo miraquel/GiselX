@@ -23,6 +23,9 @@ public class CompanyRepository : ICompanyRepository
         
         var parameters = new DynamicParameters();
         parameters.Add("@Name", company.Name);
+        parameters.Add("@BusinessUnitId", company.BusinessUnitId);
+        parameters.Add("@ChannelId", company.ChannelId);
+        parameters.Add("@SalesmanId", company.SalesmanId);
         parameters.Add("@Address", company.Address);
         parameters.Add("@ContactEmail", company.ContactEmail);
         parameters.Add("@DeadlineDayOfMonth", company.DeadlineDayOfMonth);
@@ -58,7 +61,7 @@ public class CompanyRepository : ICompanyRepository
             commandType: CommandType.StoredProcedure
         );
 
-        return await _dbConnection.QuerySingleAsync<Company>(command);
+        return await _dbConnection.QuerySingleOrDefaultAsync<Company>(command);
     }
 
     public async Task<PagedList<Company>> GetCompaniesAsync(PagedListRequest pagedListRequest, CancellationToken cancellationToken)
@@ -150,6 +153,9 @@ public class CompanyRepository : ICompanyRepository
         var parameters = new DynamicParameters();
         parameters.Add("@Id", company.Id);
         parameters.Add("@Name", company.Name);
+        parameters.Add("@BusinessUnitId", company.BusinessUnitId);
+        parameters.Add("@ChannelId", company.ChannelId);
+        parameters.Add("@SalesmanId", company.SalesmanId);
         parameters.Add("@Address", company.Address);
         parameters.Add("@ContactEmail", company.ContactEmail);
         parameters.Add("@DeadlineDayOfMonth", company.DeadlineDayOfMonth);

@@ -20,8 +20,8 @@ public sealed class SelloutWorkbookParser
 
     public SelloutParseResult Parse(byte[] workbook, DistributorTemplateMappingDto mapping)
     {
-        var worksheet = XlsxSelloutWorkbookInspector.ReadWorksheetData(workbook, mapping.WorksheetName);
-        var rows = XlsxSelloutWorkbookInspector.ExpandVerticalMergedValues(worksheet, mapping.FirstDataRowNumber);
+        var worksheet = XlsxWorkbookInspector.ReadWorksheetData(workbook, mapping.WorksheetName);
+        var rows = XlsxWorkbookInspector.ExpandVerticalMergedValues(worksheet, mapping.FirstDataRowNumber);
         var staged = new List<SelloutStaging>();
         var allErrors = new List<SelloutStagingErrorDto>();
         var sourceRows = rows
@@ -37,7 +37,7 @@ public sealed class SelloutWorkbookParser
         var remainingRows = sourceRows
             .Where(row => !structurallyMergedSummaryRows.Contains(row.Key))
             .ToList();
-        var ignoredSummaryRows = FindTrailingSummaryRows(remainingRows, mapping).ToHashSet();
+        var ignoredSummaryRows = FindIgnorableRows(remainingRows, mapping).ToHashSet();
         ignoredSummaryRows.UnionWith(structurallyMergedSummaryRows);
 
         foreach (var source in sourceRows)
@@ -74,7 +74,9 @@ public sealed class SelloutWorkbookParser
             .Select(group => new SelloutWeekSummaryDto
             {
                 ReportingWeekStart = group.Key,
-                RowCount = group.Count()
+                RowCount = group.Count(),
+                CoveredFrom = group.Min(row => row.InvoiceDate!.Value.Date),
+                CoveredTo = group.Max(row => row.InvoiceDate!.Value.Date)
             })
             .ToList();
 
@@ -86,13 +88,26 @@ public sealed class SelloutWorkbookParser
             ignoredSummaryRows.OrderBy(row => row).ToList());
     }
 
-    private static IReadOnlySet<int> FindTrailingSummaryRows(
+    /// <summary>
+    /// Finds the rows that are not sales lines at all. A row carrying no customer, product or invoice
+    /// identity can never be published, and it comes in two shapes: a total line, which pairs the missing
+    /// identity with real figures and only ever sits under the data, and form noise such as a signature
+    /// block, which carries no figure at all and can sit anywhere - including between the last invoice
+    /// and the totals, where a purely backwards scan would stop short of it. A worksheet made up entirely
+    /// of such rows is left alone: that points at the mapping rather than at the sheet.
+    /// </summary>
+    private static IReadOnlySet<int> FindIgnorableRows(
         IReadOnlyList<KeyValuePair<int, IReadOnlyDictionary<int, string>>> sourceRows,
         DistributorTemplateMappingDto mapping)
     {
-        var ignored = new HashSet<int>();
+        var ignored = sourceRows
+            .Where(row => IsFormNoiseRow(row.Value, mapping))
+            .Select(row => row.Key)
+            .ToHashSet();
+
         var index = sourceRows.Count - 1;
-        while (index >= 0 && IsSummaryRow(sourceRows[index].Value, mapping))
+        while (index >= 0 &&
+               (ignored.Contains(sourceRows[index].Key) || IsTotalRow(sourceRows[index].Value, mapping)))
         {
             ignored.Add(sourceRows[index].Key);
             index--;
@@ -108,7 +123,7 @@ public sealed class SelloutWorkbookParser
 
     private static bool IsStructurallyMergedSummaryRow(
         int rowNumber,
-        IReadOnlyList<XlsxSelloutWorkbookInspector.MergedRange> mergedRanges,
+        IReadOnlyList<XlsxWorkbookInspector.MergedRange> mergedRanges,
         DistributorTemplateMappingDto mapping)
     {
         return mergedRanges
@@ -119,20 +134,35 @@ public sealed class SelloutWorkbookParser
                 column.SourceColumnNumber <= range.LastColumn) >= 2);
     }
 
-    private static bool IsSummaryRow(
+    private static bool IsTotalRow(
         IReadOnlyDictionary<int, string> source,
-        DistributorTemplateMappingDto mapping)
-    {
-        var identityValuesAreBlank = mapping.Columns
-            .Where(column => IdentityFields.Contains(column.CanonicalField))
-            .All(column => string.IsNullOrWhiteSpace(source.GetValueOrDefault(column.SourceColumnNumber)));
-        var hasNumericValue = mapping.Columns
-            .Where(column => SelloutCanonicalFieldCatalog.GetValueType(column.CanonicalField) is var type &&
-                             (type == typeof(int) || type == typeof(decimal)))
-            .Any(column => !string.IsNullOrWhiteSpace(source.GetValueOrDefault(column.SourceColumnNumber)));
+        DistributorTemplateMappingDto mapping) =>
+        HasNoSalesIdentity(source, mapping) && HasNumericValue(source, mapping);
 
-        return identityValuesAreBlank && hasNumericValue;
-    }
+    private static bool IsFormNoiseRow(
+        IReadOnlyDictionary<int, string> source,
+        DistributorTemplateMappingDto mapping) =>
+        HasNoSalesIdentity(source, mapping) && !HasNumericValue(source, mapping);
+
+    private static bool HasNoSalesIdentity(
+        IReadOnlyDictionary<int, string> source,
+        DistributorTemplateMappingDto mapping) => mapping.Columns
+        .Where(column => IdentityFields.Contains(column.CanonicalField))
+        .All(column => string.IsNullOrWhiteSpace(source.GetValueOrDefault(column.SourceColumnNumber)));
+
+    /// <summary>
+    /// Asks whether a numeric column holds a figure, not merely whether it holds something. A caption
+    /// typed across a quantity column is a signature line, not a total.
+    /// </summary>
+    private static bool HasNumericValue(
+        IReadOnlyDictionary<int, string> source,
+        DistributorTemplateMappingDto mapping) => mapping.Columns
+        .Where(column => SelloutCanonicalFieldCatalog.GetValueType(column.CanonicalField) is var type &&
+                         (type == typeof(int) || type == typeof(decimal)))
+        .Any(column => SelloutCellValueConverter.TryConvert(
+                           source.GetValueOrDefault(column.SourceColumnNumber),
+                           column.CanonicalField,
+                           out var value) && value is not null);
 
     internal static DateTime GetMonday(DateTime date)
     {
@@ -192,7 +222,7 @@ public sealed class SelloutWorkbookParser
             case SelloutCanonicalField.ProductBrand: row.ProductBrand = (string?)value; break;
             case SelloutCanonicalField.ProductName: row.ProductName = (string?)value; break;
             case SelloutCanonicalField.ProductPackaging: row.ProductPackaging = (string?)value; break;
-            case SelloutCanonicalField.ProductPcsInCtn: row.ProductPcsInCtn = (int?)value; break;
+            case SelloutCanonicalField.ProductPcsInCtn: row.ProductPcsInCtn = (decimal?)value; break;
             case SelloutCanonicalField.BatchNumber: row.BatchNumber = (string?)value; break;
             case SelloutCanonicalField.ExpiredDate: row.ExpiredDate = (DateTime?)value; break;
             case SelloutCanonicalField.InvoiceNo: row.InvoiceNo = (string?)value; break;

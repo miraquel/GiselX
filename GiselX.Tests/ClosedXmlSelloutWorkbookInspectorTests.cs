@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Text;
 using System.Xml.Linq;
+using GiselX.Domain;
 using GiselX.Service;
 using GiselX.Service.Dto;
 
@@ -10,6 +11,10 @@ public sealed class ClosedXmlSelloutWorkbookInspectorTests
 {
     internal static byte[] BuildWorkbook(string worksheetName, params (int Row, int Column, string Value)[] cells) =>
         CreateWorkbook(Sheet(worksheetName, cells));
+
+    internal static byte[] BuildMultiSheetWorkbook(
+        params (string WorksheetName, (int Row, int Column, string Value)[] Cells)[] sheets) =>
+        CreateWorkbook(sheets.Select(sheet => Sheet(sheet.WorksheetName, sheet.Cells)).ToArray());
 
     internal static byte[] BuildWorkbookWithMergedCells(
         string worksheetName,
@@ -52,7 +57,7 @@ public sealed class ClosedXmlSelloutWorkbookInspectorTests
     }
 
     [Fact]
-    public async Task Inspect_reports_duplicate_normalized_headers()
+    public async Task Inspect_numbers_duplicate_normalized_headers()
     {
         var workbook = CreateWorkbook(Sheet("Data",
             (1, 1, "Invoice No"),
@@ -61,7 +66,26 @@ public sealed class ClosedXmlSelloutWorkbookInspectorTests
         var result = await new XlsxSelloutWorkbookInspector()
             .InspectAsync(workbook, "Data", 1, 2);
 
-        Assert.Contains(result.Errors, error => error.Contains("duplicated", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(["Invoice No", "Invoice No 2"], result.Headers);
+        Assert.Equal(["INVOICE NO", "INVOICE NO 2"], result.NormalizedHeaders);
+        Assert.Empty(result.Errors);
+    }
+
+    [Fact]
+    public async Task Inspect_declares_a_blank_first_header()
+    {
+        var workbook = CreateWorkbook(Sheet("Data",
+            (1, 2, "Product ID"),
+            (2, 1, "ignored or mapped value"),
+            (2, 2, "P-01")));
+
+        var result = await new XlsxSelloutWorkbookInspector()
+            .InspectAsync(workbook, "Data", 1, 2);
+
+        Assert.Equal(["Column 1", "Product ID"], result.Headers);
+        Assert.Equal(["COLUMN 1", "PRODUCT ID"], result.NormalizedHeaders);
+        Assert.Equal("COLUMN 1\u001FPRODUCT ID", result.HeaderSignature);
+        Assert.Empty(result.Errors);
     }
 
     [Fact]
@@ -133,6 +157,105 @@ public sealed class ClosedXmlSelloutWorkbookInspectorTests
         Assert.Equal(["First", "Second"], result.CandidateMappingNames);
         Assert.Contains(result.Errors, error => error.Contains("multiple", StringComparison.OrdinalIgnoreCase));
     }
+
+    [Theory]
+    [InlineData("laporan penjualan ", "laporan penjualan")]
+    [InlineData("laporan penjualan", "laporan penjualan ")]
+    [InlineData("Laporan Penjualan", "laporan penjualan")]
+    [InlineData(" Data ", "data")]
+    public async Task Inspect_matches_a_worksheet_name_that_differs_only_by_case_or_surrounding_space(
+        string sheetName, string configuredName)
+    {
+        var workbook = CreateWorkbook(Sheet(sheetName, (1, 1, "Invoice No"), (2, 1, "INV-1")));
+
+        var result = await new XlsxSelloutWorkbookInspector().InspectAsync(workbook, configuredName, 1, 2);
+
+        Assert.Empty(result.Errors);
+        Assert.Equal(sheetName, result.WorksheetName);
+        Assert.Equal(["Invoice No"], result.Headers);
+    }
+
+    [Fact]
+    public async Task Inspect_prefers_the_exactly_named_worksheet_over_a_loose_match()
+    {
+        var workbook = CreateWorkbook(
+            Sheet("data ", (1, 1, "Loose")),
+            Sheet("Data", (1, 1, "Exact")));
+
+        var result = await new XlsxSelloutWorkbookInspector().InspectAsync(workbook, "Data", 1, 2);
+
+        Assert.Empty(result.Errors);
+        Assert.Equal("Data", result.WorksheetName);
+        Assert.Equal(["Exact"], result.Headers);
+    }
+
+    [Fact]
+    public async Task Inspect_refuses_to_guess_between_worksheets_that_differ_only_by_case_or_space()
+    {
+        var workbook = CreateWorkbook(
+            Sheet("Data ", (1, 1, "One")),
+            Sheet("data", (1, 1, "Two")));
+
+        var result = await new XlsxSelloutWorkbookInspector().InspectAsync(workbook, "DATA", 1, 2);
+
+        Assert.Contains(result.Errors, error => error.Contains("more than one", StringComparison.OrdinalIgnoreCase));
+        Assert.Empty(result.Headers);
+    }
+
+    [Fact]
+    public async Task Inspect_names_the_available_worksheets_when_none_match()
+    {
+        var workbook = CreateWorkbook(Sheet("pivot"), Sheet("stok"));
+
+        var result = await new XlsxSelloutWorkbookInspector().InspectAsync(workbook, "Lap Penjualan", 1, 2);
+
+        var error = Assert.Single(result.Errors);
+        Assert.Contains("Lap Penjualan", error, StringComparison.Ordinal);
+        Assert.Contains("pivot", error, StringComparison.Ordinal);
+        Assert.Contains("stok", error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Detection_and_parsing_resolve_the_same_loosely_named_worksheet()
+    {
+        // Detection accepting a loosely matched sheet is only safe if the parser reads that same sheet.
+        var workbook = CreateWorkbook(Sheet("laporan penjualan ",
+            (1, 1, "Customer Id"), (1, 2, "Customer Name"), (1, 3, "Product Id"), (1, 4, "Product Name"),
+            (1, 5, "Invoice No"), (1, 6, "Invoice Date"), (1, 7, "Qty"), (1, 8, "Unit"),
+            (2, 1, "C-01"), (2, 2, "Toko Satu"), (2, 3, "P-01"), (2, 4, "Item Satu"),
+            (2, 5, "INV-1"), (2, 6, "2026-08-03"), (2, 7, "5"), (2, 8, "CTN")));
+        var inspector = new XlsxSelloutWorkbookInspector();
+        var preview = await inspector.InspectAsync(workbook, "laporan penjualan", 1, 2);
+        var mapping = new DistributorTemplateMappingDto
+        {
+            Id = 1,
+            Name = "loose",
+            WorksheetName = "laporan penjualan",
+            HeaderRowNumber = 1,
+            FirstDataRowNumber = 2,
+            HeaderSignature = preview.HeaderSignature,
+            IsActive = true,
+            Columns =
+            [
+                Column(1, SelloutCanonicalField.CustomerId), Column(2, SelloutCanonicalField.CustomerName),
+                Column(3, SelloutCanonicalField.ProductId), Column(4, SelloutCanonicalField.ProductName),
+                Column(5, SelloutCanonicalField.InvoiceNo), Column(6, SelloutCanonicalField.InvoiceDate),
+                Column(7, SelloutCanonicalField.InvoiceQty), Column(8, SelloutCanonicalField.InvoiceUnit)
+            ]
+        };
+
+        var detection = await inspector.DetectAsync(workbook, [mapping]);
+        Assert.True(detection.IsMatch);
+
+        var parsed = new SelloutWorkbookParser().Parse(workbook, detection.Mapping!);
+
+        var row = Assert.Single(parsed.Rows);
+        Assert.True(row.IsValid);
+        Assert.Equal("INV-1", row.InvoiceNo);
+    }
+
+    private static DistributorTemplateColumnDto Column(int sourceColumnNumber, SelloutCanonicalField field) =>
+        new() { SourceColumnNumber = sourceColumnNumber, SourceHeader = $"col{sourceColumnNumber}", CanonicalField = field };
 
     private static byte[] CreateWorkbook(params SheetDefinition[] sheets)
     {
@@ -223,6 +346,6 @@ public sealed class ClosedXmlSelloutWorkbookInspectorTests
             HeaderRowNumber = headerRow,
             FirstDataRowNumber = headerRow + 1,
             IsActive = active,
-            HeaderSignature = SelloutHeaderNormalizer.CreateSignature(headers)
+            HeaderSignature = WorkbookHeaderNormalizer.CreateSignature(headers)
         };
 }

@@ -93,9 +93,10 @@ public class StockService : IStockService
     {
         var user = await _userManager.FindByNameAsync(_userClaimDto.Username)
             ?? throw new InvalidOperationException("User not found.");
+        var companyId = _userClaimDto.IsAdministrator ? 0 : user.CompanyId;
 
         var pagedList = await _stockRepository.SelectAsync(
-            _mapper.MapToEntity(pagedListRequest), user.CompanyId, useDistributorIdentity, cancellationToken);
+            _mapper.MapToEntity(pagedListRequest), companyId, useDistributorIdentity, cancellationToken);
 
         return new ServiceResponse<PagedListDto<StockDto>>
         {
@@ -108,7 +109,8 @@ public class StockService : IStockService
     public async Task<ServiceResponse<IEnumerable<StockDto>>> SelectByCustPeriodAsync(int companyId, int year,
         int month, CancellationToken cancellationToken)
     {
-        var results = await _stockRepository.SelectByCustPeriodAsync(companyId, year, month, cancellationToken);
+        var scopeCompanyId = await ResolveCompanyScopeAsync();
+        var results = await _stockRepository.SelectByCustPeriodAsync(scopeCompanyId, year, month, cancellationToken);
 
         return new ServiceResponse<IEnumerable<StockDto>>
         {
@@ -123,7 +125,8 @@ public class StockService : IStockService
         var user = await _userManager.FindByNameAsync(_userClaimDto.Username)
             ?? throw new InvalidOperationException("User not found.");
 
-        var periods = await _stockRepository.SelectPeriodsAsync(user.CompanyId, cancellationToken);
+        var companyId = _userClaimDto.IsAdministrator ? 0 : user.CompanyId;
+        var periods = await _stockRepository.SelectPeriodsAsync(companyId, cancellationToken);
 
         return new ServiceResponse<IEnumerable<PeriodDto>>
         {
@@ -138,13 +141,15 @@ public class StockService : IStockService
     {
         var user = await _userManager.FindByNameAsync(_userClaimDto.Username)
             ?? throw new InvalidOperationException("User not found.");
-        var batches = await _stockRepository.ListCompletedUploadsAsync(user.CompanyId, cancellationToken);
+        var companyId = _userClaimDto.IsAdministrator ? 0 : user.CompanyId;
+        var batches = await _stockRepository.ListCompletedUploadsAsync(companyId, cancellationToken);
         return new ServiceResponse<IReadOnlyList<StockUploadHistoryOptionDto>>
         {
             Data = batches.Select(batch => new StockUploadHistoryOptionDto
             {
                 BatchId = batch.Id, UploadedDate = batch.UploadedDate,
-                StockDate = batch.StockDate, OriginalFileName = batch.OriginalFileName
+                StockDate = batch.StockDate, OriginalFileName = batch.OriginalFileName,
+                CompanyName = batch.CompanyName
             }).ToList(),
             Message = "Stock upload history retrieved successfully."
         };
@@ -155,7 +160,8 @@ public class StockService : IStockService
     {
         var user = await _userManager.FindByNameAsync(_userClaimDto.Username)
             ?? throw new InvalidOperationException("User not found.");
-        var rows = (await _stockRepository.SelectByBatchAsync(batchId, user.CompanyId, useDistributorIdentity,
+        var companyId = _userClaimDto.IsAdministrator ? 0 : user.CompanyId;
+        var rows = (await _stockRepository.SelectByBatchAsync(batchId, companyId, useDistributorIdentity,
             cancellationToken)).ToList();
         if (rows.Count == 0)
             return new ServiceResponse<IEnumerable<StockDto>>
@@ -167,5 +173,33 @@ public class StockService : IStockService
         {
             Data = _mapper.MapToDto(rows), Message = "Stock snapshot retrieved successfully."
         };
+    }
+
+    public async Task<ServiceResponse<StockSelectionSummaryDto>> SelectSummaryAsync(PagedListRequestDto request,
+        bool useDistributorIdentity, CancellationToken cancellationToken)
+    {
+        var companyId = await ResolveCompanyScopeAsync();
+        var summary = await _stockRepository.SummarizeAsync(
+            _mapper.MapToEntity(request), companyId, useDistributorIdentity, cancellationToken);
+        return new ServiceResponse<StockSelectionSummaryDto>
+        {
+            Data = new StockSelectionSummaryDto
+            {
+                DistributorCount = summary.DistributorCount, RowCount = summary.RowCount,
+                SaldoAwal = summary.SaldoAwal, SaldoMasukPO = summary.SaldoMasukPO,
+                SaldoAkhir = summary.SaldoAkhir, SaldoAkhirGood = summary.SaldoAkhirGood,
+                SaldoAkhirBad = summary.SaldoAkhirBad, StockValue = summary.StockValue
+            },
+            Message = "Stock summary retrieved successfully."
+        };
+    }
+
+    private async Task<int> ResolveCompanyScopeAsync()
+    {
+        if (_userClaimDto.IsAdministrator) return 0;
+
+        var user = await _userManager.FindByNameAsync(_userClaimDto.Username)
+            ?? throw new InvalidOperationException("User not found.");
+        return user.CompanyId;
     }
 }

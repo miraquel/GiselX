@@ -68,7 +68,7 @@ internal static DateTime GetMonday(DateTime date)
 }
 ```
 
-Delete only the validation branch that compares invoice dates with a selected week. Keep required, conversion, quantity, and length validation unchanged.
+Delete only the validation branch that compares invoice dates with a selected week. Keep required, conversion, and length validation unchanged; accept non-zero negative quantities as returns so the supplied workbook's return rows remain transactions.
 
 - [ ] **Step 4: Run the focused test and verify GREEN**
 

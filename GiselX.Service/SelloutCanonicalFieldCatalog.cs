@@ -19,10 +19,10 @@ public static class SelloutCanonicalFieldCatalog
 
     public static Type GetValueType(SelloutCanonicalField field) => field switch
     {
-        SelloutCanonicalField.ProductPcsInCtn => typeof(int),
         SelloutCanonicalField.ExpiredDate or
         SelloutCanonicalField.InvoiceDate or
         SelloutCanonicalField.ShipDate => typeof(DateTime),
+        SelloutCanonicalField.ProductPcsInCtn or
         SelloutCanonicalField.InvoiceQty or
         SelloutCanonicalField.UnitPrice or
         SelloutCanonicalField.GrossValue or

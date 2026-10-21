@@ -5,6 +5,8 @@
 @section styles {
     <link href="/lib/datatables-bs5/datatables.boostrap5.css" rel="stylesheet" />
     <link href="/lib/datatables-responsive-bs5/responsive.bootstrap5.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <link href="/lib/select2-bootstrap-5-theme/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
 }
 
 <div class="card">
@@ -19,8 +21,8 @@
                         @Html.AntiForgeryToken()
                         <div class="input-group">
                             <input type="date" name="stockDate" id="stockDate" class="form-control" required />
-                            <input type="file" name="file" id="stockFile" class="form-control" accept=".xlsx" required />
-                            <button type="submit" class="btn btn-outline-success"><span class="ri-upload-2-fill me-1"></span>Review Upload</button>
+                            <input type="file" name="file" id="stockFile" class="form-control" accept=".xlsx,.xls" required />
+                            <button type="submit" class="btn btn-outline-success" id="reviewUploadButton"><span class="ri-upload-2-fill me-1"></span>Review Upload</button>
                         </div>
                     </form>
                 </div>
@@ -31,30 +33,102 @@
                     <form asp-action="DownloadBatch" method="get" class="input-group">
                         <select name="batchId" class="form-select" required>
                             <option value="">Select uploaded snapshot</option>
-                            @foreach (var upload in Model.CompletedUploads) { <option value="@upload.BatchId">@upload.DisplayText</option> }
+                            @foreach (var upload in Model.CompletedUploads) { <option value="@upload.BatchId">@(User.IsInRole("Administrator") ? upload.AdministratorDisplayText : upload.DisplayText)</option> }
                         </select>
                         <button class="btn btn-outline-primary"><span class="ri-download-2-fill me-1"></span>Download</button>
                     </form>
                 </div>
             }
         </div>
+        <div class="row mt-4">
+            <div class="col-md-6">
+                <select id="yearSelect" name="year" class="form-control"></select>
+            </div>
+            <div class="col-md-6">
+                <select id="monthSelect" name="month" class="form-control"></select>
+            </div>
+        </div>
+        <div class="mt-4">
+            <div class="d-flex justify-content-between align-items-center mb-2"><h6 class="mb-0">Selected data summary</h6><small class="text-muted">@(User.IsInRole("Administrator") ? "Latest snapshot in the selected month; updates with distributor and table filters" : "Latest snapshot in the selected month; updates with table filters")</small></div>
+            <div class="row g-2" id="stockSelectionSummary">
+                @if (User.IsInRole("Administrator"))
+                {
+                    <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Distributors</small><div class="fs-5 fw-semibold" id="stockSummaryDistributors">—</div></div></div>
+                }
+                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Rows</small><div class="fs-5 fw-semibold" id="stockSummaryRows">—</div></div></div>
+                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Saldo Awal</small><div class="fs-5 fw-semibold" id="stockSummaryAwal">—</div></div></div>
+                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Masuk PO</small><div class="fs-5 fw-semibold" id="stockSummaryMasuk">—</div></div></div>
+                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Saldo Akhir</small><div class="fs-5 fw-semibold" id="stockSummaryAkhir">—</div></div></div>
+                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Saldo Akhir Good</small><div class="fs-5 fw-semibold" id="stockSummaryAkhirGood">—</div></div></div>
+                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Saldo Akhir Bad</small><div class="fs-5 fw-semibold" id="stockSummaryAkhirBad">—</div></div></div>
+                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Stock value</small><div class="fs-5 fw-semibold" id="stockSummaryValue">—</div></div></div>
+            </div>
+        </div>
     </div>
     <div class="card-datatable text-nowrap">
         <table id="stock-table" class="table table-bordered" style="width:100%"><thead><tr>
-            <th>Product ID</th><th>Product Name</th><th>Packaging</th><th>Pcs/Ctn</th><th>Netto</th><th>Unit</th><th>Price Unit</th>
+            @if (User.IsInRole("Administrator")) { <th>Distributor</th> }
+            <th>Area</th><th>Condition</th>
+            <th>Product ID</th><th>Product Name</th><th>Packaging</th><th>Pcs/Ctn</th><th>Netto</th><th>Unit</th>
+            <th>Smallest Unit</th><th>Qty per Smallest Unit</th><th>Price Unit</th>
             <th>Saldo Awal</th><th>Saldo Masuk PO</th><th>Saldo Akhir</th><th>Batch No</th><th>Expired Date</th><th>Stock Date</th>
-        </tr></thead></table>
+        </tr></thead>
+        <tfoot><tr>
+            @if (User.IsInRole("Administrator")) { <th><input id="stockDistributorFilter" class="form-control form-control-sm" placeholder="Filter distributor" /></th> }
+            <th><input id="stockAreaFilter" class="form-control form-control-sm" placeholder="Filter area" /></th>
+            <th><select id="stockConditionFilter" class="form-select form-select-sm"><option value="">All</option><option value="Good">Good</option><option value="Bad">Bad</option></select></th>
+            @for (var index = 0; index < 15; index++) { <th></th> }
+        </tr></tfoot>
+        </table>
     </div>
 </div>
 
-<div class="modal fade" id="reviewModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
-    <div class="modal-header"><h5 class="modal-title">Review Stock upload</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+<div class="modal fade" id="reviewModal" tabindex="-1" aria-labelledby="reviewModalTitle" aria-hidden="true"><div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title" id="reviewModalTitle">Stock upload summary</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
     <div class="modal-body">
         <div id="reviewAlert" class="alert d-none"></div>
-        <dl class="row mb-3"><dt class="col-sm-5">Detected mapping</dt><dd class="col-sm-7" id="mappingName"></dd><dt class="col-sm-5">Stock date</dt><dd class="col-sm-7" id="reviewStockDate"></dd><dt class="col-sm-5">Rows</dt><dd class="col-sm-7" id="rowCounts"></dd><dt class="col-sm-5">Ignored summary rows</dt><dd class="col-sm-7" id="ignoredRows"></dd></dl>
+        <div class="row g-3 mb-4">
+            <div class="col-sm-6 col-xl-3"><div class="border rounded p-3 h-100"><div class="text-muted small">Total data rows</div><div class="fs-3 fw-semibold" id="summaryTotalRows">0</div></div></div>
+            <div class="col-sm-6 col-xl-3"><div class="border border-success rounded p-3 h-100"><div class="text-success small">Ready to publish</div><div class="fs-3 fw-semibold text-success" id="summaryValidRows">0</div></div></div>
+            <div class="col-sm-6 col-xl-3"><div class="border border-danger rounded p-3 h-100"><div class="text-danger small">Invalid / excluded</div><div class="fs-3 fw-semibold text-danger" id="summaryInvalidRows">0</div></div></div>
+            <div class="col-sm-6 col-xl-3"><div class="border rounded p-3 h-100"><div class="text-muted small">Ignored summary rows</div><div class="fs-3 fw-semibold" id="summaryIgnoredRows">0</div></div></div>
+        </div>
+        <div class="row g-4">
+            <div class="col-lg-6">
+                <h6 class="mb-3">Upload information</h6>
+                <dl class="row mb-0">
+                    <dt class="col-sm-5">File</dt><dd class="col-sm-7 text-break" id="reviewFileName"></dd>
+                    <dt class="col-sm-5">Detected mapping</dt><dd class="col-sm-7" id="mappingName"></dd>
+                    <dt class="col-sm-5">Stock date</dt><dd class="col-sm-7" id="reviewStockDate"></dd>
+                    <dt class="col-sm-5">Ignored row numbers</dt><dd class="col-sm-7" id="ignoredRows"></dd>
+                    <dt class="col-sm-5">Skipped worksheets</dt><dd class="col-sm-7" id="ignoredWorksheets"></dd>
+                </dl>
+            </div>
+            <div class="col-lg-6">
+                <h6 class="mb-3">Stock totals from valid rows</h6>
+                <div class="table-responsive"><table class="table table-sm table-bordered mb-0"><tbody>
+                    <tr><th>Saldo Awal</th><td class="text-end fw-semibold" id="totalSaldoAwal">0</td></tr>
+                    <tr><th>Saldo Masuk PO</th><td class="text-end fw-semibold" id="totalSaldoMasukPo">0</td></tr>
+                    <tr><th>Saldo Akhir</th><td class="text-end fw-semibold" id="totalSaldoAkhir">0</td></tr>
+                </tbody></table></div>
+                <div class="form-text mt-2">Totals include only rows that will be published.</div>
+            </div>
+        </div>
+        <hr class="my-4" />
+        <h6>Areas</h6>
+        <div class="table-responsive mb-2"><table class="table table-sm table-bordered mb-0">
+            <thead><tr><th>Area</th><th class="text-end">Valid rows</th><th class="text-end">Good Saldo Akhir</th><th class="text-end">Bad Saldo Akhir</th><th>Replaces</th></tr></thead>
+            <tbody id="areaBreakdown"></tbody>
+        </table></div>
+        <div class="small text-muted mb-4" id="untouchedAreas"></div>
+        <h6>Worksheets in this workbook</h6>
+        <div class="table-responsive mb-4"><table class="table table-sm table-bordered mb-0">
+            <thead><tr><th>Worksheet</th><th>Mapping</th><th class="text-end">Rows</th><th class="text-end">Ready</th><th class="text-end">Invalid</th><th class="text-end">Ignored summary rows</th></tr></thead>
+            <tbody id="sheetBreakdown"></tbody>
+        </table></div>
         <h6>Validation details</h6><ul id="validationDetails" class="mb-0"></ul>
     </div>
-    <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button><button type="button" class="btn btn-success" id="confirmUpload">Confirm and Upload</button></div>
+    <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button><button type="button" class="btn btn-success" id="confirmUpload"><span class="ri-upload-2-fill me-1"></span>Confirm and Upload</button></div>
 </div></div></div>
 
 @section scripts {
@@ -62,44 +136,162 @@
 <script src="/lib/datatables-bs5/datatables.bootstrap5.js"></script>
 <script src="/lib/moment/moment.js"></script>
 <script src="/js/helper.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
 $(function () {
  const form = document.getElementById('stockUploadForm');
  const modalElement = document.getElementById('reviewModal');
  const modal = modalElement ? new bootstrap.Modal(modalElement) : null;
  const token = form?.querySelector('[name="__RequestVerificationToken"]')?.value;
- const table = $('#stock-table').DataTable({
-   processing:true, serverSide:true, searching:true, ordering:true, scrollX:true, order:[[0,'asc']],
+ // The SHA-256 preflight reported for the workbook shown in the review modal. It is sent back on confirm
+ // so the server can refuse a file that was swapped after the review, and cleared whenever the file input
+ // changes so a stale confirmation can never travel with a new workbook.
+ let confirmedSha256 = null;
+ document.getElementById('stockFile')?.addEventListener('change', () => { confirmedSha256 = null; });
+ const numberFormatter = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 });
+ let lastStockQuery = {};
+ let stockSummaryRequest = 0;
+ async function refreshStockSummary(query) {
+     try {
+       const requestId = ++stockSummaryRequest;
+       const parameters = new URLSearchParams(Object.entries(query).filter(([, value]) => value !== null && value !== undefined && value !== ''));
+       const response = await fetch(`/api/Stocks/Summary?${parameters}`);
+       const payload = await response.json(); if (requestId !== stockSummaryRequest) return; const data = payload.data;
+       if (!response.ok || !data) throw new Error(payload.message || 'Summary unavailable');
+       $('#stockSummaryDistributors').text(numberFormatter.format(data.distributorCount || 0));
+       $('#stockSummaryRows').text(numberFormatter.format(data.rowCount || 0));
+       $('#stockSummaryAwal').text(numberFormatter.format(data.saldoAwal || 0));
+       $('#stockSummaryMasuk').text(numberFormatter.format(data.saldoMasukPO || 0));
+       $('#stockSummaryAkhir').text(numberFormatter.format(data.saldoAkhir || 0));
+       $('#stockSummaryAkhirGood').text(numberFormatter.format(data.saldoAkhirGood || 0));
+       $('#stockSummaryAkhirBad').text(numberFormatter.format(data.saldoAkhirBad || 0));
+       $('#stockSummaryValue').text(numberFormatter.format(data.stockValue || 0));
+     } catch { $('#stockSelectionSummary .fw-semibold').text('Unavailable'); }
+ }
+ // Browsed by month like Sellout: the table stays hidden and unloaded until a year and a month are
+ // chosen, and the server shows each distributor's latest snapshot inside that month.
+ const yearSelect = $('#yearSelect');
+ const monthSelect = $('#monthSelect');
+ let table;
+ function periodsSelect(select, placeholder, toResults) {
+   select.select2({
+     placeholder: placeholder, theme: 'bootstrap-5', allowClear: true,
+     ajax: { url: '/api/Stocks/SelectPeriods', type: 'GET', dataType: 'json', delay: 500,
+             processResults: data => ({ results: toResults(data.data || []) }) }
+   });
+   select.val(null).trigger('change');
+ }
+ periodsSelect(yearSelect, 'Select Year', periods =>
+   [...new Set(periods.map(p => p.year))].map(year => ({ id: year, text: year.toString() })));
+ periodsSelect(monthSelect, 'Select Month', periods => {
+   const year = parseInt(yearSelect.val());
+   return [...new Set(periods.filter(p => p.year === year).map(p => p.month))]
+     .map(month => ({ id: month, text: moment().month(month - 1).format('MMMM') }));
+ });
+ monthSelect.prop('disabled', true);
+ function canLoadTable() { return yearSelect.val() && monthSelect.val(); }
+ function loadTable() {
+   if (table) { table.ajax.reload(); return; }
+   table = $('#stock-table').DataTable({
+   processing:true, serverSide:true, searching:true, ordering:true, scrollX:true, order:[[@(User.IsInRole("Administrator") ? 3 : 2),'asc']],
    ajax:{
      url:'/api/Stocks/Select',
      data:function(d){
        const q={pageNumber:(d.start/d.length)+1,pageSize:d.length};
        if(d.search?.value){q.SearchTerm=d.search.value;}
+       const distributor=$('#stockDistributorFilter').val();
+       if(distributor){q['Filters.CompanyName']=distributor;}
+       const area=$('#stockAreaFilter').val();
+       if(area){q['Filters.AreaName']=area;}
+       const condition=$('#stockConditionFilter').val();
+       if(condition){q['Filters.Condition']=condition;}
        if(d.order?.length){q.SortBy=d.columns[d.order[0].column].data;q.IsSortAscending=d.order[0].dir==='asc';}
+       q['Filters.Year']=yearSelect.val();
+       q['Filters.Month']=monthSelect.val();
+       lastStockQuery=q;
        return q;
      },
-     dataSrc:function(json){ if(json.data?.items){json.recordsTotal=json.data.totalCount;json.recordsFiltered=json.data.totalCount;return json.data.items;} return []; }
+     dataSrc:function(json){ if(!canLoadTable()) return []; refreshStockSummary(lastStockQuery); if(json.data?.items){json.recordsTotal=json.data.totalCount;json.recordsFiltered=json.data.totalCount;return json.data.items;} return []; }
    },
    columns:[
+    @if (User.IsInRole("Administrator")) { <text>{data:'companyName'},</text> }
+    {data:'areaName',defaultContent:''},{data:'condition'},
     {data:'productId'},{data:'productName'},{data:'productPackaging'},{data:'productPcsInCtn'},
-    {data:'productNetto'},{data:'productUnit'},{data:'priceUnit'},{data:'saldoAwal'},{data:'saldoMasukPO'},
+    {data:'productNetto'},{data:'productUnit'},{data:'smallestUnit'},{data:'smallestUnitQty'},
+    {data:'priceUnit'},{data:'saldoAwal'},{data:'saldoMasukPO'},
     {data:'saldoAkhir'},{data:'batchNumber'},
     {data:'expiredDate',render:d=>d&&d.substring(0,10)!=='1753-01-01'?moment(d).format('DD MMM YYYY'):''},
     {data:'stockDate',render:d=>d?moment(d).format('DD MMM YYYY'):''}
    ]
+   });
+ }
+ function refreshForPeriod() {
+   $('.card-datatable').toggle(!!canLoadTable());
+   if (canLoadTable()) loadTable();
+   else {
+     if (table) table.clear().draw();
+     $('#stockSelectionSummary .fw-semibold').text('—');
+   }
+ }
+ yearSelect.on('change', function () {
+   monthSelect.prop('disabled', !yearSelect.val());
+   monthSelect.val(null).trigger('change');
  });
+ monthSelect.on('change', refreshForPeriod);
+ refreshForPeriod();
+ let distributorFilterTimer;
+ $('#stockDistributorFilter').on('input', function () {
+   clearTimeout(distributorFilterTimer);
+   distributorFilterTimer=setTimeout(()=>{ if (table) table.ajax.reload(); },300);
+ });
+ $('#stockAreaFilter').on('input', function () {
+   clearTimeout(distributorFilterTimer);
+   distributorFilterTimer=setTimeout(()=>{ if (table) table.ajax.reload(); },300);
+ });
+ $('#stockConditionFilter').on('change', function () { if (table) table.ajax.reload(); });
  function render(preflight, message) {
+   $('#summaryTotalRows').text(numberFormatter.format(preflight.totalRows || 0));
+   $('#summaryValidRows').text(numberFormatter.format(preflight.validRows || 0));
+   $('#summaryInvalidRows').text(numberFormatter.format(preflight.invalidRows || 0));
+   $('#summaryIgnoredRows').text(numberFormatter.format(preflight.ignoredSummaryRowNumbers?.length || 0));
+   $('#reviewFileName').text(document.getElementById('stockFile')?.files?.[0]?.name || '');
    $('#mappingName').text(preflight.mappingName || 'Not detected'); $('#reviewStockDate').text(preflight.stockDate?.substring(0,10) || '');
-   $('#rowCounts').text(`${preflight.totalRows} total, ${preflight.validRows} valid, ${preflight.invalidRows} invalid`);
    $('#ignoredRows').text(preflight.ignoredSummaryRowNumbers?.join(', ') || 'None');
+   $('#ignoredWorksheets').text(preflight.ignoredWorksheetNames?.join(', ') || 'None');
+   const sheets=$('#sheetBreakdown').empty();
+   (preflight.sheets||[]).forEach(s=>sheets.append($('<tr>')
+     .append($('<td>').text(s.worksheetName||''))
+     .append($('<td>').text(s.mappingName||''))
+     .append($('<td class="text-end">').text(numberFormatter.format(s.totalRows||0)))
+     .append($('<td class="text-end">').text(numberFormatter.format(s.validRows||0)))
+     .append($('<td class="text-end">').text(numberFormatter.format(s.invalidRows||0)))
+     .append($('<td class="text-end">').text(s.ignoredSummaryRowNumbers?.join(', ')||'—'))));
+   if(!sheets.children().length) sheets.append($('<tr>').append($('<td colspan="6" class="text-muted">').text('No mapped worksheet was detected.')));
+   const areaRows=$('#areaBreakdown').empty();
+   (preflight.areas||[]).forEach(a=>{
+     const replaces=$('<td>');
+     if(!(a.replaces||[]).length) replaces.text('nothing published yet for this date');
+     else a.replaces.forEach(r=>replaces.append($('<div>').text(`replaces ${numberFormatter.format(r.rowCount||0)} rows uploaded ${(r.uploadedDate||'').substring(0,10)} by ${r.uploadedBy||''} (${r.originalFileName||''})`)));
+     areaRows.append($('<tr>')
+       .append($('<td>').text(a.areaName||''))
+       .append($('<td class="text-end">').text(numberFormatter.format(a.validRows||0)))
+       .append($('<td class="text-end">').text(numberFormatter.format(a.saldoAkhirGood||0)))
+       .append($('<td class="text-end">').text(numberFormatter.format(a.saldoAkhirBad||0)))
+       .append(replaces));
+   });
+   if(!areaRows.children().length) areaRows.append($('<tr>').append($('<td colspan="5" class="text-muted">').text('No area information is available.')));
+   $('#untouchedAreas').text((preflight.untouchedAreaNames||[]).length?`Not affected: ${preflight.untouchedAreaNames.join(', ')}`:'');
+   $('#totalSaldoAwal').text(numberFormatter.format(preflight.totalSaldoAwal || 0));
+   $('#totalSaldoMasukPo').text(numberFormatter.format(preflight.totalSaldoMasukPo || 0));
+   $('#totalSaldoAkhir').text(numberFormatter.format(preflight.totalSaldoAkhir || 0));
    const details=$('#validationDetails').empty(); (preflight.errors||[]).forEach(e=>details.append($('<li>').text(e)));
-   (preflight.rowErrors||[]).forEach(e=>details.append($('<li>').text(`Row ${e.sourceRowNumber}${e.field!==null&&e.field!==undefined?' — '+e.field:''}: ${e.reason}`)));
+   (preflight.rowErrors||[]).forEach(e=>details.append($('<li>').text(`${e.worksheetName?e.worksheetName+' — ':''}Row ${e.sourceRowNumber}${e.field!==null&&e.field!==undefined?' — '+e.field:''}: ${e.reason}${e.rejectedValue?` (cell value: "${e.rejectedValue}")`:''}`)));
    if(!details.children().length) details.append($('<li>').text('All rows are valid.'));
    $('#reviewAlert').removeClass('d-none alert-success alert-warning alert-danger').addClass(preflight.canPublish?(preflight.invalidRows?'alert-warning':'alert-success'):'alert-danger').text(message||'Review complete.');
    $('#confirmUpload').prop('disabled',!preflight.canPublish); modal.show();
  }
- form?.addEventListener('submit', async e => { e.preventDefault(); const response=await fetch('@Url.Action("PreflightUpload")',{method:'POST',body:new FormData(form),headers:{RequestVerificationToken:token}}); const body=await response.json(); if(body.data) render(body.data,body.message); else alert(body.message||'Unable to analyze workbook.'); });
- $('#confirmUpload').on('click', async function(){ this.disabled=true; const data=new FormData(form); data.append('confirmed','true'); const response=await fetch('@Url.Action("Upload")',{method:'POST',body:data,headers:{RequestVerificationToken:token}}); const body=await response.json(); if(body.data?.batchId){window.location.href='@Url.Action("Result")?batchId='+body.data.batchId;return;} alert(body.message||'Upload failed.'); this.disabled=false; });
+ form?.addEventListener('submit', async e => { e.preventDefault(); const response=await fetch('@Url.Action("PreflightUpload")',{method:'POST',body:new FormData(form),headers:{RequestVerificationToken:token}}); const body=await response.json(); if(body.data){ confirmedSha256=body.data.fileSha256; render(body.data,body.message); } else { confirmedSha256=null; alert(body.message||'Unable to analyze workbook.'); } });
+ $('#confirmUpload').on('click', async function(){ this.disabled=true; const data=new FormData(form); data.append('confirmed','true'); data.append('confirmedSha256', confirmedSha256 || ''); const response=await fetch('@Url.Action("Upload")',{method:'POST',body:data,headers:{RequestVerificationToken:token}}); const body=await response.json(); if(body.data?.batchId){window.location.href='@Url.Action("Result")?batchId='+body.data.batchId;return;} alert(body.message||'Upload failed.'); this.disabled=false; });
 });
 </script>
 }

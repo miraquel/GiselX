@@ -78,6 +78,47 @@
                     <span asp-validation-for="CompanyId" class="text-danger"></span>
                 </div>
             </div>
+            @if (Model.CanAssignRoles)
+            {
+                <div class="row mb-4">
+                    <label asp-for="SelectedRoles" class="col-sm-2 col-form-label"></label>
+                    <div class="col-sm-10">
+                        @if (Model.AvailableRoles.Count == 0)
+                        {
+                            <div class="alert alert-warning mb-0 py-2">
+                                No roles have been created yet. The user can be created now and given a
+                                role later from Manage Roles.
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="row">
+                                @foreach (var role in Model.AvailableRoles)
+                                {
+                                    var roleId = $"role_{role.Name}";
+                                    <div class="col-md-4 mb-2">
+                                        <div class="form-check">
+                                            <input class="form-check-input"
+                                                   type="checkbox"
+                                                   name="SelectedRoles"
+                                                   value="@role.Name"
+                                                   id="@roleId"
+                                                   @(Model.SelectedRoles.Contains(role.Name) ? "checked" : "") />
+                                            <label class="form-check-label" for="@roleId">
+                                                <span class="fw-bold">@role.Name</span>
+                                                <span class="text-muted small d-block">@role.Description</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                            <small class="text-muted">
+                                Optional — roles can also be changed later from Manage Roles.
+                            </small>
+                        }
+                    </div>
+                </div>
+            }
             <div class="row justify-content-end">
                 <div class="col-sm-10">
                     <button type="submit" class="btn btn-primary">Create User</button>

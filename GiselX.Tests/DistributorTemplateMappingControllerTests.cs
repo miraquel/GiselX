@@ -20,6 +20,18 @@ namespace GiselX.Tests;
 public sealed class DistributorTemplateMappingControllerTests
 {
     [Fact]
+    public void SourceHeader_IsOptionalForUnmappedCanonicalRows()
+    {
+        var services = new ServiceCollection().AddLogging().AddMvcCore().Services.BuildServiceProvider();
+        var metadataProvider = services.GetRequiredService<IModelMetadataProvider>();
+        var metadata = metadataProvider.GetMetadataForProperty(
+            typeof(DistributorTemplateColumnEditViewModel),
+            nameof(DistributorTemplateColumnEditViewModel.SourceHeader));
+
+        Assert.False(metadata.IsRequired);
+    }
+
+    [Fact]
     public async Task Index_ReturnsMappingsForRequestedCompany()
     {
         var service = new CapturingMappingService
@@ -179,7 +191,7 @@ public sealed class DistributorTemplateMappingControllerTests
             [
                 Column(SelloutCanonicalField.CustomerAlias, 0),
                 Column(SelloutCanonicalField.CustomerId, 2),
-                Column(SelloutCanonicalField.CustomerName, 3),
+                Column(SelloutCanonicalField.CustomerName, 2),
                 Column(SelloutCanonicalField.ProductId, 4),
                 Column(SelloutCanonicalField.ProductName, 5),
                 Column(SelloutCanonicalField.InvoiceNo, 6),
@@ -197,7 +209,7 @@ public sealed class DistributorTemplateMappingControllerTests
         var saved = Assert.IsType<SaveDistributorTemplateMappingDto>(mappingService.SavedMapping);
         Assert.Equal(8, saved.Columns.Count);
         Assert.DoesNotContain(saved.Columns, column => !Enum.IsDefined(column.CanonicalField));
-        Assert.Equal(2, saved.Columns[0].SourceColumnNumber);
+        Assert.Equal(2, saved.Columns.Count(column => column.SourceColumnNumber == 2));
     }
 
     private static DistributorTemplateColumnEditViewModel Column(SelloutCanonicalField field, int sourceColumnNumber) =>
@@ -219,9 +231,9 @@ public sealed class DistributorTemplateMappingControllerTests
 
     private sealed class SuccessfulInspector : ISelloutWorkbookInspector
     {
-        public Task<SelloutWorkbookPreviewDto> InspectAsync(byte[] workbook, string? worksheetName,
+        public Task<WorkbookPreviewDto> InspectAsync(byte[] workbook, string? worksheetName,
             int headerRowNumber, int firstDataRowNumber, CancellationToken cancellationToken = default) =>
-            Task.FromResult(new SelloutWorkbookPreviewDto
+            Task.FromResult(new WorkbookPreviewDto
             {
                 WorksheetName = "Data",
                 HeaderSignature = "HEADER-SIGNATURE",

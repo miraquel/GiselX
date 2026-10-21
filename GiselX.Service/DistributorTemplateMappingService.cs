@@ -163,8 +163,6 @@ public sealed class DistributorTemplateMappingService : IDistributorTemplateMapp
             errors.Add("Every mapped source column must have a header.");
         if (dto.Columns.Any(column => !Enum.IsDefined(column.CanonicalField)))
             errors.Add("Every mapped column must use a valid canonical field.");
-        if (dto.Columns.GroupBy(column => column.SourceColumnNumber).Any(group => group.Count() > 1))
-            errors.Add("A source column can only be mapped once.");
         if (dto.Columns.GroupBy(column => column.CanonicalField).Any(group => group.Count() > 1))
             errors.Add("A canonical field can only be mapped once.");
 

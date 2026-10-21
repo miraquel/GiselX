@@ -23,6 +23,8 @@
                class="btn btn-outline-secondary">Add Stock Mapping</a>
             <a asp-controller="ItemMappings" asp-action="Index" asp-route-companyId="@Model.Id"
                class="btn btn-outline-primary">Manage Item Mappings</a>
+            <a asp-controller="StockAreas" asp-action="Index" asp-route-companyId="@Model.Id"
+               class="btn btn-outline-primary">Stock areas</a>
         </div>
         @if (ViewBag.StatusMessage != null)
         {
@@ -39,6 +41,33 @@
                 </div>
             </div>
             <div class="row mb-4">
+                <label asp-for="BusinessUnitId" class="col-sm-2 col-form-label"></label>
+                <div class="col-sm-10">
+                    <select asp-for="BusinessUnitId" asp-items="ViewBag.BusinessUnitOptions" class="form-select">
+                        <option value="">-- Select Business Unit --</option>
+                    </select>
+                    <span asp-validation-for="BusinessUnitId" class="text-danger"></span>
+                </div>
+            </div>
+            <div class="row mb-4">
+                <label asp-for="ChannelId" class="col-sm-2 col-form-label"></label>
+                <div class="col-sm-10">
+                    <select asp-for="ChannelId" asp-items="ViewBag.ChannelOptions" class="form-select">
+                        <option value="">-- Select Channel --</option>
+                    </select>
+                    <span asp-validation-for="ChannelId" class="text-danger"></span>
+                </div>
+            </div>
+            <div class="row mb-4">
+                <label asp-for="SalesmanId" class="col-sm-2 col-form-label"></label>
+                <div class="col-sm-10">
+                    <select asp-for="SalesmanId" asp-items="ViewBag.SalesmanOptions" class="form-select">
+                        <option value="">-- Select Salesman --</option>
+                    </select>
+                    <span asp-validation-for="SalesmanId" class="text-danger"></span>
+                </div>
+            </div>
+            <div class="row mb-4">
                 <label asp-for="Address" class="col-sm-2 col-form-label"></label>
                 <div class="col-sm-10">
                     <input asp-for="Address" class="form-control" />
@@ -48,9 +77,14 @@
             <div class="row mb-4">
                 <label asp-for="ContactEmail" class="col-sm-2 col-form-label"></label>
                 <div class="col-sm-10">
-                    <input asp-for="ContactEmail" class="form-control" type="email" />
+                    <textarea asp-for="ContactEmail" class="form-control" rows="2" maxlength="1000"
+                              placeholder="admin@distributor.co.id; gudang@distributor.co.id"></textarea>
                     <span asp-validation-for="ContactEmail" class="text-danger"></span>
-                    <small class="text-muted">Leave blank to disable reminders for this company.</small>
+                    <small class="text-muted">
+                        Receives the upload deadline reminders and the confirmation sent when an upload
+                        completes. Separate multiple addresses with <code>;</code>.
+                        Leave blank to disable both for this company.
+                    </small>
                 </div>
             </div>
             <div class="row mb-4">

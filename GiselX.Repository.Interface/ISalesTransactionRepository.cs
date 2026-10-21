@@ -12,5 +12,7 @@ public interface ISalesTransactionRepository
     Task DeleteAsync(SalesTransaction salesTransaction, CancellationToken cancellationToken);
     Task<PagedList<SalesTransaction>> SelectAsync(PagedListRequest pagedListRequest, int companyId,
         bool useDistributorIdentity, CancellationToken cancellationToken);
+    Task<SalesSelectionSummary> SummarizeAsync(PagedListRequest request, int companyId, bool useDistributorIdentity,
+        CancellationToken cancellationToken) => throw new NotSupportedException();
     Task<IEnumerable<Period>> SelectPeriodsAsync(int companyId, CancellationToken cancellationToken);
 }

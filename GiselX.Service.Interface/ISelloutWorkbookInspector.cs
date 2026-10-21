@@ -4,7 +4,7 @@ namespace GiselX.Service.Interface;
 
 public interface ISelloutWorkbookInspector
 {
-    Task<SelloutWorkbookPreviewDto> InspectAsync(
+    Task<WorkbookPreviewDto> InspectAsync(
         byte[] workbook,
         string? worksheetName,
         int headerRowNumber,

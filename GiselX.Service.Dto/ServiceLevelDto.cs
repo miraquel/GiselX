@@ -38,4 +38,6 @@ public class ServiceLevelDto
     public string CreatedBy { get; set; } = string.Empty;
     [Display(Name = "Created Date")] public DateTime CreatedDate { get; set; } = SqlDateTime.MinValue.Value;
     public int CompanyId { get; set; }
+    [Display(Name = "Distributor")]
+    public string CompanyName { get; set; } = string.Empty;
 }

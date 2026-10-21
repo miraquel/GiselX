@@ -1,0 +1,178 @@
+@model GiselX.Service.Dto.EmailSettingDto
+@{
+    ViewData["Title"] = "Email Settings";
+    Layout = "_ContentNavbarLayout";
+}
+
+@if (TempData["StatusMessage"] is string status)
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        @status
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+@if (TempData["InfoMessage"] is string info)
+{
+    <div class="alert alert-info alert-dismissible fade show" role="alert">
+        @info Saving here stores them in the database, where a deployment cannot overwrite them.
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+<div class="card">
+    <div class="card-header d-flex align-items-center justify-content-between">
+        <h5 class="mb-0">Email Settings</h5>
+        <small class="text-muted float-end">SMTP configuration used by reminders and upload notifications</small>
+    </div>
+    <div class="card-body">
+        <form asp-action="Save" method="post">
+            @Html.AntiForgeryToken()
+            <div asp-validation-summary="All" class="text-danger mb-3"></div>
+
+            <h6 class="text-muted text-uppercase small mb-3">Server</h6>
+
+            <div class="row mb-4">
+                <label asp-for="SmtpHost" class="col-sm-3 col-form-label"></label>
+                <div class="col-sm-9">
+                    <input asp-for="SmtpHost" class="form-control" placeholder="mail.example.co.id" />
+                    <span asp-validation-for="SmtpHost" class="text-danger"></span>
+                </div>
+            </div>
+
+            <div class="row mb-4">
+                <label asp-for="SmtpPort" class="col-sm-3 col-form-label"></label>
+                <div class="col-sm-3">
+                    <input asp-for="SmtpPort" class="form-control" type="number" min="1" max="65535" />
+                    <span asp-validation-for="SmtpPort" class="text-danger"></span>
+                </div>
+                <div class="col-sm-6 pt-2">
+                    <div class="form-check">
+                        <input asp-for="EnableSsl" class="form-check-input" />
+                        <label asp-for="EnableSsl" class="form-check-label"></label>
+                        <small class="text-muted d-block">
+                            Usually on for port 587. Turn it off only for a plain internal relay on port 25.
+                        </small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row mb-4">
+                <label asp-for="Username" class="col-sm-3 col-form-label"></label>
+                <div class="col-sm-9">
+                    <input asp-for="Username" class="form-control" autocomplete="off" />
+                    <small class="text-muted">
+                        Leave blank if the relay accepts mail from this server without logging in.
+                        No login is attempted when this is empty.
+                    </small>
+                </div>
+            </div>
+
+            <div class="row mb-4">
+                <label asp-for="Password" class="col-sm-3 col-form-label"></label>
+                <div class="col-sm-9">
+                    <input asp-for="Password" class="form-control" type="password" autocomplete="new-password"
+                           placeholder="@(Model.HasStoredPassword ? "•••••••• (stored — leave blank to keep it)" : "")" />
+                    <small class="text-muted">
+                        @if (Model.HasStoredPassword)
+                        {
+                            <text>A password is already stored. Leave this blank to keep it, or type a new one to replace it.</text>
+                        }
+                        else
+                        {
+                            <text>Stored encrypted; it is never shown again after saving.</text>
+                        }
+                    </small>
+                    @if (Model.HasStoredPassword)
+                    {
+                        <div class="form-check mt-2">
+                            <input asp-for="ClearPassword" class="form-check-input" />
+                            <label asp-for="ClearPassword" class="form-check-label"></label>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <hr class="my-4" />
+            <h6 class="text-muted text-uppercase small mb-3">Sender</h6>
+
+            <div class="row mb-4">
+                <label asp-for="FromAddress" class="col-sm-3 col-form-label"></label>
+                <div class="col-sm-9">
+                    <input asp-for="FromAddress" class="form-control" placeholder="noreply@example.co.id" />
+                    <span asp-validation-for="FromAddress" class="text-danger"></span>
+                </div>
+            </div>
+
+            <div class="row mb-4">
+                <label asp-for="FromName" class="col-sm-3 col-form-label"></label>
+                <div class="col-sm-9">
+                    <input asp-for="FromName" class="form-control" placeholder="GiselX System" />
+                    <small class="text-muted">Also used as "Tim {name}" in the closing of every message.</small>
+                </div>
+            </div>
+
+            <hr class="my-4" />
+            <h6 class="text-muted text-uppercase small mb-3">Message content</h6>
+
+            <div class="row mb-4">
+                <label asp-for="DashboardBaseUrl" class="col-sm-3 col-form-label"></label>
+                <div class="col-sm-9">
+                    <input asp-for="DashboardBaseUrl" class="form-control"
+                           placeholder="https://giselx-dev.gandummas.co.id" />
+                    <small class="text-muted">
+                        Used to link an upload notification to its result page. Blank omits the link
+                        rather than sending a broken one.
+                    </small>
+                </div>
+            </div>
+
+            <div class="row mb-4">
+                <label asp-for="SupportEmail" class="col-sm-3 col-form-label"></label>
+                <div class="col-sm-9">
+                    <input asp-for="SupportEmail" class="form-control" />
+                </div>
+            </div>
+
+            <div class="row mb-4">
+                <label asp-for="SupportPhone" class="col-sm-3 col-form-label"></label>
+                <div class="col-sm-9">
+                    <input asp-for="SupportPhone" class="form-control" />
+                    <small class="text-muted">
+                        Both support fields blank omits the support sentence from distributor emails.
+                    </small>
+                </div>
+            </div>
+
+            <div class="row mb-4">
+                <label asp-for="TimeZoneId" class="col-sm-3 col-form-label"></label>
+                <div class="col-sm-9">
+                    <input asp-for="TimeZoneId" class="form-control" />
+                    <small class="text-muted">
+                        Upload times are stored in UTC and shown in this zone.
+                        <code>SE Asia Standard Time</code> or <code>Asia/Jakarta</code> for WIB.
+                    </small>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-sm-9 offset-sm-3 d-flex align-items-center gap-3">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="ri-save-line me-1"></i> Save Settings
+                    </button>
+                    <a asp-controller="EmailTest" asp-action="Index" class="btn btn-outline-secondary">
+                        <i class="ri-mail-send-line me-1"></i> Go to Email Test
+                    </a>
+                    @if (Model.ModifiedDate is not null)
+                    {
+                        <small class="text-muted">
+                            Last saved @Model.ModifiedDate.Value.ToString("dd MMM yyyy HH:mm") UTC
+                            by @Model.ModifiedBy
+                        </small>
+                    }
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts { <partial name="_ValidationScriptsPartial" /> }

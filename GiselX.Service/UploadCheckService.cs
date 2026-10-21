@@ -15,7 +15,11 @@ public class UploadCheckService : IUploadCheckService
     public Task<bool> HasUploadedThisPeriodAsync(int companyId, bool isWeekly)
     {
         var (from, to) = isWeekly ? GetCurrentIsoWeek() : GetCurrentMonth();
-        return _repository.HasDataForPeriodAsync(companyId, from, to);
+        // The period is a server-local calendar month or week, but the newer tables record UTC. Without
+        // the conversion a WIB upload made before 07:00 on the 1st (or a Monday) lands in the previous
+        // period, and the company is reminded about data it has already sent.
+        return _repository.HasDataForPeriodAsync(companyId, from, to,
+            from.ToUniversalTime(), to.ToUniversalTime());
     }
 
     private static (DateTime From, DateTime To) GetCurrentMonth()

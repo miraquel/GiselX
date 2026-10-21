@@ -13,6 +13,8 @@ BEGIN
         [ProductPcsInCtn],
         [ProductNetto],
         [ProductUnit],
+        [SmallestUnit],
+        [SmallestUnitQty],
         [PriceUnit],
         [SaldoAwal],
         [SaldoMasukPO],

@@ -9,7 +9,7 @@ namespace GiselX.Repository;
 
 public class SalesTransactionRepository : ISalesTransactionRepository
 {
-    private static readonly HashSet<string> SelectableFields =
+    internal static readonly HashSet<string> SelectableFields =
     [
         nameof(SalesTransaction.CustomerId), nameof(SalesTransaction.CustomerName),
         nameof(SalesTransaction.CustomerAlias), nameof(SalesTransaction.CustomerAddress),
@@ -22,8 +22,11 @@ public class SalesTransactionRepository : ISalesTransactionRepository
         nameof(SalesTransaction.GrossValue), nameof(SalesTransaction.DiscountValue),
         nameof(SalesTransaction.DiscountPct), nameof(SalesTransaction.NetValue), nameof(SalesTransaction.InKg),
         nameof(SalesTransaction.ExpiredDate), nameof(SalesTransaction.InvoiceDate),
-        nameof(SalesTransaction.ShipDate), nameof(SalesTransaction.CreatedDate)
+        nameof(SalesTransaction.ShipDate), nameof(SalesTransaction.CreatedDate),
+        nameof(SalesTransaction.CompanyName)
     ];
+    internal static readonly HashSet<string> NormalSelectableFields = SelectableFields
+        .Where(field => field != nameof(SalesTransaction.CompanyName)).ToHashSet();
 
     private readonly IDbConnection _dbConnection;
     private readonly IDbTransaction _dbTransaction;
@@ -59,7 +62,7 @@ public class SalesTransactionRepository : ISalesTransactionRepository
         dataTable.Columns.Add(nameof(SalesTransaction.ProductBrand), typeof(string));
         dataTable.Columns.Add(nameof(SalesTransaction.ProductName), typeof(string));
         dataTable.Columns.Add(nameof(SalesTransaction.ProductPackaging), typeof(string));
-        dataTable.Columns.Add(nameof(SalesTransaction.ProductPcsInCtn), typeof(int));
+        dataTable.Columns.Add(nameof(SalesTransaction.ProductPcsInCtn), typeof(decimal));
         dataTable.Columns.Add(nameof(SalesTransaction.BatchNumber), typeof(string));
         dataTable.Columns.Add(nameof(SalesTransaction.ExpiredDate), typeof(DateTime));
         dataTable.Columns.Add(nameof(SalesTransaction.InvoiceNo), typeof(string));
@@ -136,6 +139,9 @@ public class SalesTransactionRepository : ISalesTransactionRepository
     public async Task<IEnumerable<SalesTransaction>> SelectByCustPeriodAsync(int companyId, int year, int month,
         bool useDistributorIdentity, CancellationToken cancellationToken)
     {
+        if (companyId == 0)
+            return await SelectAllByPeriodAsync(year, month, useDistributorIdentity, cancellationToken);
+
         const string query = "GiselSales_SelectByCustPeriod";
 
         var parameters = new DynamicParameters();
@@ -177,10 +183,13 @@ public class SalesTransactionRepository : ISalesTransactionRepository
     public async Task<PagedList<SalesTransaction>> SelectAsync(PagedListRequest pagedListRequest, int companyId,
         bool useDistributorIdentity, CancellationToken cancellationToken)
     {
+        if (companyId == 0)
+            return await SelectAllAsync(pagedListRequest, useDistributorIdentity, cancellationToken);
+
         const string query = "GiselSales_Select";
 
         var parameters = new DynamicParameters();
-        foreach (var parameter in pagedListRequest.Filters.Where(parameter => SelectableFields.Contains(parameter.Key)))
+        foreach (var parameter in pagedListRequest.Filters.Where(parameter => NormalSelectableFields.Contains(parameter.Key)))
         {
             if (string.IsNullOrWhiteSpace(parameter.Value))
             {
@@ -254,6 +263,13 @@ public class SalesTransactionRepository : ISalesTransactionRepository
 
     public async Task<IEnumerable<Period>> SelectPeriodsAsync(int companyId, CancellationToken cancellationToken)
     {
+        if (companyId == 0)
+            return await _dbConnection.QueryAsync<Period>(new CommandDefinition("""
+                SELECT DISTINCT YEAR(InvoiceDate) AS [Year], MONTH(InvoiceDate) AS [Month]
+                FROM SalesTransaction
+                ORDER BY [Year] DESC, [Month] DESC;
+                """, transaction: _dbTransaction, cancellationToken: cancellationToken));
+
         const string query = "GiselSales_SelectPeriods";
 
         var parameters = new DynamicParameters();
@@ -270,4 +286,144 @@ public class SalesTransactionRepository : ISalesTransactionRepository
 
         return await _dbConnection.QueryAsync<Period>(command);
     }
+
+    public Task<SalesSelectionSummary> SummarizeAsync(PagedListRequest request, int companyId,
+        bool useDistributorIdentity, CancellationToken cancellationToken)
+    {
+        var (sql, parameters) = SalesSelectionSummaryQuery.Build(request, companyId, useDistributorIdentity);
+        return _dbConnection.QuerySingleAsync<SalesSelectionSummary>(new CommandDefinition(sql, parameters,
+            _dbTransaction, cancellationToken: cancellationToken));
+    }
+
+    private async Task<PagedList<SalesTransaction>> SelectAllAsync(PagedListRequest request,
+        bool useDistributorIdentity, CancellationToken cancellationToken)
+    {
+        var parameters = new DynamicParameters();
+        parameters.Add("PageNumber", Math.Max(1, request.PageNumber));
+        parameters.Add("PageSize", Math.Clamp(request.PageSize, 1, 500));
+        var clauses = new List<string>();
+        var periodClauses = new List<string>();
+
+        if (request.Filters.TryGetValue("Year", out var yearText) && int.TryParse(yearText, out var year))
+        {
+            parameters.Add("Year", year);
+            periodClauses.Add("YEAR(st.InvoiceDate)=@Year");
+        }
+        if (request.Filters.TryGetValue("Month", out var monthText) && int.TryParse(monthText, out var month))
+        {
+            parameters.Add("Month", month);
+            periodClauses.Add("MONTH(st.InvoiceDate)=@Month");
+        }
+
+        foreach (var filter in request.Filters.Where(filter => SelectableFields.Contains(filter.Key)))
+        {
+            if (string.IsNullOrWhiteSpace(filter.Value)) continue;
+            var property = typeof(SalesTransaction).GetProperty(filter.Key);
+            if (property is null) continue;
+            var expression = GetAdministratorColumnExpression(filter.Key, useDistributorIdentity);
+            switch (property.PropertyType)
+            {
+                case { } type when type == typeof(string):
+                    var text = filter.Value.Replace('*', '%');
+                    parameters.Add(filter.Key, text.Contains('%') ? text : $"%{text}%");
+                    clauses.Add($"{expression} LIKE @{filter.Key}");
+                    break;
+                case { } type when type == typeof(int):
+                    if (int.TryParse(filter.Value, out var intValue))
+                    { parameters.Add(filter.Key, intValue); clauses.Add($"{expression}=@{filter.Key}"); }
+                    break;
+                case { } type when type == typeof(decimal):
+                    if (decimal.TryParse(filter.Value, out var decimalValue))
+                    { parameters.Add(filter.Key, decimalValue); clauses.Add($"{expression}=@{filter.Key}"); }
+                    break;
+                case { } type when type == typeof(DateTime):
+                    if (DateTime.TryParse(filter.Value, out var dateValue))
+                    { parameters.Add(filter.Key, dateValue); clauses.Add($"CONVERT(date,{expression})=CONVERT(date,@{filter.Key})"); }
+                    break;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.SearchTerm))
+        {
+            var search = request.SearchTerm.Replace('*', '%');
+            parameters.Add("Search", search.Contains('%') ? search : $"%{search}%");
+            clauses.Add($"({GetAdministratorColumnExpression(nameof(SalesTransaction.ProductId), useDistributorIdentity)} LIKE @Search OR " +
+                        $"{GetAdministratorColumnExpression(nameof(SalesTransaction.ProductName), useDistributorIdentity)} LIKE @Search OR c.Name LIKE @Search)");
+        }
+
+        var filters = clauses.Count == 0 ? string.Empty : " AND " + string.Join(" AND ", clauses);
+        var periodFilter = periodClauses.Count == 0 ? string.Empty : " WHERE " + string.Join(" AND ", periodClauses);
+        var sort = typeof(SalesTransaction).GetProperties()
+            .FirstOrDefault(property => SelectableFields.Contains(property.Name) &&
+                                        string.Equals(property.Name, request.SortBy,
+                                            StringComparison.OrdinalIgnoreCase))?.Name
+            ?? nameof(SalesTransaction.InvoiceDate);
+        var sortExpression = GetAdministratorColumnExpression(sort, useDistributorIdentity);
+        var direction = request.IsSortAscending ? "ASC" : "DESC";
+        var projection = GetAdministratorProjection(useDistributorIdentity);
+        var query = $"""
+            WITH LatestUploads AS (
+                SELECT st.*, MAX(st.CreatedDate) OVER (PARTITION BY CompanyId) AS LatestCreatedDate
+                FROM SalesTransaction st
+                {periodFilter}
+            )
+            SELECT {projection}
+            FROM LatestUploads st INNER JOIN Company c ON c.Id=st.CompanyId
+            WHERE st.CreatedDate=st.LatestCreatedDate {filters}
+            ORDER BY {sortExpression} {direction}, st.Id
+            OFFSET (@PageNumber-1)*@PageSize ROWS FETCH NEXT @PageSize ROWS ONLY;
+            WITH LatestUploads AS (
+                SELECT st.*, MAX(st.CreatedDate) OVER (PARTITION BY CompanyId) AS LatestCreatedDate
+                FROM SalesTransaction st
+                {periodFilter}
+            )
+            SELECT COUNT(*)
+            FROM LatestUploads st INNER JOIN Company c ON c.Id=st.CompanyId
+            WHERE st.CreatedDate=st.LatestCreatedDate {filters};
+            """;
+        using var result = await _dbConnection.QueryMultipleAsync(new CommandDefinition(query, parameters,
+            _dbTransaction, cancellationToken: cancellationToken));
+        var items = (await result.ReadAsync<SalesTransaction>()).ToList();
+        var totalCount = await result.ReadSingleAsync<int>();
+        return new PagedList<SalesTransaction>(items, Math.Max(1, request.PageNumber),
+            Math.Clamp(request.PageSize, 1, 500), totalCount);
+    }
+
+    private Task<IEnumerable<SalesTransaction>> SelectAllByPeriodAsync(int year, int month,
+        bool useDistributorIdentity, CancellationToken cancellationToken)
+    {
+        var projection = GetAdministratorProjection(useDistributorIdentity);
+        return _dbConnection.QueryAsync<SalesTransaction>(new CommandDefinition($"""
+            WITH LatestUploads AS (
+                SELECT st.*, MAX(st.CreatedDate) OVER (PARTITION BY CompanyId) AS LatestCreatedDate
+                FROM SalesTransaction st
+                WHERE YEAR(st.InvoiceDate)=@Year AND MONTH(st.InvoiceDate)=@Month
+            )
+            SELECT {projection}
+            FROM LatestUploads st INNER JOIN Company c ON c.Id=st.CompanyId
+            WHERE st.CreatedDate=st.LatestCreatedDate
+            ORDER BY c.Name, st.InvoiceDate, st.InvoiceNo, st.Id;
+            """, new { Year = year, Month = month }, _dbTransaction, cancellationToken: cancellationToken));
+    }
+
+    internal static string GetAdministratorColumnExpression(string field, bool useDistributorIdentity) => field switch
+    {
+        nameof(SalesTransaction.CompanyName) => "c.Name",
+        nameof(SalesTransaction.ProductId) when useDistributorIdentity =>
+            "COALESCE(NULLIF(st.DistributorProductId,''),st.ProductId)",
+        nameof(SalesTransaction.ProductName) when useDistributorIdentity =>
+            "COALESCE(NULLIF(st.DistributorProductName,''),st.ProductName)",
+        _ => $"st.[{field}]"
+    };
+
+    private static string GetAdministratorProjection(bool useDistributorIdentity) => $"""
+        st.Id, st.CustomerId, st.CustomerName, st.CustomerAlias, st.CustomerAddress,
+        {GetAdministratorColumnExpression(nameof(SalesTransaction.ProductId), useDistributorIdentity)} AS ProductId,
+        st.ProductBrand,
+        {GetAdministratorColumnExpression(nameof(SalesTransaction.ProductName), useDistributorIdentity)} AS ProductName,
+        st.ProductPackaging, st.ProductPcsInCtn, st.BatchNumber, st.ExpiredDate, st.InvoiceNo,
+        st.InvoiceDate, st.InvoiceQty, st.InvoiceUnit, st.UnitPrice, st.GrossValue, st.DiscountValue,
+        st.DiscountPct, st.NetValue, st.InKg, st.GeisaPOId, st.ShipDate, st.SalesmanNameGMK,
+        st.CompanyId, st.CreatedDate, c.Name AS CompanyName
+        """;
 }

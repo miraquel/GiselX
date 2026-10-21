@@ -76,7 +76,7 @@ The existing validation rules remain in force:
 - exactly one active mapping for the current company matches the worksheet and ordered header signature;
 - all eight required canonical values are present on each transaction row;
 - mapped integers, decimals, and dates convert without fallback;
-- `InvoiceQty` is greater than zero;
+- `InvoiceQty` is non-zero (negative quantities represent returns);
 - strings fit the canonical maximum lengths;
 - at least one transaction row exists.
 

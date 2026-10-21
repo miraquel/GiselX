@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Data;
 using GiselX.Domain;
 using GiselX.Repository.Interface;
@@ -26,12 +27,38 @@ public sealed class SelloutUploadServiceTests
     }
 
     [Fact]
+    public async Task PreflightAsync_summarizes_values_from_valid_rows_only()
+    {
+        var analysis = ValidAnalysis(multiWeek: false);
+        analysis.Rows[0].InvoiceQty = 2m;
+        analysis.Rows[0].UnitPrice = 10m;
+        analysis.Rows[0].DiscountValue = 1m;
+        analysis.Rows[1].InvoiceQty = 3m;
+        analysis.Rows[1].GrossValue = 45m;
+        analysis.Rows[1].DiscountValue = 5m;
+        analysis.Rows[1].NetValue = 38m;
+        analysis.Rows = analysis.Rows.Append(new SelloutStaging
+        {
+            SourceRowNumber = 5, IsValid = false, InvoiceQty = 999m,
+            GrossValue = 999m, DiscountValue = 999m, NetValue = 999m
+        }).ToList();
+        var (service, _, _) = CreateService(analysis);
+
+        var response = await service.PreflightAsync(Stream(), "sales.xlsx", 9, CancellationToken.None);
+
+        Assert.Equal(5m, response.Data!.TotalInvoiceQty);
+        Assert.Equal(65m, response.Data.TotalGrossValue);
+        Assert.Equal(6m, response.Data.TotalDiscountValue);
+        Assert.Equal(57m, response.Data.TotalNetValue);
+    }
+
+    [Fact]
     public async Task UploadAsync_requires_explicit_confirmation_for_multiple_weeks()
     {
         var (service, repository, transaction) = CreateService(ValidAnalysis(multiWeek: true));
 
         var response = await service.UploadAsync(
-            Stream(), "sales.xlsx", 9, multiWeekConfirmed: false, "uploader", CancellationToken.None);
+            Stream(), "sales.xlsx", 9, multiWeekConfirmed: false, "uploader", ConfirmedSha(), CancellationToken.None);
 
         Assert.False(response.IsSuccess);
         Assert.Contains("multiple reporting weeks", response.Message, StringComparison.OrdinalIgnoreCase);
@@ -45,7 +72,7 @@ public sealed class SelloutUploadServiceTests
         var (service, repository, transaction) = CreateService(ValidAnalysis(multiWeek: true));
 
         var response = await service.UploadAsync(
-            Stream(), "sales.xlsx", 9, multiWeekConfirmed: true, "uploader", CancellationToken.None);
+            Stream(), "sales.xlsx", 9, multiWeekConfirmed: true, "uploader", ConfirmedSha(), CancellationToken.None);
 
         Assert.True(response.IsSuccess);
         Assert.Equal(50, response.Data!.GroupId);
@@ -58,7 +85,7 @@ public sealed class SelloutUploadServiceTests
     }
 
     [Fact]
-    public async Task UploadAsync_does_not_stage_or_promote_when_any_row_is_invalid()
+    public async Task UploadAsync_refuses_the_workbook_when_the_invalid_share_reaches_the_limit()
     {
         var analysis = ValidAnalysis(multiWeek: false);
         analysis.RowErrors =
@@ -73,7 +100,7 @@ public sealed class SelloutUploadServiceTests
         var (service, repository, transaction) = CreateService(analysis);
 
         var response = await service.UploadAsync(
-            Stream(), "sales.xlsx", 9, multiWeekConfirmed: false, "uploader", CancellationToken.None);
+            Stream(), "sales.xlsx", 9, multiWeekConfirmed: false, "uploader", ConfirmedSha(), CancellationToken.None);
 
         Assert.False(response.IsSuccess);
         Assert.Empty(repository.Batches);
@@ -94,7 +121,7 @@ public sealed class SelloutUploadServiceTests
         var (service, repository, _) = CreateService(analysis);
 
         var response = await service.UploadAsync(
-            Stream(), "sales.xlsx", 9, multiWeekConfirmed: false, "uploader", CancellationToken.None);
+            Stream(), "sales.xlsx", 9, multiWeekConfirmed: false, "uploader", ConfirmedSha(), CancellationToken.None);
 
         Assert.True(response.IsSuccess);
         var staging = repository.StagingRows.First();
@@ -112,7 +139,7 @@ public sealed class SelloutUploadServiceTests
         repository.ThrowOnPromote = true;
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => service.UploadAsync(
-            Stream(), "sales.xlsx", 9, multiWeekConfirmed: true, "uploader", CancellationToken.None));
+            Stream(), "sales.xlsx", 9, multiWeekConfirmed: true, "uploader", ConfirmedSha(), CancellationToken.None));
 
         Assert.False(transaction.CommitCalled);
     }
@@ -146,8 +173,194 @@ public sealed class SelloutUploadServiceTests
         Assert.Equal(9, Assert.Single(response.Data.Errors).SourceRowNumber);
     }
 
+    [Fact]
+    public async Task UploadAsync_publishes_the_valid_rows_when_only_a_few_are_invalid()
+    {
+        // One bad cell in twenty-one rows is 4.8%, under the 5% limit: the month still goes through.
+        var analysis = AnalysisOf(Rows(valid: 20, invalid: 1, week: new DateTime(2026, 7, 4)));
+        var (service, repository, transaction) = CreateService(analysis);
+
+        var response = await service.UploadAsync(
+            Stream(), "sales.xlsx", 9, multiWeekConfirmed: false, "uploader", ConfirmedSha(), CancellationToken.None);
+
+        Assert.True(response.IsSuccess);
+        Assert.Equal(SelloutUploadBatchStatus.CompletedWithWarnings, response.Data!.Status);
+        Assert.Equal(1, response.Data.InvalidRows);
+        Assert.Equal(50, repository.PromotedGroupId);
+        // The invalid row is staged beside the valid ones: it is the record of what was excluded.
+        Assert.Equal(21, repository.StagingRows.Count);
+        Assert.Single(repository.StagingRows, row => !row.IsValid);
+        Assert.Equal(1, transaction.CommitCount);
+    }
+
+    [Fact]
+    public async Task UploadAsync_names_the_proportion_and_the_limit_when_it_refuses()
+    {
+        var analysis = AnalysisOf(Rows(valid: 8, invalid: 2, week: new DateTime(2026, 7, 4)));
+        var (service, repository, _) = CreateService(analysis);
+
+        var response = await service.UploadAsync(
+            Stream(), "sales.xlsx", 9, multiWeekConfirmed: false, "uploader", ConfirmedSha(), CancellationToken.None);
+
+        Assert.False(response.IsSuccess);
+        Assert.Contains("20%", response.Message, StringComparison.Ordinal);
+        Assert.Contains("5% limit", response.Message, StringComparison.Ordinal);
+        Assert.Empty(repository.StagingRows);
+        Assert.Null(repository.PromotedGroupId);
+    }
+
+    [Fact]
+    public async Task UploadAsync_refuses_a_single_invalid_row_when_the_limit_is_zero()
+    {
+        // Zero is the escape hatch back to the older all-or-nothing behaviour.
+        var analysis = AnalysisOf(Rows(valid: 20, invalid: 1, week: new DateTime(2026, 7, 4)));
+        var (service, repository, _) = CreateService(analysis, maxInvalidRowPercentage: 0m);
+
+        var response = await service.UploadAsync(
+            Stream(), "sales.xlsx", 9, multiWeekConfirmed: false, "uploader", ConfirmedSha(), CancellationToken.None);
+
+        Assert.False(response.IsSuccess);
+        Assert.Empty(repository.StagingRows);
+        Assert.Null(repository.PromotedGroupId);
+    }
+
+    [Fact]
+    public async Task UploadAsync_reports_an_invalid_row_that_has_no_date_without_staging_it()
+    {
+        // A missing invoice date is frequently the very reason a row is invalid, and it leaves the row
+        // with no reporting week to be staged against.
+        var rows = Rows(valid: 20, invalid: 0, week: new DateTime(2026, 7, 4))
+            .Append((InvoiceDate: (DateTime?)null, IsValid: false)).ToArray();
+        var (service, repository, _) = CreateService(AnalysisOf(rows));
+
+        var response = await service.UploadAsync(
+            Stream(), "sales.xlsx", 9, multiWeekConfirmed: false, "uploader", ConfirmedSha(), CancellationToken.None);
+
+        Assert.True(response.IsSuccess);
+        Assert.Equal(20, repository.StagingRows.Count);
+        // The group still carries the row in its counts, so nothing is lost from the audit.
+        Assert.Equal(21, Assert.Single(repository.Groups).TotalRows);
+        Assert.Equal(1, repository.Groups[0].InvalidRows);
+    }
+
+    [Fact]
+    public async Task UploadAsync_does_not_stage_an_invalid_row_from_a_week_no_valid_row_reached()
+    {
+        var rows = Rows(valid: 20, invalid: 0, week: new DateTime(2026, 7, 4))
+            .Append((InvoiceDate: (DateTime?)new DateTime(2026, 8, 15), IsValid: false)).ToArray();
+        var (service, repository, _) = CreateService(AnalysisOf(rows));
+
+        var response = await service.UploadAsync(
+            Stream(), "sales.xlsx", 9, multiWeekConfirmed: false, "uploader", ConfirmedSha(), CancellationToken.None);
+
+        Assert.True(response.IsSuccess);
+        Assert.Single(repository.Batches);
+        Assert.Equal(20, repository.StagingRows.Count);
+    }
+
+    [Fact]
+    public async Task UploadAsync_completes_cleanly_when_every_row_is_valid()
+    {
+        var analysis = AnalysisOf(Rows(valid: 5, invalid: 0, week: new DateTime(2026, 7, 4)));
+        var (service, _, _) = CreateService(analysis);
+
+        var response = await service.UploadAsync(
+            Stream(), "sales.xlsx", 9, multiWeekConfirmed: false, "uploader", ConfirmedSha(), CancellationToken.None);
+
+        Assert.True(response.IsSuccess);
+        Assert.Equal(SelloutUploadBatchStatus.Completed, response.Data!.Status);
+        Assert.Equal(0, response.Data.InvalidRows);
+    }
+
+    private static (DateTime? InvoiceDate, bool IsValid)[] Rows(int valid, int invalid, DateTime week) =>
+        Enumerable.Repeat(((DateTime?)week, true), valid)
+            .Concat(Enumerable.Repeat(((DateTime?)week, false), invalid))
+            .ToArray();
+
+    /// <summary>
+    /// Builds an analysis the way the real service does, in particular deriving the reporting weeks from
+    /// valid rows that carry a date — which is what leaves some invalid rows with no week to belong to.
+    /// </summary>
+
+    /// <summary>Mirrors SelloutWorkbookParser.GetMonday, which is internal to the service assembly.</summary>
+    private static DateTime MondayOf(DateTime date) => date.Date.AddDays(-(((int)date.DayOfWeek + 6) % 7));
+
+    private static SelloutWorkbookAnalysisDto AnalysisOf((DateTime? InvoiceDate, bool IsValid)[] rows)
+    {
+        var staged = rows.Select((row, index) => new SelloutStaging
+        {
+            SourceRowNumber = index + 3, InvoiceDate = row.InvoiceDate, IsValid = row.IsValid
+        }).ToList();
+        return new SelloutWorkbookAnalysisDto
+        {
+            Mapping = new DistributorTemplateMappingDto { Id = 4, Name = "Mapping Sellout" },
+            Rows = staged,
+            WeekSummaries = staged
+                .Where(row => row.IsValid && row.InvoiceDate.HasValue)
+                .GroupBy(row => MondayOf(row.InvoiceDate!.Value))
+                .OrderBy(group => group.Key)
+                .Select(group => new SelloutWeekSummaryDto
+                {
+                    ReportingWeekStart = group.Key, RowCount = group.Count()
+                })
+                .ToList()
+        };
+    }
+
+    [Fact]
+    public async Task A_completed_upload_notifies_with_the_group_totals_and_its_weeks()
+    {
+        var notifications = new RecordingUploadNotificationDispatcher();
+        var (service, repository, _) = CreateService(
+            ValidAnalysis(multiWeek: false), notifications: notifications);
+
+        var response = await service.UploadAsync(Stream(), "sales.xlsx", 9, multiWeekConfirmed: true,
+            "budi", ConfirmedSha(), CancellationToken.None);
+
+        Assert.True(response.IsSuccess);
+        var notification = Assert.Single(notifications.Enqueued);
+        Assert.Equal(9, notification.CompanyId);
+        Assert.Equal(UploadNotificationKind.Sellout, notification.Kind);
+        Assert.Equal("budi", notification.UploadedBy);
+        Assert.Equal("sales.xlsx", notification.OriginalFileName);
+        Assert.Equal(repository.Groups.Single().Id, notification.Reference);
+        Assert.StartsWith("Minggu ", notification.PeriodLabel);
+    }
+
+    [Fact]
+    public async Task A_multi_week_upload_names_the_range_it_replaced()
+    {
+        var notifications = new RecordingUploadNotificationDispatcher();
+        var (service, _, _) = CreateService(ValidAnalysis(multiWeek: true), notifications: notifications);
+
+        await service.UploadAsync(Stream(), "sales.xlsx", 9, multiWeekConfirmed: true,
+            "budi", ConfirmedSha(), CancellationToken.None);
+
+        var notification = Assert.Single(notifications.Enqueued);
+        Assert.Contains(" minggu, ", notification.PeriodLabel);
+    }
+
+    [Fact]
+    public async Task A_workbook_refused_for_too_many_invalid_rows_notifies_nobody()
+    {
+        // One row of two is invalid, which is above a 0% tolerance, so nothing is published.
+        var notifications = new RecordingUploadNotificationDispatcher();
+        var analysis = AnalysisOf([
+            (new DateTime(2026, 7, 4), true),
+            (new DateTime(2026, 7, 5), false)
+        ]);
+        var (service, _, _) = CreateService(
+            analysis, maxInvalidRowPercentage: 0m, notifications: notifications);
+
+        await service.UploadAsync(Stream(), "sales.xlsx", 9, multiWeekConfirmed: true,
+            "budi", ConfirmedSha(), CancellationToken.None);
+
+        Assert.Empty(notifications.Enqueued);
+    }
+
     private static (SelloutUploadService Service, FakeUploadRepository Repository, FakeTransaction Transaction)
-        CreateService(SelloutWorkbookAnalysisDto analysis)
+        CreateService(SelloutWorkbookAnalysisDto analysis, decimal maxInvalidRowPercentage = 5m,
+            IUploadNotificationDispatcher? notifications = null, IUploadArchive? archive = null)
     {
         var repository = new FakeUploadRepository();
         var transaction = new FakeTransaction();
@@ -155,11 +368,57 @@ public sealed class SelloutUploadServiceTests
             repository,
             new FakeAnalysisService(analysis),
             transaction,
-            Options.Create(new SelloutUploadOptions { MaxFileSizeBytes = 1024 }));
+            Options.Create(new SelloutUploadOptions
+            {
+                MaxFileSizeBytes = 1024, MaxInvalidRowPercentage = maxInvalidRowPercentage
+            }),
+            notifications ?? new RecordingUploadNotificationDispatcher(),
+            archive ?? new RecordingUploadArchive());
         return (service, repository, transaction);
     }
 
+    [Fact]
+    public async Task UploadAsync_refuses_a_workbook_that_is_not_the_one_that_was_confirmed()
+    {
+        var (service, repository, transaction) = CreateService(ValidAnalysis(multiWeek: false));
+        var otherWorkbook = Convert.ToHexString(SHA256.HashData([9, 9, 9])).ToLowerInvariant();
+
+        var response = await service.UploadAsync(Stream(), "sales.xlsx", 9, multiWeekConfirmed: false,
+            "uploader", otherWorkbook, CancellationToken.None);
+
+        Assert.False(response.IsSuccess);
+        Assert.Contains("not the workbook that was uploaded", response.Message, StringComparison.Ordinal);
+        Assert.Empty(repository.Groups);
+        Assert.False(transaction.CommitCalled);
+    }
+
+    [Fact]
+    public async Task UploadAsync_refuses_when_no_confirmation_accompanies_the_workbook()
+    {
+        var (service, repository, _) = CreateService(ValidAnalysis(multiWeek: false));
+
+        var response = await service.UploadAsync(Stream(), "sales.xlsx", 9, multiWeekConfirmed: false,
+            "uploader", null, CancellationToken.None);
+
+        Assert.False(response.IsSuccess);
+        Assert.Empty(repository.Groups);
+    }
+
+    [Fact]
+    public async Task PreflightAsync_reports_the_hash_the_upload_has_to_quote_back()
+    {
+        var (service, _, _) = CreateService(ValidAnalysis(multiWeek: false));
+
+        var response = await service.PreflightAsync(Stream(), "sales.xlsx", 9, CancellationToken.None);
+
+        Assert.Equal(ConfirmedSha(), response.Data!.FileSha256);
+    }
+
     private static MemoryStream Stream() => new([1, 2, 3, 4]);
+
+    /// <summary>The SHA-256 preflight reports for the bytes Stream() supplies, quoted back on upload.</summary>
+    private static string ConfirmedSha() =>
+        Convert.ToHexString(SHA256.HashData([1, 2, 3, 4])).ToLowerInvariant();
 
     private static SelloutWorkbookAnalysisDto ValidAnalysis(bool multiWeek)
     {
@@ -230,7 +489,16 @@ public sealed class SelloutUploadServiceTests
             return Task.CompletedTask;
         }
 
-        public Task MarkGroupFailedAsync(long groupId, int totalRows, int invalidRows, string errorSummary,
+        public string? ArchivedFilePath { get; private set; }
+
+    public Task SetArchivedFilePathAsync(long groupId, string archivedFilePath,
+        CancellationToken cancellationToken)
+    {
+        ArchivedFilePath = archivedFilePath;
+        return Task.CompletedTask;
+    }
+
+    public Task MarkGroupFailedAsync(long groupId, int totalRows, int invalidRows, string errorSummary,
             string validationErrorsJson, CancellationToken cancellationToken) => Task.CompletedTask;
 
         public Task<(SelloutUploadGroup Group, IReadOnlyList<SelloutUploadBatch> Batches, IReadOnlyList<SelloutStaging> Rows)?> GetGroupAsync(

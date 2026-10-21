@@ -9,8 +9,8 @@ public sealed class ItemMappingWorkbookParserTests
     public void Parse_reports_duplicate_normalized_distributor_ids()
     {
         var bytes = Workbook(
-            ("4100039", "Cream Caramel", " P0003 ", "Caramel Mix"),
-            ("4100040", "Other", "p0003", "Other Name"));
+            ("4100039", "Cream Caramel", " P0003 ", "Caramel Mix", "1"),
+            ("4100040", "Other", "p0003", "Other Name", "0"));
 
         var result = new ItemMappingWorkbookParser().Parse(bytes);
 
@@ -20,9 +20,9 @@ public sealed class ItemMappingWorkbookParserTests
     }
 
     [Fact]
-    public void Parse_requires_the_exact_four_headers()
+    public void Parse_requires_the_exact_five_headers()
     {
-        var bytes = WorkbookWithHeaders("GMK Item ID", "GMK Item Name", "Distributor Item ID", "Name");
+        var bytes = WorkbookWithHeaders("GMK Item ID", "GMK Item Name", "Distributor Item ID", "Name", "Status");
 
         var result = new ItemMappingWorkbookParser().Parse(bytes);
 
@@ -34,7 +34,7 @@ public sealed class ItemMappingWorkbookParserTests
     [Fact]
     public void Parse_trims_values_and_ignores_fully_blank_trailing_rows()
     {
-        var bytes = Workbook((" 4100039 ", " Cream Caramel ", " P0003 ", " Caramel Mix "));
+        var bytes = Workbook((" 4100039 ", " Cream Caramel ", " P0003 ", " Caramel Mix ", " 0 "));
 
         var result = new ItemMappingWorkbookParser().Parse(bytes);
 
@@ -44,12 +44,13 @@ public sealed class ItemMappingWorkbookParserTests
         Assert.Equal("Cream Caramel", mapping.GmkItemName);
         Assert.Equal("P0003", mapping.DistributorItemId);
         Assert.Equal("Caramel Mix", mapping.DistributorItemName);
+        Assert.False(mapping.IsActive);
     }
 
     [Fact]
     public void Parse_reports_missing_and_overlength_values_at_the_source_row()
     {
-        var bytes = Workbook(("", new string('G', 201), "P0003", "Caramel Mix"));
+        var bytes = Workbook(("", new string('G', 201), "P0003", "Caramel Mix", "1"));
 
         var result = new ItemMappingWorkbookParser().Parse(bytes);
 
@@ -59,7 +60,24 @@ public sealed class ItemMappingWorkbookParserTests
         Assert.Contains(result.Errors, error => error.Field == "GMK Item Name" && error.Reason.Contains("maximum length"));
     }
 
-    private static byte[] Workbook(params (string GmkId, string GmkName, string DistributorId, string DistributorName)[] rows)
+    [Theory]
+    [InlineData("true")]
+    [InlineData("false")]
+    [InlineData("2")]
+    [InlineData("Active")]
+    public void Parse_rejects_status_values_other_than_one_or_zero(string status)
+    {
+        var bytes = Workbook(("4100039", "Cream Caramel", "P0003", "Caramel Mix", status));
+
+        var result = new ItemMappingWorkbookParser().Parse(bytes);
+
+        var error = Assert.Single(result.Errors);
+        Assert.Equal("Status", error.Field);
+        Assert.Contains("1 (Active) or 0 (Inactive)", error.Reason);
+    }
+
+    private static byte[] Workbook(params (string GmkId, string GmkName, string DistributorId, string DistributorName,
+        string Status)[] rows)
     {
         using var workbook = new XLWorkbook();
         var sheet = workbook.AddWorksheet("Mappings");
@@ -67,12 +85,14 @@ public sealed class ItemMappingWorkbookParserTests
         sheet.Cell(1, 2).Value = "GMK Item Name";
         sheet.Cell(1, 3).Value = "Distributor Item ID";
         sheet.Cell(1, 4).Value = "Distributor Item Name";
+        sheet.Cell(1, 5).Value = "Status";
         for (var index = 0; index < rows.Length; index++)
         {
             sheet.Cell(index + 2, 1).Value = rows[index].GmkId;
             sheet.Cell(index + 2, 2).Value = rows[index].GmkName;
             sheet.Cell(index + 2, 3).Value = rows[index].DistributorId;
             sheet.Cell(index + 2, 4).Value = rows[index].DistributorName;
+            sheet.Cell(index + 2, 5).Value = rows[index].Status;
         }
 
         using var stream = new MemoryStream();

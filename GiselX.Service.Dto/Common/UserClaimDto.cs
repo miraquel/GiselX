@@ -4,4 +4,5 @@ public class UserClaimDto
 {
     public Guid UserId { get; init; }
     public string Username { get; init; } = string.Empty;
+    public bool IsAdministrator { get; init; }
 }

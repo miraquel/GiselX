@@ -14,19 +14,27 @@ public class CompanyService : ICompanyService
     private readonly IItemMappingRepository _itemMappingRepository;
     private readonly IDbTransaction _dbTransaction;
     private readonly UserClaimDto _userClaimDto;
+    private readonly IBusinessUnitRepository? _businessUnitRepository;
     private readonly MapperlyMapper _mapper = new();
 
     public CompanyService(ICompanyRepository companyRepository, IItemMappingRepository itemMappingRepository,
-        IDbTransaction dbTransaction, UserClaimDto userClaimDto)
+        IDbTransaction dbTransaction, UserClaimDto userClaimDto,
+        IBusinessUnitRepository? businessUnitRepository = null)
     {
         _companyRepository = companyRepository;
         _itemMappingRepository = itemMappingRepository;
         _dbTransaction = dbTransaction;
         _userClaimDto = userClaimDto;
+        _businessUnitRepository = businessUnitRepository;
     }
 
     public async Task<ServiceResponse<CompanyDto>> CreateCompanyAsync(CompanyDto companyDto, CancellationToken cancellationToken)
     {
+        if (ValidateContactEmail(companyDto) is { } contactEmailError) return contactEmailError;
+
+        if (!await IsSelectableBusinessUnitAsync(companyDto.BusinessUnitId, cancellationToken))
+            return InvalidBusinessUnitResponse();
+
         if (companyDto.ItemMappingEnabled is true)
         {
             return new ServiceResponse<CompanyDto>
@@ -48,6 +56,45 @@ public class CompanyService : ICompanyService
             Message = "Company created successfully.",
             StatusCode = StatusCodes.Status200OK
         };
+    }
+
+    /// <summary>
+    /// Checks the contact list and rewrites it into its canonical form on the DTO, or returns the
+    /// failure response. ContactEmail may hold several addresses delimited by ';' — the reminder job
+    /// and the upload notification both send to all of them — so a single bad entry has to be named
+    /// rather than reported as "invalid email", and the list must not be stored as typed.
+    /// </summary>
+    private static ServiceResponse<CompanyDto>? ValidateContactEmail(CompanyDto companyDto)
+    {
+        var invalid = NotificationRecipients.FindInvalid(companyDto.ContactEmail);
+        if (invalid.Count > 0)
+        {
+            return new ServiceResponse<CompanyDto>
+            {
+                Errors =
+                [
+                    $"These are not valid email addresses: {string.Join(", ", invalid)}. " +
+                    "Separate multiple addresses with ';'."
+                ],
+                StatusCode = StatusCodes.Status400BadRequest
+            };
+        }
+
+        var normalized = NotificationRecipients.Normalize(companyDto.ContactEmail);
+        if (normalized is { Length: > NotificationRecipients.MaxLength })
+        {
+            return new ServiceResponse<CompanyDto>
+            {
+                Errors =
+                [
+                    $"The contact email list must not exceed {NotificationRecipients.MaxLength} characters."
+                ],
+                StatusCode = StatusCodes.Status400BadRequest
+            };
+        }
+
+        companyDto.ContactEmail = normalized;
+        return null;
     }
 
     public async Task<ServiceResponse<CompanyDto?>> GetCompanyByIdAsync(int id, CancellationToken cancellationToken)
@@ -76,6 +123,8 @@ public class CompanyService : ICompanyService
 
     public async Task<ServiceResponse<CompanyDto>> UpdateCompanyAsync(CompanyDto companyDto, CancellationToken cancellationToken)
     {
+        if (ValidateContactEmail(companyDto) is { } contactEmailError) return contactEmailError;
+
         var existing = await _companyRepository.GetCompanyByIdAsync(companyDto.Id, cancellationToken);
         if (existing is null)
         {
@@ -85,6 +134,10 @@ public class CompanyService : ICompanyService
                 StatusCode = StatusCodes.Status404NotFound
             };
         }
+
+        if (companyDto.BusinessUnitId != existing.BusinessUnitId &&
+            !await IsSelectableBusinessUnitAsync(companyDto.BusinessUnitId, cancellationToken))
+            return InvalidBusinessUnitResponse();
 
         if (!existing.ItemMappingEnabled && companyDto.ItemMappingEnabled is true &&
             !(await _itemMappingRepository.GetActiveByCompanyAsync(companyDto.Id, cancellationToken)).Any())
@@ -109,4 +162,20 @@ public class CompanyService : ICompanyService
             StatusCode = StatusCodes.Status200OK
         };
     }
+
+    private async Task<bool> IsSelectableBusinessUnitAsync(int? businessUnitId,
+        CancellationToken cancellationToken)
+    {
+        if (!businessUnitId.HasValue || _businessUnitRepository is null)
+            return true;
+
+        var businessUnit = await _businessUnitRepository.GetAsync(businessUnitId.Value, cancellationToken);
+        return businessUnit is { IsActive: true };
+    }
+
+    private static ServiceResponse<CompanyDto> InvalidBusinessUnitResponse() => new()
+    {
+        Errors = ["Select an active Business Unit."],
+        StatusCode = StatusCodes.Status400BadRequest
+    };
 }

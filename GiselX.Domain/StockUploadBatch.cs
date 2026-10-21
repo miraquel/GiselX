@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations.Schema;
+
 namespace GiselX.Domain;
 
 public sealed class StockUploadBatch
@@ -8,6 +10,13 @@ public sealed class StockUploadBatch
     public DateTime StockDate { get; set; }
     public string OriginalFileName { get; set; } = string.Empty;
     public string FileSha256 { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Where the uploaded workbook was archived, relative to the configured archive folder. Null
+    /// when archiving is off, or when the write failed and the data was accepted regardless.
+    /// </summary>
+    public string? ArchivedFilePath { get; set; }
+
     public StockUploadBatchStatus Status { get; set; } = StockUploadBatchStatus.Processing;
     public int TotalRows { get; set; }
     public int ValidRows { get; set; }
@@ -18,6 +27,7 @@ public sealed class StockUploadBatch
     public string UploadedBy { get; set; } = string.Empty;
     public DateTime UploadedDate { get; set; }
     public DateTime? CompletedDate { get; set; }
+    [NotMapped] public string CompanyName { get; set; } = string.Empty;
 
     public Company Company { get; set; } = null!;
     public StockTemplateMapping? StockTemplateMapping { get; set; }

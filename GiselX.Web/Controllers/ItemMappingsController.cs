@@ -1,5 +1,6 @@
 using ClosedXML.Excel;
 using GiselX.Common.Constants;
+using GiselX.Service;
 using GiselX.Service.Dto;
 using GiselX.Service.Dto.Common;
 using GiselX.Service.Interface;
@@ -10,15 +11,17 @@ using Microsoft.AspNetCore.Mvc;
 namespace GiselX.Web.Controllers;
 
 [Area("Admin")]
-[Authorize(PermissionConstants.Companies.Edit)]
+[Authorize]
 public sealed class ItemMappingsController(IItemMappingService mappingService, IItemMappingImportService importService)
     : Controller
 {
     [HttpGet]
+    [Authorize(PermissionConstants.ItemMappings.Index)]
     public async Task<IActionResult> Index(int companyId, string? search, string? sortBy, string? sortDirection,
         CancellationToken cancellationToken)
     {
         var response = await mappingService.ListAsync(companyId, cancellationToken);
+        var unmapped = await mappingService.ListUnmappedAsync(companyId, cancellationToken);
         var mappings = FilterAndSort(response.Data ?? [], search, sortBy, sortDirection);
         return View(new ItemMappingListViewModel
         {
@@ -26,14 +29,24 @@ public sealed class ItemMappingsController(IItemMappingService mappingService, I
             Search = search,
             SortBy = sortBy,
             SortDirection = sortDirection,
-            Mappings = mappings
+            Mappings = mappings,
+            UnmappedItems = Filter(unmapped.Data?.Items ?? [], search),
+            ItemMappingEnabled = unmapped.Data?.ItemMappingEnabled == true
         });
     }
 
     [HttpGet]
-    public IActionResult Create(int companyId) => View("Edit", new ItemMappingEditViewModel { CompanyId = companyId });
+    [Authorize(PermissionConstants.ItemMappings.Manage)]
+    public IActionResult Create(int companyId, string? distributorItemId = null, string? distributorItemName = null) =>
+        View("Edit", new ItemMappingEditViewModel
+        {
+            CompanyId = companyId,
+            DistributorItemId = distributorItemId ?? string.Empty,
+            DistributorItemName = distributorItemName ?? string.Empty
+        });
 
     [HttpGet]
+    [Authorize(PermissionConstants.ItemMappings.Manage)]
     public async Task<IActionResult> Edit(int id, int companyId, CancellationToken cancellationToken)
     {
         var mapping = (await mappingService.GetAsync(id, companyId, cancellationToken)).Data;
@@ -45,11 +58,13 @@ public sealed class ItemMappingsController(IItemMappingService mappingService, I
             GmkItemId = mapping.GmkItemId,
             GmkItemName = mapping.GmkItemName,
             DistributorItemId = mapping.DistributorItemId,
-            DistributorItemName = mapping.DistributorItemName
+            DistributorItemName = mapping.DistributorItemName,
+            IsActive = mapping.IsActive
         });
     }
 
     [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(PermissionConstants.ItemMappings.Manage)]
     public async Task<IActionResult> Save(ItemMappingEditViewModel model, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid) return View("Edit", model);
@@ -60,7 +75,8 @@ public sealed class ItemMappingsController(IItemMappingService mappingService, I
             GmkItemId = model.GmkItemId,
             GmkItemName = model.GmkItemName,
             DistributorItemId = model.DistributorItemId,
-            DistributorItemName = model.DistributorItemName
+            DistributorItemName = model.DistributorItemName,
+            IsActive = model.IsActive
         }, Username, cancellationToken);
         if (!response.IsSuccess)
         {
@@ -73,18 +89,22 @@ public sealed class ItemMappingsController(IItemMappingService mappingService, I
     }
 
     [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(PermissionConstants.ItemMappings.Manage)]
     public async Task<IActionResult> Activate(int id, int companyId, CancellationToken cancellationToken) =>
         RedirectToList(companyId, await mappingService.SetActiveAsync(id, companyId, true, Username, cancellationToken));
 
     [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(PermissionConstants.ItemMappings.Manage)]
     public async Task<IActionResult> Deactivate(int id, int companyId, CancellationToken cancellationToken) =>
         RedirectToList(companyId, await mappingService.SetActiveAsync(id, companyId, false, Username, cancellationToken));
 
     [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(PermissionConstants.ItemMappings.Delete)]
     public async Task<IActionResult> Delete(int id, int companyId, CancellationToken cancellationToken) =>
         RedirectToList(companyId, await mappingService.DeleteAsync(id, companyId, cancellationToken));
 
     [HttpGet]
+    [Authorize(PermissionConstants.ItemMappings.Import)]
     public IActionResult DownloadTemplate(int companyId)
     {
         using var workbook = new XLWorkbook();
@@ -93,8 +113,18 @@ public sealed class ItemMappingsController(IItemMappingService mappingService, I
         worksheet.Cell(1, 2).Value = "GMK Item Name";
         worksheet.Cell(1, 3).Value = "Distributor Item ID";
         worksheet.Cell(1, 4).Value = "Distributor Item Name";
+        worksheet.Cell(1, 5).Value = "Status";
         worksheet.Row(1).Style.Font.Bold = true;
         worksheet.Columns().AdjustToContents();
+        var instructions = workbook.Worksheets.Add("Instructions");
+        instructions.Cell(1, 1).Value = "Status";
+        instructions.Cell(1, 2).Value = "Meaning";
+        instructions.Cell(2, 1).Value = 1;
+        instructions.Cell(2, 2).Value = "Active";
+        instructions.Cell(3, 1).Value = 0;
+        instructions.Cell(3, 2).Value = "Inactive";
+        instructions.Row(1).Style.Font.Bold = true;
+        instructions.Columns().AdjustToContents();
         using var stream = new MemoryStream();
         workbook.SaveAs(stream);
         return File(stream.ToArray(),
@@ -103,6 +133,7 @@ public sealed class ItemMappingsController(IItemMappingService mappingService, I
     }
 
     [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(PermissionConstants.ItemMappings.Import)]
     public async Task<IActionResult> PreflightImport(int companyId, IFormFile file, CancellationToken cancellationToken)
     {
         var workbook = await ReadWorkbookAsync(file, cancellationToken);
@@ -113,6 +144,7 @@ public sealed class ItemMappingsController(IItemMappingService mappingService, I
     }
 
     [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(PermissionConstants.ItemMappings.Import)]
     public async Task<IActionResult> Import(int companyId, IFormFile file, CancellationToken cancellationToken)
     {
         var workbook = await ReadWorkbookAsync(file, cancellationToken);
@@ -133,23 +165,32 @@ public sealed class ItemMappingsController(IItemMappingService mappingService, I
 
     private static async Task<WorkbookUpload> ReadWorkbookAsync(IFormFile? file, CancellationToken cancellationToken)
     {
-        if (file is null || file.Length == 0) return new WorkbookUpload(null, "An .xlsx file is required.");
-        if (!string.Equals(Path.GetExtension(file.FileName), ".xlsx", StringComparison.OrdinalIgnoreCase))
-            return new WorkbookUpload(null, "Upload an .xlsx file.");
+        if (file is null || file.Length == 0) return new WorkbookUpload(null, "An .xlsx or .xls file is required.");
+        if (!LegacyExcelWorkbookConverter.IsSupportedExtension(file.FileName))
+            return new WorkbookUpload(null, "Upload an .xlsx or .xls file.");
         await using var source = file.OpenReadStream();
         using var destination = new MemoryStream();
         await source.CopyToAsync(destination, cancellationToken);
-        var content = destination.ToArray();
+        byte[] content;
+        try
+        {
+            content = LegacyExcelWorkbookConverter.EnsureOpenXml(destination.ToArray());
+        }
+        catch (InvalidDataException exception)
+        {
+            return new WorkbookUpload(null, exception.Message);
+        }
+
         try
         {
             using var stream = new MemoryStream(content);
             using var document = new XLWorkbook(stream);
-            if (!document.Worksheets.Any()) return new WorkbookUpload(null, "Upload a valid .xlsx workbook.");
+            if (!document.Worksheets.Any()) return new WorkbookUpload(null, "Upload a valid .xlsx or .xls workbook.");
             return new WorkbookUpload(content, null);
         }
         catch (Exception)
         {
-            return new WorkbookUpload(null, "Upload a valid .xlsx workbook.");
+            return new WorkbookUpload(null, "Upload a valid .xlsx or .xls workbook.");
         }
     }
 
@@ -184,6 +225,15 @@ public sealed class ItemMappingsController(IItemMappingService mappingService, I
             ("distributoritemid", true) => values.OrderByDescending(mapping => mapping.DistributorItemId, StringComparer.OrdinalIgnoreCase).ToList(),
             _ => values.OrderBy(mapping => mapping.DistributorItemId, StringComparer.OrdinalIgnoreCase).ToList()
         };
+    }
+
+    private static IReadOnlyList<UnmappedDistributorItemDto> Filter(IReadOnlyList<UnmappedDistributorItemDto> items,
+        string? search)
+    {
+        if (string.IsNullOrWhiteSpace(search)) return items;
+        var term = search.Trim();
+        return items.Where(item => Contains(item.DistributorItemId, term) || Contains(item.DistributorItemName, term))
+            .ToList();
     }
 
     private static bool Contains(string? value, string term) => value?.Contains(term, StringComparison.OrdinalIgnoreCase) == true;

@@ -33,14 +33,22 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ISalesTransactionRepository, SalesTransactionRepository>();
         services.AddScoped<IStockRepository, StockRepository>();
         services.AddScoped<ICompanyRepository, CompanyRepository>();
+        services.AddScoped<IBusinessUnitRepository, BusinessUnitRepository>();
+        services.AddScoped<IStockAreaRepository, StockAreaRepository>();
         services.AddScoped<IPowerBiReportMenuConnectionFactory, PowerBiReportMenuConnectionFactory>();
         services.AddScoped<IPowerBiReportMenuRepository, PowerBiReportMenuRepository>();
         services.AddScoped<IPowerBiReportRepository, PowerBiReportRepository>();
         services.AddScoped<IUploadCheckRepository, UploadCheckRepository>();
+        services.AddScoped<IStandaloneConnectionFactory, StandaloneConnectionFactory>();
+        services.AddScoped<IUploadNotificationRepository, UploadNotificationRepository>();
+        services.AddScoped<IEmailSettingRepository, EmailSettingRepository>();
+        services.AddScoped<ILatestUploadRepository, LatestUploadRepository>();
         services.AddScoped<IDistributorTemplateMappingRepository, DistributorTemplateMappingRepository>();
         services.AddScoped<IStockTemplateMappingRepository, StockTemplateMappingRepository>();
         services.AddScoped<ISelloutUploadRepository, SelloutUploadRepository>();
         services.AddScoped<IStockUploadRepository, StockUploadRepository>();
         services.AddScoped<IItemMappingRepository, ItemMappingRepository>();
+        services.AddScoped<IChannelRepository, ChannelRepository>();
+        services.AddScoped<ISalesmanRepository, SalesmanRepository>();
     }
 }

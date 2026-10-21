@@ -9,6 +9,8 @@ public interface ISalesTransactionService
         CancellationToken cancellationToken);
     Task<ServiceResponse<PagedListDto<SalesTransactionDto>>> SelectAsync(PagedListRequestDto pagedListRequest,
         bool useDistributorIdentity, CancellationToken cancellationToken);
+    Task<ServiceResponse<SalesSelectionSummaryDto>> SelectSummaryAsync(PagedListRequestDto request,
+        bool useDistributorIdentity, CancellationToken cancellationToken) => throw new NotSupportedException();
     Task<ServiceResponse<IEnumerable<SalesTransactionDto>>> SelectByCustPeriodAsync(int companyId, int year, int month,
         bool useDistributorIdentity, CancellationToken cancellationToken);
     Task<ServiceResponse<IEnumerable<PeriodDto>>> SelectPeriodsAsync(CancellationToken cancellationToken);

@@ -111,7 +111,7 @@ BEGIN TRY
         FROM sys.check_constraints cc
         CROSS APPLY
         (
-            SELECT REPLACE(REPLACE(REPLACE(REPLACE(LOWER(cc.definition), N'[', N''), N']', N''), N'(', N''), N')', N''), N' ', N'')
+            SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LOWER(cc.definition), N'[', N''), N']', N''), N'(', N''), N')', N''), N' ', N'')
                 AS Definition
         ) normalised
         WHERE cc.parent_object_id = OBJECT_ID(N'dbo.PowerBiReport', N'U')

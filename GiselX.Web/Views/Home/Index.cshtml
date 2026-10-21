@@ -1,16 +1,128 @@
-﻿@{
+﻿@using GiselX.Common.Constants
+@{
     ViewData["Title"] = "Home Page";
+
+    // Each card is gated on the same permission as its menu entry, so a distributor is never
+    // pointed at a screen that would refuse them.
+    var canServiceLevel = User.HasClaim(c => c is { Type: "permission", Value: PermissionConstants.ServiceLevels.Index });
+    var canSellout = User.HasClaim(c => c is { Type: "permission", Value: PermissionConstants.SalesTransactions.Index });
+    var canStock = User.HasClaim(c => c is { Type: "permission", Value: PermissionConstants.Stocks.Index });
 }
 
 <div class="container py-5">
     <div class="row justify-content-center">
-        <div class="col-lg-7 text-center">
-            <h1 class="display-4 mb-3 fw-bold text-primary">Welcome to Gisel</h1>
-            <p class="lead mb-4">
-                Gisel is provided by PT. Gandum Mas Kencana for Distributors to calculate Service Level in the self-service manner.
+        <div class="col-lg-9 text-center mb-5">
+            <h1 class="display-5 mb-3 fw-bold text-primary">Selamat datang di GISEL</h1>
+            <p class="lead mb-0">
+                GISEL adalah sistem dari PT. Gandum Mas Kencana tempat Anda mengirimkan data
+                <strong>Sellout</strong>, <strong>Stock</strong>, dan <strong>Service Level</strong>
+                secara mandiri &mdash; cukup unggah file Excel Anda sendiri, sistem yang membaca
+                formatnya.
             </p>
-            <div class="mb-4">
-                <a asp-controller="ServiceLevels" asp-action="Index" class="btn btn-primary btn-lg me-2">Get Started</a>
+        </div>
+    </div>
+
+    <div class="row g-4 justify-content-center">
+        @if (canSellout)
+        {
+            <div class="col-md-6 col-lg-4">
+                <div class="card h-100">
+                    <div class="card-body d-flex flex-column">
+                        <div class="d-flex align-items-center mb-3">
+                            <span class="badge bg-label-primary rounded p-2 me-3">
+                                <i class="icon-base ri ri-file-list-3-line icon-22px"></i>
+                            </span>
+                            <h5 class="mb-0">Sales Transaction</h5>
+                        </div>
+                        <p class="mb-4 flex-grow-1">
+                            Kirim data penjualan ke outlet (sellout) per minggu. Satu file boleh
+                            memuat beberapa minggu sekaligus &mdash; sistem memisahkannya sendiri.
+                        </p>
+                        <a asp-controller="SalesTransactions" asp-action="Index" class="btn btn-primary">
+                            Buka Sales Transaction
+                        </a>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @if (canStock)
+        {
+            <div class="col-md-6 col-lg-4">
+                <div class="card h-100">
+                    <div class="card-body d-flex flex-column">
+                        <div class="d-flex align-items-center mb-3">
+                            <span class="badge bg-label-primary rounded p-2 me-3">
+                                <i class="icon-base ri ri-store-2-line icon-22px"></i>
+                            </span>
+                            <h5 class="mb-0">Stock</h5>
+                        </div>
+                        <p class="mb-4 flex-grow-1">
+                            Kirim posisi stok gudang Anda pada tanggal tertentu. Bisa beberapa
+                            worksheet dalam satu file, misalnya stok gudang dan stok transit.
+                        </p>
+                        <a asp-controller="Stocks" asp-action="Index" class="btn btn-primary">
+                            Buka Stock
+                        </a>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @if (canServiceLevel)
+        {
+            <div class="col-md-6 col-lg-4">
+                <div class="card h-100">
+                    <div class="card-body d-flex flex-column">
+                        <div class="d-flex align-items-center mb-3">
+                            <span class="badge bg-label-primary rounded p-2 me-3">
+                                <i class="icon-base ri ri-money-dollar-circle-line icon-22px"></i>
+                            </span>
+                            <h5 class="mb-0">Service Level</h5>
+                        </div>
+                        <p class="mb-4 flex-grow-1">
+                            Kirim data pengiriman dan penerimaan barang, lalu lihat perhitungan
+                            Service Level Anda per periode.
+                        </p>
+                        <a asp-controller="ServiceLevels" asp-action="Index" class="btn btn-primary">
+                            Buka Service Level
+                        </a>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <div class="row justify-content-center mt-5">
+        <div class="col-lg-9">
+            <div class="card bg-label-secondary border-0">
+                <div class="card-body">
+                    <h6 class="mb-3">Yang perlu Anda ketahui sebelum mengunggah</h6>
+                    <ul class="mb-0 ps-3">
+                        <li class="mb-2">
+                            <strong>File diperiksa dulu sebelum disimpan.</strong> Setelah memilih
+                            file, Anda akan melihat ringkasan isinya &mdash; jumlah baris, periode,
+                            dan baris mana yang bermasalah beserta alasannya. Data baru masuk
+                            setelah Anda menekan konfirmasi.
+                        </li>
+                        <li class="mb-2">
+                            <strong>Format file Anda sendiri bisa dipakai.</strong> Susunan kolom
+                            workbook Anda sudah dipetakan oleh tim GMK, jadi Anda tidak perlu
+                            menyalin data ke template baru. File <code>.xlsx</code> maupun
+                            <code>.xls</code> keduanya diterima.
+                        </li>
+                        <li class="mb-2">
+                            <strong>Baris yang bermasalah tidak menggagalkan seluruh file.</strong>
+                            Baris yang valid tetap tersimpan, dan baris yang ditolak dilaporkan
+                            supaya bisa Anda perbaiki lalu unggah ulang.
+                        </li>
+                        <li class="mb-0">
+                            <strong>Anda menerima email otomatis.</strong> Pengingat menjelang batas
+                            waktu, dan konfirmasi berisi ringkasan setiap kali upload selesai.
+                            Alamat penerimanya dapat diatur oleh tim GMK.
+                        </li>
+                    </ul>
+                </div>
             </div>
         </div>
     </div>

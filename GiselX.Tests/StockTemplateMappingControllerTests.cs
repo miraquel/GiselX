@@ -7,12 +7,38 @@ using GiselX.Web.Controllers;
 using GiselX.Web.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace GiselX.Tests;
 
 public sealed class StockTemplateMappingControllerTests
 {
+    [Fact]
+    public void SourceHeader_is_optional_for_unmapped_canonical_rows()
+    {
+        var services = new ServiceCollection().AddLogging().AddMvcCore().Services.BuildServiceProvider();
+        var metadataProvider = services.GetRequiredService<IModelMetadataProvider>();
+        var metadata = metadataProvider.GetMetadataForProperty(
+            typeof(StockTemplateColumnEditViewModel),
+            nameof(StockTemplateColumnEditViewModel.SourceHeader));
+
+        Assert.False(metadata.IsRequired);
+    }
+
+    [Fact]
+    public void Create_returns_one_row_for_every_canonical_field()
+    {
+        var controller = CreateController(new CapturingService());
+
+        var result = controller.Create(8);
+
+        var model = Assert.IsType<StockTemplateMappingEditViewModel>(Assert.IsType<ViewResult>(result).Model);
+        Assert.Equal(Enum.GetValues<StockCanonicalField>(), model.Columns.Select(column => column.CanonicalField!.Value));
+        Assert.All(model.Columns, column => Assert.Equal(0, column.SourceColumnNumber));
+    }
+
     [Fact]
     public async Task Index_preserves_requested_company()
     {
@@ -54,7 +80,7 @@ public sealed class StockTemplateMappingControllerTests
     }
 
     [Fact]
-    public async Task Save_forwards_only_explicitly_assigned_columns()
+    public async Task Save_forwards_mapped_canonical_rows_and_allows_source_reuse()
     {
         var service = new CapturingService();
         var controller = CreateController(service);
@@ -67,8 +93,9 @@ public sealed class StockTemplateMappingControllerTests
             FirstDataRowNumber = 2,
             Columns =
             [
-                new() { SourceColumnNumber = 1 },
-                new() { SourceColumnNumber = 2, CanonicalField = StockCanonicalField.ProductId }
+                new() { SourceColumnNumber = 2, CanonicalField = StockCanonicalField.ProductId },
+                new() { SourceColumnNumber = 2, CanonicalField = StockCanonicalField.ProductName },
+                new() { SourceColumnNumber = 0, CanonicalField = StockCanonicalField.SaldoAkhir }
             ]
         };
         await using var workbook = new MemoryStream([1]);
@@ -77,9 +104,10 @@ public sealed class StockTemplateMappingControllerTests
         await controller.Save(model, file, CancellationToken.None);
 
         var saved = Assert.IsType<SaveStockTemplateMappingDto>(service.Saved);
-        var column = Assert.Single(saved.Columns);
-        Assert.Equal(2, column.SourceColumnNumber);
-        Assert.Equal(StockCanonicalField.ProductId, column.CanonicalField);
+        Assert.Equal(2, saved.Columns.Count);
+        Assert.All(saved.Columns, column => Assert.Equal(2, column.SourceColumnNumber));
+        Assert.Equal([StockCanonicalField.ProductId, StockCanonicalField.ProductName],
+            saved.Columns.Select(column => column.CanonicalField));
     }
 
     private static StockTemplateMappingsController CreateController(CapturingService service)
@@ -97,9 +125,9 @@ public sealed class StockTemplateMappingControllerTests
 
     private sealed class Inspector : IStockWorkbookInspector
     {
-        public Task<SelloutWorkbookPreviewDto> InspectAsync(byte[] workbook, string? worksheetName,
+        public Task<WorkbookPreviewDto> InspectAsync(byte[] workbook, string? worksheetName,
             int headerRowNumber, int firstDataRowNumber, CancellationToken cancellationToken = default) =>
-            Task.FromResult(new SelloutWorkbookPreviewDto
+            Task.FromResult(new WorkbookPreviewDto
             {
                 WorksheetName = "Data", HeaderSignature = "SIGNATURE", Headers = ["Ignore", "Product"]
             });

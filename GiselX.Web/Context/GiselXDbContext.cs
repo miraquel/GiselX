@@ -13,6 +13,10 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
 
     public virtual DbSet<Company> Company { get; set; }
 
+    public virtual DbSet<BusinessUnit> BusinessUnit { get; set; }
+
+    public virtual DbSet<EmailSetting> EmailSetting { get; set; }
+
     public virtual DbSet<ServelDeliveryEx> ServelDeliveryEx { get; set; }
 
     public virtual DbSet<ServelReceiptEx> ServelReceiptEx { get; set; }
@@ -24,6 +28,10 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
     public virtual DbSet<SalesTransaction> SalesTransaction { get; set; }
 
     public virtual DbSet<ItemMapping> ItemMapping { get; set; }
+
+    public virtual DbSet<Channel> Channel { get; set; }
+
+    public virtual DbSet<Salesman> Salesman { get; set; }
 
     public virtual DbSet<PowerBiReport> PowerBiReport { get; set; }
 
@@ -44,6 +52,8 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
     public virtual DbSet<StockUploadBatch> StockUploadBatch { get; set; }
 
     public virtual DbSet<StockStaging> StockStaging { get; set; }
+
+    public virtual DbSet<StockArea> StockArea { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -76,11 +86,50 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
             entity.Property(e => e.Name).HasMaxLength(100);
 
             // New reminder fields
-            entity.Property(e => e.ContactEmail).HasMaxLength(255);
+            entity.Property(e => e.ContactEmail).HasMaxLength(1000);
             entity.Property(e => e.ReminderLeadDays).HasDefaultValue(3);
             entity.Property(e => e.ItemMappingEnabled).HasDefaultValue(false);
             entity.Property(e => e.DeadlineDaysOfWeek).HasConversion<int?>();
+            entity.HasOne(e => e.BusinessUnit).WithMany(e => e.Companies)
+                .HasForeignKey(e => e.BusinessUnitId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.Channel).WithMany(e => e.Companies)
+                .HasForeignKey(e => e.ChannelId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.Salesman).WithMany(e => e.Companies)
+                .HasForeignKey(e => e.SalesmanId).OnDelete(DeleteBehavior.Restrict);
             // DeadlineDayOfMonth is int? — EF maps to INT NULL automatically
+        });
+
+        modelBuilder.Entity<EmailSetting>(entity =>
+        {
+            entity.Property(e => e.SmtpHost).HasMaxLength(255).IsRequired();
+            entity.Property(e => e.Username).HasMaxLength(255);
+            // Protected text, not the password: Data Protection output is base64 and grows with the
+            // key ring, so this is generous rather than sized to the secret.
+            entity.Property(e => e.PasswordProtected).HasMaxLength(2000);
+            entity.Property(e => e.FromAddress).HasMaxLength(255).IsRequired();
+            entity.Property(e => e.FromName).HasMaxLength(255).IsRequired();
+            entity.Property(e => e.DashboardBaseUrl).HasMaxLength(500);
+            entity.Property(e => e.SupportEmail).HasMaxLength(255);
+            entity.Property(e => e.SupportPhone).HasMaxLength(100);
+            entity.Property(e => e.TimeZoneId).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.ModifiedBy).HasMaxLength(256);
+            entity.Property(e => e.ModifiedDate).HasColumnType("datetime2");
+            // The key is assigned, never generated: there is one row and its Id is always 1.
+            entity.Property(e => e.Id).ValueGeneratedNever();
+        });
+
+        modelBuilder.Entity<BusinessUnit>(entity =>
+        {
+            entity.HasIndex(e => e.Name).IsUnique();
+            entity.Property(e => e.Name).HasMaxLength(100).IsRequired();
+            // Delimited list of internal notification addresses; nullable, so a unit that notifies
+            // nobody stays NULL rather than holding an empty string.
+            entity.Property(e => e.NotificationEmails).HasMaxLength(1000);
+            entity.Property(e => e.CreatedBy).HasMaxLength(256).IsRequired();
+            entity.Property(e => e.ModifiedBy).HasMaxLength(256);
+            entity.Property(e => e.CreatedDate).HasColumnType("datetime2");
+            entity.Property(e => e.ModifiedDate).HasColumnType("datetime2");
+            entity.Property(e => e.IsActive).HasDefaultValue(true);
         });
 
         modelBuilder.Entity<ItemMapping>(entity =>
@@ -96,6 +145,32 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
             entity.Property(e => e.ModifiedDate).HasColumnType("datetime2");
             entity.HasOne(e => e.Company).WithMany(e => e.ItemMappings)
                 .HasForeignKey(e => e.CompanyId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<Channel>(entity =>
+        {
+            entity.HasIndex(e => e.Code).IsUnique().HasDatabaseName("UX_Channel_Code");
+            entity.Property(e => e.Code).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.Name).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.NotificationEmails).HasMaxLength(1000);
+            entity.Property(e => e.IsActive).HasDefaultValue(true);
+            entity.Property(e => e.CreatedBy).HasMaxLength(256).IsRequired();
+            entity.Property(e => e.ModifiedBy).HasMaxLength(256);
+            entity.Property(e => e.CreatedDate).HasColumnType("datetime2");
+            entity.Property(e => e.ModifiedDate).HasColumnType("datetime2");
+        });
+
+        modelBuilder.Entity<Salesman>(entity =>
+        {
+            entity.HasIndex(e => e.Code).IsUnique().HasDatabaseName("UX_Salesman_Code");
+            entity.Property(e => e.Code).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.Name).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.NotificationEmails).HasMaxLength(1000);
+            entity.Property(e => e.IsActive).HasDefaultValue(true);
+            entity.Property(e => e.CreatedBy).HasMaxLength(256).IsRequired();
+            entity.Property(e => e.ModifiedBy).HasMaxLength(256);
+            entity.Property(e => e.CreatedDate).HasColumnType("datetime2");
+            entity.Property(e => e.ModifiedDate).HasColumnType("datetime2");
         });
 
         modelBuilder.Entity<PowerBiReport>(entity =>
@@ -141,7 +216,7 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
 
         modelBuilder.Entity<DistributorTemplateColumn>(entity =>
         {
-            entity.HasIndex(e => new { e.DistributorTemplateMappingId, e.SourceColumnNumber }).IsUnique();
+            entity.HasIndex(e => new { e.DistributorTemplateMappingId, e.SourceColumnNumber });
             entity.HasIndex(e => new { e.DistributorTemplateMappingId, e.CanonicalField }).IsUnique();
             entity.Property(e => e.SourceHeader).HasMaxLength(500);
             entity.Property(e => e.CanonicalField).HasConversion<int>();
@@ -157,6 +232,8 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
             entity.Property(e => e.Name).HasMaxLength(100);
             entity.Property(e => e.WorksheetName).HasMaxLength(128);
             entity.Property(e => e.HeaderSignature).HasColumnType("nvarchar(max)");
+            entity.Property(e => e.GoodConditionValues).HasMaxLength(500);
+            entity.Property(e => e.BadConditionValues).HasMaxLength(500);
             entity.Property(e => e.CreatedBy).HasMaxLength(256);
             entity.Property(e => e.ModifiedBy).HasMaxLength(256);
             entity.Property(e => e.CreatedDate).HasColumnType("datetime2");
@@ -172,12 +249,25 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
 
         modelBuilder.Entity<StockTemplateColumn>(entity =>
         {
-            entity.HasIndex(e => new { e.StockTemplateMappingId, e.SourceColumnNumber }).IsUnique();
+            entity.HasIndex(e => new { e.StockTemplateMappingId, e.SourceColumnNumber });
             entity.HasIndex(e => new { e.StockTemplateMappingId, e.CanonicalField }).IsUnique();
             entity.Property(e => e.SourceHeader).HasMaxLength(500);
             entity.Property(e => e.CanonicalField).HasConversion<int>();
             entity.HasOne(e => e.StockTemplateMapping).WithMany(e => e.Columns)
                 .HasForeignKey(e => e.StockTemplateMappingId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<StockArea>(entity =>
+        {
+            entity.HasIndex(e => new { e.CompanyId, e.Name }).IsUnique();
+            entity.Property(e => e.Name).HasMaxLength(100);
+            entity.Property(e => e.Aliases).HasMaxLength(1000);
+            entity.Property(e => e.CreatedBy).HasMaxLength(256);
+            entity.Property(e => e.ModifiedBy).HasMaxLength(256);
+            entity.Property(e => e.CreatedDate).HasColumnType("datetime2");
+            entity.Property(e => e.ModifiedDate).HasColumnType("datetime2");
+            entity.HasOne(e => e.Company).WithMany(e => e.StockAreas)
+                .HasForeignKey(e => e.CompanyId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<StockUploadBatch>(entity =>
@@ -187,6 +277,8 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
             entity.HasIndex(e => e.Status);
             entity.Property(e => e.StockDate).HasColumnType("date");
             entity.Property(e => e.OriginalFileName).HasMaxLength(260);
+            // Relative path inside the archive folder; nullable, because archiving is optional.
+            entity.Property(e => e.ArchivedFilePath).HasMaxLength(500);
             entity.Property(e => e.FileSha256).HasMaxLength(64).IsFixedLength();
             entity.Property(e => e.Status).HasConversion<int>();
             entity.Property(e => e.IgnoredSummaryRowsJson).HasColumnType("nvarchar(max)").HasDefaultValue("[]");
@@ -204,24 +296,36 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
         modelBuilder.Entity<StockStaging>(entity =>
         {
             entity.HasIndex(e => new { e.StockUploadBatchId, e.SourceRowNumber });
+            entity.Property(e => e.SourceWorksheetName).HasMaxLength(255);
             entity.Property(e => e.ProductId).HasMaxLength(100);
             entity.Property(e => e.ProductName).HasMaxLength(200);
             entity.Property(e => e.DistributorProductId).HasMaxLength(100);
             entity.Property(e => e.DistributorProductName).HasMaxLength(200);
             entity.Property(e => e.ProductPackaging).HasMaxLength(100);
             entity.Property(e => e.ProductUnit).HasMaxLength(50);
+            entity.Property(e => e.SmallestUnit).HasMaxLength(50);
             entity.Property(e => e.BatchNumber).HasMaxLength(100);
-            entity.Property(e => e.ProductNetto).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.ProductPcsInCtn).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.ProductNetto).HasColumnType("decimal(18, 4)");
             entity.Property(e => e.PriceUnit).HasColumnType("decimal(18, 2)");
-            entity.Property(e => e.SaldoAwal).HasColumnType("decimal(18, 2)");
-            entity.Property(e => e.SaldoMasukPO).HasColumnType("decimal(18, 2)");
-            entity.Property(e => e.SaldoAkhir).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.SmallestUnitQty).HasColumnType("decimal(18, 4)");
+            entity.Property(e => e.SaldoAwal).HasColumnType("decimal(18, 4)");
+            entity.Property(e => e.SaldoMasukPO).HasColumnType("decimal(18, 4)");
+            entity.Property(e => e.SaldoAkhir).HasColumnType("decimal(18, 4)");
             entity.Property(e => e.ExpiredDate).HasColumnType("datetime");
+            entity.Property(e => e.SourceAreaText).HasMaxLength(200);
+            entity.Property(e => e.SourceConditionText).HasMaxLength(200);
+            entity.Property(e => e.Condition).HasConversion<byte>().HasColumnType("tinyint").HasDefaultValue(StockCondition.Good);
             entity.Property(e => e.ValidationErrorsJson).HasColumnType("nvarchar(max)").HasDefaultValue("[]");
+            entity.HasIndex(e => e.StockAreaId);
+            entity.HasOne<StockArea>().WithMany()
+                .HasForeignKey(e => e.StockAreaId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(e => e.StockUploadBatch).WithMany(e => e.StagingRows)
                 .HasForeignKey(e => e.StockUploadBatchId).OnDelete(DeleteBehavior.Cascade);
             entity.HasOne<ItemMapping>().WithMany()
                 .HasForeignKey(e => e.ItemMappingId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<StockTemplateMapping>().WithMany()
+                .HasForeignKey(e => e.StockTemplateMappingId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<SelloutUploadBatch>(entity =>
@@ -256,6 +360,8 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
         {
             entity.HasIndex(e => new { e.CompanyId, e.UploadedDate });
             entity.Property(e => e.OriginalFileName).HasMaxLength(260);
+            // Relative path inside the archive folder; nullable, because archiving is optional.
+            entity.Property(e => e.ArchivedFilePath).HasMaxLength(500);
             entity.Property(e => e.FileSha256).HasMaxLength(64).IsFixedLength();
             entity.Property(e => e.Status).HasConversion<int>();
             entity.Property(e => e.IgnoredSummaryRowsJson).HasColumnType("nvarchar(max)");
@@ -279,13 +385,14 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
             entity.Property(e => e.ExpiredDate).HasColumnType("datetime");
             entity.Property(e => e.InvoiceDate).HasColumnType("datetime");
             entity.Property(e => e.ShipDate).HasColumnType("datetime");
-            entity.Property(e => e.InvoiceQty).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.ProductPcsInCtn).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.InvoiceQty).HasColumnType("decimal(18, 4)");
             entity.Property(e => e.UnitPrice).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.GrossValue).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.DiscountValue).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.DiscountPct).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.NetValue).HasColumnType("decimal(18, 2)");
-            entity.Property(e => e.InKg).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.InKg).HasColumnType("decimal(18, 4)");
             entity.Property(e => e.DistributorProductId).HasMaxLength(100);
             entity.Property(e => e.DistributorProductName).HasMaxLength(200);
             entity.Property(e => e.ValidationErrorsJson).HasColumnType("nvarchar(max)");
@@ -375,19 +482,30 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
             entity.Property(e => e.DistributorProductName).HasMaxLength(200);
             entity.Property(e => e.ProductPackaging).HasMaxLength(100);
             entity.Property(e => e.ProductUnit).HasMaxLength(50);
+            entity.Property(e => e.SmallestUnit).HasMaxLength(50);
             entity.Property(e => e.BatchNumber).HasMaxLength(100);
-            entity.Property(e => e.ProductNetto).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.ProductPcsInCtn).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.ProductNetto).HasColumnType("decimal(18, 4)");
             entity.Property(e => e.PriceUnit).HasColumnType("decimal(18, 2)");
-            entity.Property(e => e.SaldoAwal).HasColumnType("decimal(18, 2)");
-            entity.Property(e => e.SaldoMasukPO).HasColumnType("decimal(18, 2)");
-            entity.Property(e => e.SaldoAkhir).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.SmallestUnitQty).HasColumnType("decimal(18, 4)");
+            entity.Property(e => e.SaldoAwal).HasColumnType("decimal(18, 4)");
+            entity.Property(e => e.SaldoMasukPO).HasColumnType("decimal(18, 4)");
+            entity.Property(e => e.SaldoAkhir).HasColumnType("decimal(18, 4)");
             entity.Property(e => e.ExpiredDate).HasColumnType("datetime");
             entity.Property(e => e.CreatedDate).HasColumnType("datetime");
             entity.Property(e => e.StockDate).HasColumnType("date");
+            entity.Property(e => e.Condition).HasConversion<byte>().HasColumnType("tinyint").HasDefaultValue(StockCondition.Good);
 
             // GiselStock_* SPs filter by CompanyId and pick the latest CreatedDate batch
             entity.HasIndex(e => new { e.CompanyId, e.CreatedDate });
-            entity.HasIndex(e => e.StockUploadBatchId);
+            // Readers enumerate distinct (batch, area) pairs and publication looks up a batch's areas,
+            // so the batch index carries the area. IX_Stock_StockAreaId remains for the FK.
+            entity.HasIndex(e => new { e.StockUploadBatchId, e.StockAreaId });
+            entity.HasIndex(e => e.StockAreaId);
+
+            entity.HasOne(d => d.StockArea).WithMany()
+                .HasForeignKey(d => d.StockAreaId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             entity.HasOne(d => d.Company).WithMany(p => p.Stock)
                 .HasForeignKey(d => d.CompanyId)
@@ -419,13 +537,14 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
             entity.Property(e => e.InvoiceUnit).HasMaxLength(50);
             entity.Property(e => e.GeisaPOId).HasMaxLength(100);
             entity.Property(e => e.SalesmanNameGMK).HasMaxLength(200);
-            entity.Property(e => e.InvoiceQty).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.ProductPcsInCtn).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.InvoiceQty).HasColumnType("decimal(18, 4)");
             entity.Property(e => e.UnitPrice).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.GrossValue).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.DiscountValue).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.DiscountPct).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.NetValue).HasColumnType("decimal(18, 2)");
-            entity.Property(e => e.InKg).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.InKg).HasColumnType("decimal(18, 4)");
             entity.Property(e => e.ExpiredDate).HasColumnType("datetime");
             entity.Property(e => e.InvoiceDate).HasColumnType("datetime");
             entity.Property(e => e.ShipDate).HasColumnType("datetime");

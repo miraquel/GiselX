@@ -15,7 +15,10 @@ public sealed class StockUploadService(
     IStockUploadRepository repository,
     IStockWorkbookAnalysisService analysisService,
     IDbTransaction transaction,
-    IOptions<StockUploadOptions> options) : IStockUploadService
+    IOptions<StockUploadOptions> options,
+    IUploadNotificationDispatcher notifications,
+    IUploadArchive archive,
+    IStockAreaRepository areaRepository) : IStockUploadService
 {
     public async Task<ServiceResponse<StockUploadPreflightDto>> PreflightAsync(Stream file,
         string originalFileName, DateTime stockDate, int companyId, CancellationToken cancellationToken)
@@ -23,9 +26,21 @@ public sealed class StockUploadService(
         var request = await ReadRequestAsync(file, originalFileName, stockDate, cancellationToken);
         if (request.Error is not null) return PreflightFailure(request.Error);
         var analysis = await analysisService.AnalyzeAsync(request.Content!, companyId, cancellationToken);
+        var data = ToPreflight(analysis, stockDate.Date, request.SourceSha256!);
+
+        // Read-only: shows what publishing would replace. Skipped when the workbook is refused,
+        // because nothing would be published and the lists would only mislead.
+        if (analysis.Errors.Count == 0)
+        {
+            var published = await repository.GetPublishedAreasAsync(companyId, stockDate.Date, cancellationToken);
+            var names = (await areaRepository.ListAsync(companyId, false, cancellationToken))
+                .ToDictionary(area => area.Id, area => area.Name);
+            (data.Areas, data.UntouchedAreaNames) = DescribeAreas(analysis, published, names);
+        }
+
         return new ServiceResponse<StockUploadPreflightDto>
         {
-            Data = ToPreflight(analysis, stockDate.Date),
+            Data = data,
             Errors = analysis.Errors.ToList(),
             Message = analysis.Errors.Count == 0 ? "Workbook analysis completed." : "Workbook validation failed.",
             StatusCode = analysis.Errors.Count == 0 ? StatusCodes.Status200OK : StatusCodes.Status400BadRequest
@@ -33,11 +48,15 @@ public sealed class StockUploadService(
     }
 
     public async Task<ServiceResponse<StockUploadResultDto>> UploadAsync(Stream file, string originalFileName,
-        DateTime stockDate, int companyId, bool confirmed, string uploadedBy, CancellationToken cancellationToken)
+        DateTime stockDate, int companyId, bool confirmed, string uploadedBy, string? confirmedSha256,
+        CancellationToken cancellationToken)
     {
         if (!confirmed) return Failure("Review the workbook and confirm the Stock upload before continuing.");
         var request = await ReadRequestAsync(file, originalFileName, stockDate, cancellationToken);
         if (request.Error is not null) return Failure(request.Error);
+
+        var mismatch = UploadConfirmation.DescribeMismatch(confirmedSha256, request.SourceSha256!);
+        if (mismatch is not null) return Failure(mismatch);
 
         var content = request.Content!;
         var analysis = await analysisService.AnalyzeAsync(content, companyId, cancellationToken);
@@ -47,7 +66,7 @@ public sealed class StockUploadService(
             StockTemplateMappingId = analysis.Mapping?.Id,
             StockDate = stockDate.Date,
             OriginalFileName = Path.GetFileName(originalFileName),
-            FileSha256 = Convert.ToHexString(SHA256.HashData(content)).ToLowerInvariant(),
+            FileSha256 = request.SourceSha256!,
             TotalRows = analysis.Rows.Count,
             ValidRows = analysis.ValidRows,
             InvalidRows = analysis.InvalidRows,
@@ -57,6 +76,16 @@ public sealed class StockUploadService(
             UploadedDate = DateTime.UtcNow
         };
         batch.Id = await repository.InsertBatchAsync(batch, cancellationToken);
+
+        // Archived once the id exists, and before the commit, so a stored path never outlives a
+        // rolled-back batch. A failed write returns null and the upload carries on regardless.
+        var archivedPath = await archive.StoreAsync(UploadNotificationKind.Stock, batch.Id,
+            batch.OriginalFileName, content, cancellationToken);
+        if (archivedPath is not null)
+        {
+            batch.ArchivedFilePath = archivedPath;
+            await repository.SetArchivedFilePathAsync(batch.Id, archivedPath, cancellationToken);
+        }
 
         var staging = analysis.Rows.Select(row => ToStaging(row, batch.Id)).ToList();
         await repository.InsertStagingAsync(staging, cancellationToken);
@@ -79,6 +108,26 @@ public sealed class StockUploadService(
             : StockUploadBatchStatus.Completed;
         await repository.PublishValidRowsAsync(batch.Id, companyId, status, cancellationToken);
         transaction.Commit();
+
+        // Queued only after the commit: a notification for rows that rolled back would be a lie.
+        notifications.Enqueue(new UploadNotificationDto
+        {
+            CompanyId = companyId,
+            Kind = UploadNotificationKind.Stock,
+            Reference = batch.Id,
+            TotalRows = batch.TotalRows,
+            ValidRows = batch.ValidRows,
+            InvalidRows = batch.InvalidRows,
+            UploadedBy = uploadedBy,
+            CompletedAtUtc = DateTime.UtcNow,
+            OriginalFileName = batch.OriginalFileName,
+            PeriodLabel = $"Snapshot {stockDate.ToString("dd MMMM yyyy", UploadNotificationMessage.Culture)}",
+            // No OutletCount: a Stock workbook is the distributor's own warehouse position and
+            // carries no customer, so the mail omits that line rather than reporting zero outlets.
+            SourceFileArchived = batch.ArchivedFilePath is not null,
+            ProductCount = CountDistinctProducts(analysis)
+        });
+
         var successMessage = status == StockUploadBatchStatus.Completed
             ? "Stock snapshot uploaded successfully."
             : $"Stock snapshot uploaded with {analysis.InvalidRows} invalid row(s) excluded from the final Stock table.";
@@ -88,6 +137,34 @@ public sealed class StockUploadService(
             Message = successMessage
         };
     }
+
+    public async Task<ServiceResponse<ArchivedUploadFileDto>> DownloadSourceAsync(long batchId, int companyId,
+        CancellationToken cancellationToken)
+    {
+        // The company id comes from the signed-in user, never from the request, and the lookup is
+        // scoped by it — a distributor guessing another batch id gets "not found", not a file.
+        var found = await repository.GetBatchAsync(batchId, companyId, cancellationToken);
+        if (found is null)
+            return NotFound("Stock upload batch was not found.");
+
+        var batch = found.Value.Batch;
+        if (string.IsNullOrWhiteSpace(batch.ArchivedFilePath))
+            return NotFound("The uploaded file for this batch was not archived.");
+
+        var content = await archive.OpenAsync(batch.ArchivedFilePath, cancellationToken);
+        if (content is null)
+            return NotFound("The archived file is no longer available on the server.");
+
+        return new ServiceResponse<ArchivedUploadFileDto>
+        {
+            Data = new ArchivedUploadFileDto { Content = content, FileName = batch.OriginalFileName }
+        };
+    }
+
+    private static ServiceResponse<ArchivedUploadFileDto> NotFound(string error) => new()
+    {
+        Errors = [error], Message = error, StatusCode = StatusCodes.Status404NotFound
+    };
 
     public async Task<ServiceResponse<StockUploadBatchDto>> GetResultAsync(long batchId, int companyId,
         CancellationToken cancellationToken)
@@ -114,12 +191,29 @@ public sealed class StockUploadService(
         };
     }
 
-    private async Task<(byte[]? Content, string? Error)> ReadRequestAsync(Stream file, string filename,
-        DateTime stockDate, CancellationToken cancellationToken)
+    /// <summary>
+    /// Distinct products among the rows that were published, or null when none carry an identifier —
+    /// the mail then omits the line rather than reporting a misleading zero.
+    /// </summary>
+    private static int? CountDistinctProducts(StockWorkbookAnalysisDto analysis)
     {
-        if (stockDate == default) return (null, "Stock date is required.");
-        if (!string.Equals(Path.GetExtension(filename), ".xlsx", StringComparison.OrdinalIgnoreCase))
-            return (null, "Only .xlsx files are supported.");
+        var count = analysis.Rows
+            .Where(row => row.IsValid)
+            .Select(row => row.ProductId ?? row.DistributorProductId)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value!.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count();
+
+        return count == 0 ? null : count;
+    }
+
+    private async Task<(byte[]? Content, string? SourceSha256, string? Error)> ReadRequestAsync(Stream file,
+        string filename, DateTime stockDate, CancellationToken cancellationToken)
+    {
+        if (stockDate == default) return (null, null, "Stock date is required.");
+        if (!LegacyExcelWorkbookConverter.IsSupportedExtension(filename))
+            return (null, null, LegacyExcelWorkbookConverter.UnsupportedFileMessage);
         try
         {
             using var output = new MemoryStream();
@@ -131,30 +225,91 @@ public sealed class StockUploadService(
                     throw new InvalidDataException($"The workbook exceeds the {options.Value.MaxFileSizeBytes} byte upload limit.");
                 await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
             }
-            return output.Length == 0 ? (null, "The workbook is empty.") : (output.ToArray(), null);
+            if (output.Length == 0) return (null, null, "The workbook is empty.");
+
+            // Hash what the distributor actually sent; a converted .xls is not the audited artifact.
+            var source = output.ToArray();
+            var sha256 = Convert.ToHexString(SHA256.HashData(source)).ToLowerInvariant();
+            return (LegacyExcelWorkbookConverter.EnsureOpenXml(source), sha256, null);
         }
-        catch (InvalidDataException exception) { return (null, exception.Message); }
+        catch (InvalidDataException exception) { return (null, null, exception.Message); }
     }
 
     private static StockStaging ToStaging(StockStagingRowDto row, long batchId) => new()
     {
-        StockUploadBatchId = batchId, SourceRowNumber = row.SourceRowNumber, ProductId = row.ProductId,
+        StockUploadBatchId = batchId, StockTemplateMappingId = row.StockTemplateMappingId,
+        SourceWorksheetName = row.SourceWorksheetName,
+        SourceRowNumber = row.SourceRowNumber, ProductId = row.ProductId,
         ProductName = row.ProductName, DistributorProductId = row.DistributorProductId,
         DistributorProductName = row.DistributorProductName, ItemMappingId = row.ItemMappingId,
         ProductPackaging = row.ProductPackaging,
+        StockAreaId = row.StockAreaId, Condition = row.Condition,
+        SourceAreaText = row.SourceAreaText, SourceConditionText = row.SourceConditionText,
         ProductPcsInCtn = row.ProductPcsInCtn, ProductNetto = row.ProductNetto, ProductUnit = row.ProductUnit,
+        SmallestUnit = row.SmallestUnit, SmallestUnitQty = row.SmallestUnitQty,
         PriceUnit = row.PriceUnit, SaldoAwal = row.SaldoAwal, SaldoMasukPO = row.SaldoMasukPO,
         SaldoAkhir = row.SaldoAkhir,
         BatchNumber = row.BatchNumber, ExpiredDate = row.ExpiredDate, IsValid = row.IsValid,
         ValidationErrorsJson = row.ValidationErrorsJson
     };
 
-    private static StockUploadPreflightDto ToPreflight(StockWorkbookAnalysisDto analysis, DateTime stockDate) => new()
+    private const string NoAreaName = "(no area)";
+
+    /// <summary>
+    /// The scope of a publication is the areas carried by valid rows, so that is what is listed and
+    /// what is matched against the published entries; every other published area is untouched.
+    /// </summary>
+    private static (IReadOnlyList<StockAreaReplacementDto> Areas, IReadOnlyList<string> Untouched) DescribeAreas(
+        StockWorkbookAnalysisDto analysis, IReadOnlyList<PublishedStockArea> published,
+        IReadOnlyDictionary<int, string> names)
     {
-        MappingName = analysis.Mapping?.Name, StockDate = stockDate, TotalRows = analysis.Rows.Count,
+        string NameOf(int? areaId) => areaId is null
+            ? NoAreaName
+            : published.FirstOrDefault(entry => entry.StockAreaId == areaId)?.AreaName
+              ?? (names.TryGetValue(areaId.Value, out var name) ? name : $"Area {areaId}");
+
+        var areas = analysis.Rows.Where(row => row.IsValid).GroupBy(row => row.StockAreaId)
+            .Select(group => new StockAreaReplacementDto
+            {
+                AreaName = NameOf(group.Key),
+                ValidRows = group.Count(),
+                SaldoAkhirGood = group.Where(row => row.Condition == StockCondition.Good).Sum(row => row.SaldoAkhir ?? 0m),
+                SaldoAkhirBad = group.Where(row => row.Condition == StockCondition.Bad).Sum(row => row.SaldoAkhir ?? 0m),
+                Replaces = published.Where(entry => entry.StockAreaId == group.Key).ToList()
+            })
+            // "(no area)" sorts first, the rest alphabetically.
+            .OrderBy(area => area.AreaName == NoAreaName ? 0 : 1)
+            .ThenBy(area => area.AreaName, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+        var scope = analysis.Rows.Where(row => row.IsValid).Select(row => row.StockAreaId).ToHashSet();
+        var untouched = published.Where(entry => !scope.Contains(entry.StockAreaId))
+            .Select(entry => entry.AreaName ?? NoAreaName).Distinct().ToList();
+        return (areas, untouched);
+    }
+
+    private static StockUploadPreflightDto ToPreflight(StockWorkbookAnalysisDto analysis, DateTime stockDate,
+        string fileSha256) => new()
+    {
+        FileSha256 = fileSha256,
+        MappingName = DescribeMappings(analysis), StockDate = stockDate, TotalRows = analysis.Rows.Count,
         ValidRows = analysis.ValidRows, InvalidRows = analysis.InvalidRows,
+        TotalSaldoAwal = analysis.Rows.Where(row => row.IsValid).Sum(row => row.SaldoAwal ?? 0m),
+        TotalSaldoMasukPo = analysis.Rows.Where(row => row.IsValid).Sum(row => row.SaldoMasukPO ?? 0m),
+        TotalSaldoAkhir = analysis.Rows.Where(row => row.IsValid).Sum(row => row.SaldoAkhir ?? 0m),
+        Sheets = analysis.Sheets, IgnoredWorksheetNames = analysis.IgnoredWorksheetNames,
         IgnoredSummaryRowNumbers = analysis.IgnoredSummaryRowNumbers,
         RowErrors = analysis.RowErrors, Errors = analysis.Errors
+    };
+
+    /// <summary>
+    /// Names every mapping the workbook matched, because a single upload can draw on several mapped
+    /// worksheets and the review must show all of them, not just the first.
+    /// </summary>
+    private static string? DescribeMappings(StockWorkbookAnalysisDto analysis) => analysis.Sheets.Count switch
+    {
+        0 => analysis.Mapping?.Name,
+        1 => analysis.Sheets[0].MappingName,
+        _ => string.Join(", ", analysis.Sheets.Select(sheet => $"{sheet.MappingName} ({sheet.WorksheetName})"))
     };
 
     private static StockUploadResultDto Result(StockUploadBatch batch, StockUploadBatchStatus status,

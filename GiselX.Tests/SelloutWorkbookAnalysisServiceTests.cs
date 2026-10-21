@@ -157,7 +157,7 @@ public sealed class SelloutWorkbookAnalysisServiceTests
                 Errors = DetectionErrors
             });
 
-        public Task<SelloutWorkbookPreviewDto> InspectAsync(byte[] workbook, string? worksheetName,
+        public Task<WorkbookPreviewDto> InspectAsync(byte[] workbook, string? worksheetName,
             int headerRowNumber, int firstDataRowNumber, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
     }

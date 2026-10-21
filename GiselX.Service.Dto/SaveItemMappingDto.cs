@@ -8,4 +8,5 @@ public sealed class SaveItemMappingDto
     public string GmkItemName { get; set; } = string.Empty;
     public string DistributorItemId { get; set; } = string.Empty;
     public string DistributorItemName { get; set; } = string.Empty;
+    public bool IsActive { get; set; } = true;
 }

@@ -35,7 +35,10 @@ BEGIN TRY
     END
     ELSE
     BEGIN
-        UPDATE dbo.Company SET ItemMappingEnabled = 0 WHERE ItemMappingEnabled IS NULL;
+        -- Dynamic SQL throughout this script wherever a statement names a column added above: the
+        -- whole script is one batch compiled before it runs, so a static reference to a column the
+        -- table does not have yet fails the batch with "Invalid column name" and nothing executes.
+        EXEC sys.sp_executesql N'UPDATE dbo.Company SET ItemMappingEnabled = 0 WHERE ItemMappingEnabled IS NULL;';
         IF EXISTS
         (
             SELECT 1 FROM sys.columns c
@@ -309,13 +312,13 @@ BEGIN TRY
         ALTER TABLE dbo.SelloutStaging ADD CONSTRAINT FK_SelloutStaging_ItemMapping_ItemMappingId
             FOREIGN KEY (ItemMappingId) REFERENCES dbo.ItemMapping(Id) ON DELETE NO ACTION;
 
-    UPDATE dbo.Stock
+    EXEC sys.sp_executesql N'UPDATE dbo.Stock
     SET DistributorProductId = ProductId, DistributorProductName = ProductName
-    WHERE DistributorProductId IS NULL OR DistributorProductName IS NULL;
+    WHERE DistributorProductId IS NULL OR DistributorProductName IS NULL;';
 
-    UPDATE dbo.SalesTransaction
+    EXEC sys.sp_executesql N'UPDATE dbo.SalesTransaction
     SET DistributorProductId = ProductId, DistributorProductName = ProductName
-    WHERE DistributorProductId IS NULL OR DistributorProductName IS NULL;
+    WHERE DistributorProductId IS NULL OR DistributorProductName IS NULL;';
 
     IF COL_LENGTH(N'dbo.Stock', N'PriceUnit') IS NOT NULL
        AND EXISTS

@@ -1,0 +1,43 @@
+@model GiselX.Service.Dto.BusinessUnitDto
+@{
+    ViewData["Title"] = Model.Id > 0 ? "Edit Business Unit" : "Add Business Unit";
+    Layout = "_ContentNavbarLayout";
+}
+
+<div class="card">
+    <div class="card-header"><h5 class="mb-0">@ViewData["Title"]</h5></div>
+    <div class="card-body">
+        <form asp-action="Save" method="post">
+            <input asp-for="Id" type="hidden" />
+            <div asp-validation-summary="All" class="text-danger mb-3"></div>
+            <div class="mb-3">
+                <label asp-for="Name" class="form-label">Business Unit Name</label>
+                <input asp-for="Name" class="form-control" maxlength="100" required />
+                <span asp-validation-for="Name" class="text-danger"></span>
+            </div>
+            <div class="mb-3">
+                <label asp-for="NotificationEmails" class="form-label">Internal Notification Emails</label>
+                <textarea asp-for="NotificationEmails" class="form-control" rows="2" maxlength="1000"
+                          placeholder="scm@gandummas.co.id; b2b.admin@gandummas.co.id"></textarea>
+                <div class="form-text">
+                    Internal PT. GMK addresses notified whenever a distributor in this Business Unit
+                    completes a Sellout, Stock or Service Level upload. Separate addresses with
+                    <code>;</code>. Leave blank to notify nobody internally — the distributor still
+                    receives their own confirmation.
+                </div>
+                <span asp-validation-for="NotificationEmails" class="text-danger"></span>
+            </div>
+            <div class="mb-3">
+                <label asp-for="IsActive" class="form-label"></label>
+                <select asp-for="IsActive" class="form-select">
+                    <option value="true">Active</option>
+                    <option value="false">Inactive</option>
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary">Save Business Unit</button>
+            <a asp-action="Index" class="btn btn-secondary ms-2">Cancel</a>
+        </form>
+    </div>
+</div>
+
+@section Scripts { <partial name="_ValidationScriptsPartial" /> }

@@ -89,7 +89,7 @@ public sealed class ItemMappingImportService(
                     {
                         CompanyId = companyId, GmkItemId = parsedMapping.GmkItemId, GmkItemName = parsedMapping.GmkItemName,
                         DistributorItemId = parsedMapping.DistributorItemId, DistributorItemName = parsedMapping.DistributorItemName,
-                        IsActive = true, CreatedBy = username, CreatedDate = now
+                        IsActive = parsedMapping.IsActive, CreatedBy = username, CreatedDate = now
                     });
                 }
                 continue;
@@ -108,7 +108,7 @@ public sealed class ItemMappingImportService(
                 {
                     Id = existing.Id, CompanyId = existing.CompanyId, GmkItemId = parsedMapping.GmkItemId,
                     GmkItemName = parsedMapping.GmkItemName, DistributorItemId = parsedMapping.DistributorItemId,
-                    DistributorItemName = parsedMapping.DistributorItemName, IsActive = existing.IsActive,
+                    DistributorItemName = parsedMapping.DistributorItemName, IsActive = parsedMapping.IsActive,
                     CreatedBy = existing.CreatedBy, CreatedDate = existing.CreatedDate, ModifiedBy = username, ModifiedDate = now
                 });
             }
@@ -121,7 +121,8 @@ public sealed class ItemMappingImportService(
         string.Equals(incoming.GmkItemId.Trim(), existing.GmkItemId.Trim(), StringComparison.Ordinal) &&
         string.Equals(incoming.GmkItemName.Trim(), existing.GmkItemName.Trim(), StringComparison.Ordinal) &&
         string.Equals(incoming.DistributorItemId.Trim(), existing.DistributorItemId.Trim(), StringComparison.OrdinalIgnoreCase) &&
-        string.Equals(incoming.DistributorItemName.Trim(), existing.DistributorItemName.Trim(), StringComparison.Ordinal);
+        string.Equals(incoming.DistributorItemName.Trim(), existing.DistributorItemName.Trim(), StringComparison.Ordinal) &&
+        incoming.IsActive == existing.IsActive;
 
     private static ItemMappingImportResultDto ToResult(ItemMappingImportPreviewDto preview) => new()
     {

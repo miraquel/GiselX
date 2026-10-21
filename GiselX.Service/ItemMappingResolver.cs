@@ -49,8 +49,7 @@ public sealed class ItemMappingResolver(
             };
         }
 
-        var mapping = context.Mappings.FirstOrDefault(value => value.IsActive &&
-            StringComparer.OrdinalIgnoreCase.Equals(Trim(value.DistributorItemId), id));
+        var mapping = context.FindActive(id);
         if (mapping is null)
         {
             return new ItemIdentityResolutionDto
@@ -71,5 +70,5 @@ public sealed class ItemMappingResolver(
         };
     }
 
-    private static string? Trim(string? value) => string.IsNullOrWhiteSpace(value) ? value?.Trim() : value.Trim();
+    private static string? Trim(string? value) => value?.Trim();
 }

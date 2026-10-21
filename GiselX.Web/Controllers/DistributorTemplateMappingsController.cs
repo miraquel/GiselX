@@ -1,5 +1,6 @@
 using GiselX.Common.Constants;
 using GiselX.Domain;
+using GiselX.Service;
 using GiselX.Service.Dto;
 using GiselX.Service.Dto.Common;
 using GiselX.Service.Interface;
@@ -10,12 +11,13 @@ using Microsoft.AspNetCore.Mvc;
 namespace GiselX.Web.Controllers;
 
 [Area("Admin")]
-[Authorize(PermissionConstants.Companies.Edit)]
+[Authorize]
 public sealed class DistributorTemplateMappingsController(
     IDistributorTemplateMappingService mappingService,
     ISelloutWorkbookInspector inspector) : Controller
 {
     [HttpGet]
+    [Authorize(PermissionConstants.DistributorTemplateMappings.Index)]
     public async Task<IActionResult> Index(int companyId, CancellationToken cancellationToken)
     {
         var response = await mappingService.ListAsync(companyId, cancellationToken);
@@ -27,6 +29,7 @@ public sealed class DistributorTemplateMappingsController(
     }
 
     [HttpGet]
+    [Authorize(PermissionConstants.DistributorTemplateMappings.Manage)]
     public IActionResult Create(int companyId) => View("Edit", new DistributorTemplateMappingEditViewModel
     {
         CompanyId = companyId,
@@ -34,6 +37,7 @@ public sealed class DistributorTemplateMappingsController(
     });
 
     [HttpGet]
+    [Authorize(PermissionConstants.DistributorTemplateMappings.Manage)]
     public async Task<IActionResult> Edit(int id, int companyId, CancellationToken cancellationToken)
     {
         var response = await mappingService.GetAsync(id, companyId, cancellationToken);
@@ -48,26 +52,24 @@ public sealed class DistributorTemplateMappingsController(
     }
 
     [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(PermissionConstants.DistributorTemplateMappings.Manage)]
     public async Task<IActionResult> Inspect(IFormFile sampleFile, string? worksheetName, int headerRowNumber,
         int firstDataRowNumber, CancellationToken cancellationToken)
     {
         if (sampleFile is null || sampleFile.Length == 0) return BadRequest("A sample .xlsx file is required.");
-        await using var input = sampleFile!.OpenReadStream();
-        using var memory = new MemoryStream();
-        await input.CopyToAsync(memory, cancellationToken);
-        return Json(await inspector.InspectAsync(memory.ToArray(), worksheetName, headerRowNumber, firstDataRowNumber, cancellationToken));
+        return Json(await inspector.InspectAsync(await ReadAsync(sampleFile, cancellationToken), worksheetName,
+            headerRowNumber, firstDataRowNumber, cancellationToken));
     }
 
     [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(PermissionConstants.DistributorTemplateMappings.Manage)]
     public async Task<IActionResult> Save(DistributorTemplateMappingEditViewModel model, IFormFile sampleFile,
         CancellationToken cancellationToken)
     {
         if (sampleFile is null || sampleFile.Length == 0) ModelState.AddModelError("sampleFile", "A sample .xlsx file is required.");
         if (!ModelState.IsValid) return View("Edit", model);
-        await using var input = sampleFile!.OpenReadStream();
-        using var memory = new MemoryStream();
-        await input.CopyToAsync(memory, cancellationToken);
-        var preview = await inspector.InspectAsync(memory.ToArray(), model.WorksheetName, model.HeaderRowNumber, model.FirstDataRowNumber, cancellationToken);
+        var preview = await inspector.InspectAsync(await ReadAsync(sampleFile!, cancellationToken),
+            model.WorksheetName, model.HeaderRowNumber, model.FirstDataRowNumber, cancellationToken);
         if (preview.Errors.Count > 0)
         {
             foreach (var error in preview.Errors) ModelState.AddModelError(string.Empty, error);
@@ -78,11 +80,12 @@ public sealed class DistributorTemplateMappingsController(
             .Where(column => column.SourceColumnNumber > 0 && column.SourceColumnNumber <= preview.Headers.Count)
             .Select(column =>
             {
-                column.SourceHeader = preview.Headers[column.SourceColumnNumber - 1];
+                var sourceHeader = preview.Headers[column.SourceColumnNumber - 1];
+                column.SourceHeader = sourceHeader;
                 return new DistributorTemplateColumnDto
                 {
                     SourceColumnNumber = column.SourceColumnNumber,
-                    SourceHeader = column.SourceHeader,
+                    SourceHeader = sourceHeader,
                     CanonicalField = column.CanonicalField!.Value
                 };
             }).ToList();
@@ -101,16 +104,19 @@ public sealed class DistributorTemplateMappingsController(
     }
 
     [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(PermissionConstants.DistributorTemplateMappings.Manage)]
     public async Task<IActionResult> Activate(int id, int companyId, CancellationToken cancellationToken) =>
         RedirectToList(companyId, await mappingService.SetActiveAsync(id, companyId, true,
             User.Identity?.Name ?? "unknown", cancellationToken));
 
     [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(PermissionConstants.DistributorTemplateMappings.Manage)]
     public async Task<IActionResult> Deactivate(int id, int companyId, CancellationToken cancellationToken) =>
         RedirectToList(companyId, await mappingService.SetActiveAsync(id, companyId, false,
             User.Identity?.Name ?? "unknown", cancellationToken));
 
     [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(PermissionConstants.DistributorTemplateMappings.Delete)]
     public async Task<IActionResult> Delete(int id, int companyId, CancellationToken cancellationToken)
     {
         var response = await mappingService.DeleteAsync(id, companyId, cancellationToken);
@@ -124,6 +130,14 @@ public sealed class DistributorTemplateMappingsController(
         else
             TempData["ErrorMessage"] = string.Join(" ", response.Errors);
         return RedirectToAction(nameof(Index), new { companyId });
+    }
+
+    private static async Task<byte[]> ReadAsync(IFormFile file, CancellationToken cancellationToken)
+    {
+        await using var input = file.OpenReadStream();
+        using var memory = new MemoryStream();
+        await input.CopyToAsync(memory, cancellationToken);
+        return LegacyExcelWorkbookConverter.EnsureOpenXmlOrOriginal(memory.ToArray());
     }
 
     private static List<DistributorTemplateColumnEditViewModel> BuildCanonicalRows(

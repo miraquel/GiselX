@@ -4,6 +4,7 @@ using GiselX.Domain;
 using GiselX.Repository;
 using GiselX.Service;
 using GiselX.Service.Dto.Common;
+using GiselX.Service.Interface;
 using GiselX.Web;
 using GiselX.Web.Context;
 using Hangfire;
@@ -52,6 +53,7 @@ builder.Services.ConfigureApplicationCookie(options =>
 builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("Email"));
 builder.Services.Configure<SelloutUploadOptions>(builder.Configuration.GetSection(SelloutUploadOptions.SectionName));
 builder.Services.Configure<StockUploadOptions>(builder.Configuration.GetSection(StockUploadOptions.SectionName));
+builder.Services.Configure<UploadArchiveOptions>(builder.Configuration.GetSection(UploadArchiveOptions.SectionName));
 
 // Hangfire
 builder.Services.AddHangfire(config =>
@@ -61,6 +63,13 @@ builder.Services.AddHangfireServer();
 builder.Services.AddGiselXRepository();
 builder.Services.AddGiselXService();
 
+// The Service layer raises upload notifications through an abstraction so it carries no Hangfire
+// dependency; this is the implementation that actually queues them.
+builder.Services.AddScoped<IUploadNotificationDispatcher, HangfireUploadNotificationDispatcher>();
+
+// SMTP settings are stored encrypted, so the password is not readable from the database alone.
+builder.Services.AddScoped<IEmailSecretProtector, DataProtectionEmailSecretProtector>();
+
 builder.Services.AddScoped(serviceProvider =>
 {
     var httpContextAccessor = serviceProvider.GetRequiredService<IHttpContextAccessor>();
@@ -69,7 +78,8 @@ builder.Services.AddScoped(serviceProvider =>
     var userClaimDto = new UserClaimDto
     {
         UserId = userId,
-        Username = username
+        Username = username,
+        IsAdministrator = httpContextAccessor.HttpContext?.User.IsInRole("Administrator") == true
     };
 
     return userClaimDto;

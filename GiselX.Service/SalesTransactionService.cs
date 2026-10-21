@@ -112,9 +112,10 @@ public class SalesTransactionService : ISalesTransactionService
     {
         var user = await _userManager.FindByNameAsync(_userClaimDto.Username)
             ?? throw new InvalidOperationException("User not found.");
+        var companyId = _userClaimDto.IsAdministrator ? 0 : user.CompanyId;
 
         var pagedList = await _salesTransactionRepository.SelectAsync(
-            _mapper.MapToEntity(pagedListRequest), user.CompanyId, useDistributorIdentity, cancellationToken);
+            _mapper.MapToEntity(pagedListRequest), companyId, useDistributorIdentity, cancellationToken);
 
         return new ServiceResponse<PagedListDto<SalesTransactionDto>>
         {
@@ -127,7 +128,8 @@ public class SalesTransactionService : ISalesTransactionService
     public async Task<ServiceResponse<IEnumerable<SalesTransactionDto>>> SelectByCustPeriodAsync(int companyId, int year,
         int month, bool useDistributorIdentity, CancellationToken cancellationToken)
     {
-        var results = await _salesTransactionRepository.SelectByCustPeriodAsync(companyId, year, month,
+        var scopeCompanyId = await ResolveCompanyScopeAsync();
+        var results = await _salesTransactionRepository.SelectByCustPeriodAsync(scopeCompanyId, year, month,
             useDistributorIdentity, cancellationToken);
 
         return new ServiceResponse<IEnumerable<SalesTransactionDto>>
@@ -143,7 +145,8 @@ public class SalesTransactionService : ISalesTransactionService
         var user = await _userManager.FindByNameAsync(_userClaimDto.Username)
             ?? throw new InvalidOperationException("User not found.");
 
-        var periods = await _salesTransactionRepository.SelectPeriodsAsync(user.CompanyId, cancellationToken);
+        var companyId = _userClaimDto.IsAdministrator ? 0 : user.CompanyId;
+        var periods = await _salesTransactionRepository.SelectPeriodsAsync(companyId, cancellationToken);
 
         return new ServiceResponse<IEnumerable<PeriodDto>>
         {
@@ -151,5 +154,32 @@ public class SalesTransactionService : ISalesTransactionService
             Message = "Periods retrieved successfully.",
             StatusCode = StatusCodes.Status200OK
         };
+    }
+
+    public async Task<ServiceResponse<SalesSelectionSummaryDto>> SelectSummaryAsync(PagedListRequestDto request,
+        bool useDistributorIdentity, CancellationToken cancellationToken)
+    {
+        var companyId = await ResolveCompanyScopeAsync();
+        var summary = await _salesTransactionRepository.SummarizeAsync(
+            _mapper.MapToEntity(request), companyId, useDistributorIdentity, cancellationToken);
+        return new ServiceResponse<SalesSelectionSummaryDto>
+        {
+            Data = new SalesSelectionSummaryDto
+            {
+                DistributorCount = summary.DistributorCount, RowCount = summary.RowCount,
+                InvoiceQty = summary.InvoiceQty, GrossValue = summary.GrossValue,
+                DiscountValue = summary.DiscountValue, NetValue = summary.NetValue
+            },
+            Message = "Sellout summary retrieved successfully."
+        };
+    }
+
+    private async Task<int> ResolveCompanyScopeAsync()
+    {
+        if (_userClaimDto.IsAdministrator) return 0;
+
+        var user = await _userManager.FindByNameAsync(_userClaimDto.Username)
+            ?? throw new InvalidOperationException("User not found.");
+        return user.CompanyId;
     }
 }

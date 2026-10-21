@@ -6,6 +6,21 @@ public partial class Company
 
     public string Name { get; set; } = null!;
 
+    public int? BusinessUnitId { get; set; }
+
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public string? BusinessUnitName { get; set; }
+
+    public int? ChannelId { get; set; }
+
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public string? ChannelName { get; set; }
+
+    public int? SalesmanId { get; set; }
+
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public string? SalesmanName { get; set; }
+
     public string? Address { get; set; }
 
     public string? ContactEmail { get; set; }
@@ -18,6 +33,12 @@ public partial class Company
 
     public bool ItemMappingEnabled { get; set; }
 
+    public virtual BusinessUnit? BusinessUnit { get; set; }
+
+    public virtual Channel? Channel { get; set; }
+
+    public virtual Salesman? Salesman { get; set; }
+
     public virtual ICollection<TransDist> TransDist { get; set; } = new List<TransDist>();
     public virtual ICollection<ServelDeliveryEx> ServelDeliveryEx { get; set; } = new List<ServelDeliveryEx>();
     public virtual ICollection<ServelReceiptEx> ServelReceiptEx { get; set; } = new List<ServelReceiptEx>();
@@ -26,6 +47,7 @@ public partial class Company
     public virtual ICollection<DistributorTemplateMapping> DistributorTemplateMappings { get; set; } = new List<DistributorTemplateMapping>();
     public virtual ICollection<StockTemplateMapping> StockTemplateMappings { get; set; } = new List<StockTemplateMapping>();
     public virtual ICollection<ItemMapping> ItemMappings { get; set; } = new List<ItemMapping>();
+    public virtual ICollection<StockArea> StockAreas { get; set; } = new List<StockArea>();
     public virtual ICollection<PowerBiReport> PowerBiReports { get; set; } = new List<PowerBiReport>();
     public virtual ICollection<StockUploadBatch> StockUploadBatches { get; set; } = new List<StockUploadBatch>();
     public virtual ICollection<SelloutUploadBatch> SelloutUploadBatches { get; set; } = new List<SelloutUploadBatch>();

@@ -1,4 +1,6 @@
 using GiselX.Common.Constants;
+using GiselX.Domain;
+using GiselX.Service;
 using GiselX.Service.Dto;
 using GiselX.Service.Dto.Common;
 using GiselX.Service.Interface;
@@ -9,12 +11,13 @@ using Microsoft.AspNetCore.Mvc;
 namespace GiselX.Web.Controllers;
 
 [Area("Admin")]
-[Authorize(PermissionConstants.Companies.Edit)]
+[Authorize]
 public sealed class StockTemplateMappingsController(
     IStockTemplateMappingService mappingService,
     IStockWorkbookInspector inspector) : Controller
 {
     [HttpGet]
+    [Authorize(PermissionConstants.StockTemplateMappings.Index)]
     public async Task<IActionResult> Index(int companyId, CancellationToken cancellationToken)
     {
         var response = await mappingService.ListAsync(companyId, cancellationToken);
@@ -22,10 +25,16 @@ public sealed class StockTemplateMappingsController(
     }
 
     [HttpGet]
+    [Authorize(PermissionConstants.StockTemplateMappings.Manage)]
     public IActionResult Create(int companyId) =>
-        View("Edit", new StockTemplateMappingEditViewModel { CompanyId = companyId });
+        View("Edit", new StockTemplateMappingEditViewModel
+        {
+            CompanyId = companyId,
+            Columns = BuildCanonicalRows([])
+        });
 
     [HttpGet]
+    [Authorize(PermissionConstants.StockTemplateMappings.Manage)]
     public async Task<IActionResult> Edit(int id, int companyId, CancellationToken cancellationToken)
     {
         var value = (await mappingService.GetAsync(id, companyId, cancellationToken)).Data;
@@ -38,16 +47,14 @@ public sealed class StockTemplateMappingsController(
             WorksheetName = value.WorksheetName,
             HeaderRowNumber = value.HeaderRowNumber,
             FirstDataRowNumber = value.FirstDataRowNumber,
-            Columns = value.Columns.Select(column => new StockTemplateColumnEditViewModel
-            {
-                SourceColumnNumber = column.SourceColumnNumber,
-                SourceHeader = column.SourceHeader,
-                CanonicalField = column.CanonicalField
-            }).ToList()
+            GoodConditionValues = value.GoodConditionValues,
+            BadConditionValues = value.BadConditionValues,
+            Columns = BuildCanonicalRows(value.Columns)
         });
     }
 
     [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(PermissionConstants.StockTemplateMappings.Manage)]
     public async Task<IActionResult> Inspect(IFormFile sampleFile, string? worksheetName, int headerRowNumber,
         int firstDataRowNumber, CancellationToken cancellationToken)
     {
@@ -57,6 +64,7 @@ public sealed class StockTemplateMappingsController(
     }
 
     [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(PermissionConstants.StockTemplateMappings.Manage)]
     public async Task<IActionResult> Save(StockTemplateMappingEditViewModel model, IFormFile sampleFile,
         CancellationToken cancellationToken)
     {
@@ -89,6 +97,8 @@ public sealed class StockTemplateMappingsController(
             HeaderRowNumber = model.HeaderRowNumber,
             FirstDataRowNumber = model.FirstDataRowNumber,
             HeaderSignature = preview.HeaderSignature,
+            GoodConditionValues = model.GoodConditionValues,
+            BadConditionValues = model.BadConditionValues,
             Columns = assignments
         }, User.Identity?.Name ?? "unknown", cancellationToken);
         if (!response.IsSuccess)
@@ -101,16 +111,19 @@ public sealed class StockTemplateMappingsController(
     }
 
     [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(PermissionConstants.StockTemplateMappings.Manage)]
     public async Task<IActionResult> Activate(int id, int companyId, CancellationToken cancellationToken) =>
         RedirectToList(companyId, await mappingService.SetActiveAsync(id, companyId, true,
             User.Identity?.Name ?? "unknown", cancellationToken));
 
     [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(PermissionConstants.StockTemplateMappings.Manage)]
     public async Task<IActionResult> Deactivate(int id, int companyId, CancellationToken cancellationToken) =>
         RedirectToList(companyId, await mappingService.SetActiveAsync(id, companyId, false,
             User.Identity?.Name ?? "unknown", cancellationToken));
 
     [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(PermissionConstants.StockTemplateMappings.Delete)]
     public async Task<IActionResult> Delete(int id, int companyId, CancellationToken cancellationToken) =>
         RedirectToList(companyId, await mappingService.DeleteAsync(id, companyId, cancellationToken));
 
@@ -126,6 +139,27 @@ public sealed class StockTemplateMappingsController(
         await using var input = file.OpenReadStream();
         using var memory = new MemoryStream();
         await input.CopyToAsync(memory, cancellationToken);
-        return memory.ToArray();
+        return LegacyExcelWorkbookConverter.EnsureOpenXmlOrOriginal(memory.ToArray());
+    }
+
+    private static List<StockTemplateColumnEditViewModel> BuildCanonicalRows(
+        IEnumerable<StockTemplateColumnDto> mappedColumns)
+    {
+        var mappedByField = mappedColumns
+            .GroupBy(column => column.CanonicalField)
+            .ToDictionary(group => group.Key, group => group.First());
+
+        return Enum.GetValues<StockCanonicalField>()
+            .Select(field =>
+            {
+                mappedByField.TryGetValue(field, out var mapped);
+                return new StockTemplateColumnEditViewModel
+                {
+                    CanonicalField = field,
+                    SourceColumnNumber = mapped?.SourceColumnNumber ?? 0,
+                    SourceHeader = mapped?.SourceHeader
+                };
+            })
+            .ToList();
     }
 }

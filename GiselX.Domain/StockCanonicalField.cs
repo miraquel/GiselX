@@ -13,5 +13,9 @@ public enum StockCanonicalField
     SaldoAkhir,
     BatchNumber,
     ExpiredDate,
-    PriceUnit
+    PriceUnit,
+    SmallestUnit,
+    SmallestUnitQty,
+    Area,
+    Condition
 }

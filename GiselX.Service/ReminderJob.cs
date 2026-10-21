@@ -27,12 +27,17 @@ public class ReminderJob
 
         foreach (var company in companies)
         {
+            // ContactEmail is a delimited list, so it is split here rather than handed to the mailer
+            // whole — passing "a@x; b@y" as one address made MimeKit throw and killed the reminder.
+            var recipients = NotificationRecipients.Parse(company.ContactEmail);
+            if (recipients.Count == 0) continue;
+
             foreach (var (deadlineDate, isFinalReminder) in ResolveTriggers(company, today))
             {
                 var isWeekly = company.DeadlineDaysOfWeek.HasValue;
                 var hasUploaded = await _uploadCheckService.HasUploadedThisPeriodAsync(company.Id, isWeekly);
                 if (!hasUploaded)
-                    await _emailService.SendReminderAsync(company.ContactEmail!, company.Name, deadlineDate, isFinalReminder);
+                    await _emailService.SendReminderAsync(recipients, company.Name, deadlineDate, isFinalReminder);
             }
         }
     }

@@ -83,66 +83,54 @@ public class SalesTransactionsController : Controller
             User.IsInRole("Distributor"), cancellationToken);
         if (response is { IsSuccess: true, Data: not null })
         {
+            var includeDistributor = User.IsInRole("Administrator");
+            var columnOffset = includeDistributor ? 1 : 0;
             var stream = ExcelHelper.ExportExcel(response.Data, (row, dto) =>
             {
                 if (row.RowNumber() == 1)
                 {
-                    row.Cell(1).Value = "Customer ID";
-                    row.Cell(2).Value = "Customer Name";
-                    row.Cell(3).Value = "Customer Alias";
-                    row.Cell(4).Value = "Customer Address";
-                    row.Cell(5).Value = "Product ID";
-                    row.Cell(6).Value = "Product Brand";
-                    row.Cell(7).Value = "Product Name";
-                    row.Cell(8).Value = "Product Packaging";
-                    row.Cell(9).Value = "Pcs/Ctn";
-                    row.Cell(10).Value = "Batch No";
-                    row.Cell(11).Value = "Expired Date";
-                    row.Cell(12).Value = "Invoice No";
-                    row.Cell(13).Value = "Invoice Date";
-                    row.Cell(14).Value = "Invoice Qty";
-                    row.Cell(15).Value = "Unit";
-                    row.Cell(16).Value = "Unit Price";
-                    row.Cell(17).Value = "Gross Value";
-                    row.Cell(18).Value = "Discount Value";
-                    row.Cell(19).Value = "Discount %";
-                    row.Cell(20).Value = "Net Value";
-                    row.Cell(21).Value = "In Kg";
-                    row.Cell(22).Value = "Geisa PO ID";
-                    row.Cell(23).Value = "Ship Date";
-                    row.Cell(24).Value = "Salesman";
+                    var headers = new[] { "Customer ID", "Customer Name", "Customer Alias", "Customer Address",
+                        "Product ID", "Product Brand", "Product Name", "Product Packaging", "Pcs/Ctn", "Batch No",
+                        "Expired Date", "Invoice No", "Invoice Date", "Invoice Qty", "Unit", "Unit Price",
+                        "Gross Value", "Discount Value", "Discount %", "Net Value", "In Kg", "Geisa PO ID",
+                        "Ship Date", "Salesman" };
+                    if (includeDistributor) row.Cell(1).Value = "Distributor";
+                    for (var index = 0; index < headers.Length; index++)
+                        row.Cell(index + 1 + columnOffset).Value = headers[index];
                 }
                 else
                 {
-                    row.Cell(1).Value = dto.CustomerId;
-                    row.Cell(2).Value = dto.CustomerName;
-                    row.Cell(3).Value = dto.CustomerAlias;
-                    row.Cell(4).Value = dto.CustomerAddress;
-                    row.Cell(5).Value = dto.ProductId;
-                    row.Cell(6).Value = dto.ProductBrand;
-                    row.Cell(7).Value = dto.ProductName;
-                    row.Cell(8).Value = dto.ProductPackaging;
-                    row.Cell(9).Value = dto.ProductPcsInCtn;
-                    row.Cell(10).Value = dto.BatchNumber;
-                    row.Cell(11).Value = dto.ExpiredDate == SqlDateTime.MinValue.Value ? null : dto.ExpiredDate.ToString("yyyy-MM-dd");
-                    row.Cell(12).Value = dto.InvoiceNo;
-                    row.Cell(13).Value = dto.InvoiceDate == SqlDateTime.MinValue.Value ? null : dto.InvoiceDate.ToString("yyyy-MM-dd");
-                    row.Cell(14).Value = dto.InvoiceQty;
-                    row.Cell(15).Value = dto.InvoiceUnit;
-                    row.Cell(16).Value = dto.UnitPrice;
-                    row.Cell(17).Value = dto.GrossValue;
-                    row.Cell(18).Value = dto.DiscountValue;
-                    row.Cell(19).Value = dto.DiscountPct;
-                    row.Cell(20).Value = dto.NetValue;
-                    row.Cell(21).Value = dto.InKg;
-                    row.Cell(22).Value = dto.GeisaPOId;
-                    row.Cell(23).Value = dto.ShipDate == SqlDateTime.MinValue.Value ? null : dto.ShipDate.ToString("yyyy-MM-dd");
-                    row.Cell(24).Value = dto.SalesmanNameGMK;
+                    if (includeDistributor) row.Cell(1).Value = dto.CompanyName;
+                    row.Cell(1 + columnOffset).Value = dto.CustomerId;
+                    row.Cell(2 + columnOffset).Value = dto.CustomerName;
+                    row.Cell(3 + columnOffset).Value = dto.CustomerAlias;
+                    row.Cell(4 + columnOffset).Value = dto.CustomerAddress;
+                    row.Cell(5 + columnOffset).Value = dto.ProductId;
+                    row.Cell(6 + columnOffset).Value = dto.ProductBrand;
+                    row.Cell(7 + columnOffset).Value = dto.ProductName;
+                    row.Cell(8 + columnOffset).Value = dto.ProductPackaging;
+                    row.Cell(9 + columnOffset).Value = dto.ProductPcsInCtn;
+                    row.Cell(10 + columnOffset).Value = dto.BatchNumber;
+                    row.Cell(11 + columnOffset).Value = dto.ExpiredDate == SqlDateTime.MinValue.Value ? null : dto.ExpiredDate.ToString("yyyy-MM-dd");
+                    row.Cell(12 + columnOffset).Value = dto.InvoiceNo;
+                    row.Cell(13 + columnOffset).Value = dto.InvoiceDate == SqlDateTime.MinValue.Value ? null : dto.InvoiceDate.ToString("yyyy-MM-dd");
+                    row.Cell(14 + columnOffset).Value = dto.InvoiceQty;
+                    row.Cell(15 + columnOffset).Value = dto.InvoiceUnit;
+                    row.Cell(16 + columnOffset).Value = dto.UnitPrice;
+                    row.Cell(17 + columnOffset).Value = dto.GrossValue;
+                    row.Cell(18 + columnOffset).Value = dto.DiscountValue;
+                    row.Cell(19 + columnOffset).Value = dto.DiscountPct;
+                    row.Cell(20 + columnOffset).Value = dto.NetValue;
+                    row.Cell(21 + columnOffset).Value = dto.InKg;
+                    row.Cell(22 + columnOffset).Value = dto.GeisaPOId;
+                    row.Cell(23 + columnOffset).Value = dto.ShipDate == SqlDateTime.MinValue.Value ? null : dto.ShipDate.ToString("yyyy-MM-dd");
+                    row.Cell(24 + columnOffset).Value = dto.SalesmanNameGMK;
                 }
             });
 
             var monthYear = new DateTime(year, month, 1);
-            var fileName = $"SalesTransactions_{user.Company.Name}_{monthYear:MMMM_yyyy}.xlsx";
+            var companyLabel = includeDistributor ? "All_Distributors" : user.Company.Name;
+            var fileName = $"SalesTransactions_{companyLabel}_{monthYear:MMMM_yyyy}.xlsx";
             return File(stream, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
         }
 
@@ -179,7 +167,8 @@ public class SalesTransactionsController : Controller
     [HttpPost]
     [Authorize(PermissionConstants.SalesTransactions.Upload)]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Upload([FromForm(Name = "file")] IFormFile fileInput, bool multiWeekConfirmed, CancellationToken cancellationToken)
+    public async Task<IActionResult> Upload([FromForm(Name = "file")] IFormFile fileInput, bool multiWeekConfirmed,
+        string? confirmedSha256, CancellationToken cancellationToken)
     {
         if (fileInput.Length == 0)
         {
@@ -196,10 +185,31 @@ public class SalesTransactionsController : Controller
 
         await using var stream = fileInput.OpenReadStream();
         var response = await _selloutUploadService.UploadAsync(stream, fileInput.FileName, user.CompanyId,
-            multiWeekConfirmed, user.UserName ?? "unknown", cancellationToken);
+            multiWeekConfirmed, user.UserName ?? "unknown", confirmedSha256, cancellationToken);
         if (response.Data?.GroupId > 0) return RedirectToAction(nameof(UploadResult), new { groupId = response.Data.GroupId });
         TempData["ErrorMessage"] = response.Message ?? "Failed to upload sellout data.";
         return RedirectToAction(nameof(Index));
+    }
+
+    /// <summary>
+    /// Hands back the workbook as it was uploaded. Scoped to the signed-in user's own company (any company for
+    /// an Administrator), so the link in a forwarded notification email is useless to anyone outside it.
+    /// </summary>
+    [HttpGet]
+    [Authorize(PermissionConstants.SalesTransactions.Index)]
+    public async Task<IActionResult> DownloadSource(long groupId, CancellationToken cancellationToken)
+    {
+        var user = await _userManager.GetUserAsync(User);
+        if (user is null) return Challenge();
+
+        var response = await _selloutUploadService.DownloadSourceAsync(groupId, UploadScope(user), cancellationToken);
+        if (!response.IsSuccess || response.Data is null)
+        {
+            TempData["ErrorMessage"] = string.Join(" ", response.Errors);
+            return RedirectToAction(nameof(Index));
+        }
+
+        return File(response.Data.Content, response.Data.ContentType, response.Data.FileName);
     }
 
     [HttpGet]
@@ -208,7 +218,14 @@ public class SalesTransactionsController : Controller
     {
         var user = await _userManager.GetUserAsync(User);
         if (user is null) return Challenge();
-        var response = await _selloutUploadService.GetUploadResultAsync(groupId, batchId, user.CompanyId, cancellationToken);
+        var response = await _selloutUploadService.GetUploadResultAsync(groupId, batchId, UploadScope(user), cancellationToken);
         return response.Data is null ? NotFound() : View(response.Data);
     }
+
+    /// <summary>
+    /// The company an upload result or archived workbook is looked up in. Administrators are PT. GMK
+    /// staff whose own CompanyId is not the distributor's, and the internal notification mail sends them
+    /// these same links — scoping them to their own company would 404 every one.
+    /// </summary>
+    private int UploadScope(AppIdentityUser user) => User.IsInRole("Administrator") ? 0 : user.CompanyId;
 }
