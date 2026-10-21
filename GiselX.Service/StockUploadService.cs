@@ -230,6 +230,8 @@ public sealed class StockUploadService(
         ProductName = row.ProductName, DistributorProductId = row.DistributorProductId,
         DistributorProductName = row.DistributorProductName, ItemMappingId = row.ItemMappingId,
         ProductPackaging = row.ProductPackaging,
+        StockAreaId = row.StockAreaId, Condition = row.Condition,
+        SourceAreaText = row.SourceAreaText, SourceConditionText = row.SourceConditionText,
         ProductPcsInCtn = row.ProductPcsInCtn, ProductNetto = row.ProductNetto, ProductUnit = row.ProductUnit,
         SmallestUnit = row.SmallestUnit, SmallestUnitQty = row.SmallestUnitQty,
         PriceUnit = row.PriceUnit, SaldoAwal = row.SaldoAwal, SaldoMasukPO = row.SaldoMasukPO,

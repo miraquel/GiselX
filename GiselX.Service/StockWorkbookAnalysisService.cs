@@ -10,6 +10,8 @@ public sealed class StockWorkbookAnalysisService(
     IStockTemplateMappingRepository mappingRepository,
     IStockWorkbookInspector inspector,
     StockWorkbookParser parser,
+    IStockAreaRepository areaRepository,
+    ICompanyRepository companyRepository,
     IItemMappingResolver itemMappingResolver) : IStockWorkbookAnalysisService
 {
     public async Task<StockWorkbookAnalysisDto> AnalyzeAsync(byte[] content, int companyId,
@@ -26,6 +28,28 @@ public sealed class StockWorkbookAnalysisService(
             };
 
         var itemMappingContext = await itemMappingResolver.LoadAsync(companyId, cancellationToken);
+        var activeAreas = await areaRepository.ListAsync(companyId, true, cancellationToken);
+        var companyName = (await companyRepository.GetCompanyByIdAsync(companyId, cancellationToken))?.Name
+            ?? "this distributor";
+        var matcher = new StockAreaMatcher(activeAreas, companyName);
+
+        if (activeAreas.Count > 0)
+        {
+            var refusals = detection.Matches
+                .Where(match => match.Mapping.Columns.All(column => column.CanonicalField != StockCanonicalField.Area))
+                .Select(match => match.Mapping)
+                .DistinctBy(mapping => mapping.Id)
+                .Select(mapping =>
+                    $"Template '{mapping.Name}' does not map an Area column, but {companyName} has Stock areas registered.")
+                .ToList();
+            if (refusals.Count > 0)
+                return new StockWorkbookAnalysisDto
+                {
+                    Errors = refusals,
+                    IgnoredWorksheetNames = detection.IgnoredWorksheetNames
+                };
+        }
+
         var rows = new List<StockStagingRowDto>();
         var errors = new List<StockStagingErrorDto>();
         var ignoredSummaryRows = new List<int>();
@@ -36,11 +60,16 @@ public sealed class StockWorkbookAnalysisService(
             cancellationToken.ThrowIfCancellationRequested();
             var parsed = parser.Parse(content, match.Mapping, match.WorksheetName);
             foreach (var error in parsed.Errors) error.WorksheetName = match.WorksheetName;
+            var mapsArea = match.Mapping.Columns.Any(column => column.CanonicalField == StockCanonicalField.Area);
+            var mapsCondition = match.Mapping.Columns.Any(column => column.CanonicalField == StockCanonicalField.Condition);
             foreach (var row in parsed.Rows)
             {
                 row.StockTemplateMappingId = match.Mapping.Id;
                 row.SourceWorksheetName = match.WorksheetName;
-                Resolve(row, itemMappingContext, match.WorksheetName, errors);
+                var rowErrors = Resolve(row, itemMappingContext, match.WorksheetName, errors);
+                ResolveAreaAndCondition(row, match.Mapping, mapsArea ? matcher : null, mapsCondition,
+                    match.WorksheetName, rowErrors, errors);
+                if (rowErrors.Count > 0) row.ValidationErrorsJson = JsonSerializer.Serialize(rowErrors);
             }
 
             rows.AddRange(parsed.Rows);
@@ -72,8 +101,43 @@ public sealed class StockWorkbookAnalysisService(
         };
     }
 
-    private void Resolve(StockStagingRowDto row, ItemMappingContextDto itemMappingContext, string worksheetName,
-        List<StockStagingErrorDto> errors)
+    private static void ResolveAreaAndCondition(StockStagingRowDto row, StockTemplateMappingDto mapping,
+        StockAreaMatcher? areaMatcher, bool mapsCondition, string worksheetName,
+        List<StockStagingErrorDto> rowErrors, List<StockStagingErrorDto> errors)
+    {
+        void Fail(StockCanonicalField field, string? rejected, string reason)
+        {
+            var error = new StockStagingErrorDto
+            {
+                SourceRowNumber = row.SourceRowNumber,
+                WorksheetName = worksheetName,
+                Field = field,
+                RejectedValue = rejected,
+                Reason = reason
+            };
+            rowErrors.Add(error);
+            errors.Add(error);
+            row.IsValid = false;
+        }
+
+        if (areaMatcher is not null)
+        {
+            var area = areaMatcher.Resolve(row.SourceAreaText);
+            if (area.Error is not null) Fail(StockCanonicalField.Area, row.SourceAreaText, area.Error);
+            else row.StockAreaId = area.AreaId;
+        }
+
+        if (mapsCondition)
+        {
+            var (condition, error) = StockConditionResolver.Resolve(row.SourceConditionText,
+                mapping.GoodConditionValues, mapping.BadConditionValues, mapping.Name);
+            if (error is not null) Fail(StockCanonicalField.Condition, row.SourceConditionText, error);
+            else row.Condition = condition ?? StockCondition.Good;
+        }
+    }
+
+    private List<StockStagingErrorDto> Resolve(StockStagingRowDto row, ItemMappingContextDto itemMappingContext,
+        string worksheetName, List<StockStagingErrorDto> errors)
     {
         var resolution = itemMappingResolver.Resolve(itemMappingContext, row.ProductId, row.ProductName);
         row.DistributorProductId = resolution.DistributorItemId;
@@ -99,7 +163,7 @@ public sealed class StockWorkbookAnalysisService(
             row.IsValid = false;
         }
 
-        if (rowErrors.Count > 0) row.ValidationErrorsJson = JsonSerializer.Serialize(rowErrors);
+        return rowErrors;
     }
 
     private static StockTemplateMappingDto ToDto(StockTemplateMapping mapping) => new()

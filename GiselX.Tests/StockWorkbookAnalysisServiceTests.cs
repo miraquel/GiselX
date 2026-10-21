@@ -1,4 +1,5 @@
 using GiselX.Domain;
+using GiselX.Domain.Common;
 using GiselX.Repository.Interface;
 using GiselX.Service;
 using GiselX.Service.Dto;
@@ -13,7 +14,7 @@ public sealed class StockWorkbookAnalysisServiceTests
     {
         var mapping = Mapping();
         var service = new StockWorkbookAnalysisService(new Repository(mapping), new Inspector(),
-            new StockWorkbookParser(), new Resolver());
+            new StockWorkbookParser(), NoAreas(), Companies(), new Resolver());
         var workbook = ClosedXmlSelloutWorkbookInspectorTests.BuildWorkbook("Stock",
             [(3, 1, "P1"), (3, 2, "Valid"), (3, 3, "4"), (4, 1, "P2"), (4, 2, "Invalid"), (4, 3, "-1")]);
 
@@ -30,7 +31,7 @@ public sealed class StockWorkbookAnalysisServiceTests
     public async Task AnalyzeAsync_propagates_detection_failure_without_parsing()
     {
         var service = new StockWorkbookAnalysisService(new Repository(Mapping()), new Inspector(matches: false),
-            new StockWorkbookParser(), new Resolver());
+            new StockWorkbookParser(), NoAreas(), Companies(), new Resolver());
 
         var result = await service.AnalyzeAsync([1], 7, CancellationToken.None);
 
@@ -44,7 +45,7 @@ public sealed class StockWorkbookAnalysisServiceTests
     {
         var mapping = Mapping();
         var service = new StockWorkbookAnalysisService(new Repository(mapping), new Inspector(),
-            new StockWorkbookParser(), new Resolver(new ItemIdentityResolutionDto
+            new StockWorkbookParser(), NoAreas(), Companies(), new Resolver(new ItemIdentityResolutionDto
             {
                 DistributorItemId = "P1", DistributorItemName = "Uploaded Name", GmkItemId = "4100039",
                 GmkItemName = "GMK Name", ItemMappingId = 9
@@ -68,7 +69,7 @@ public sealed class StockWorkbookAnalysisServiceTests
     {
         var mapping = Mapping();
         var service = new StockWorkbookAnalysisService(new Repository(mapping), new Inspector(),
-            new StockWorkbookParser(), new Resolver(new ItemIdentityResolutionDto
+            new StockWorkbookParser(), NoAreas(), Companies(), new Resolver(new ItemIdentityResolutionDto
             {
                 DistributorItemId = "P1", DistributorItemName = "Name",
                 ErrorReason = "Distributor Item ID \"P1\" has no active GMK item mapping."
@@ -94,7 +95,7 @@ public sealed class StockWorkbookAnalysisServiceTests
         second.Name = "Weekly Stock";
         second.WorksheetName = "Stock 2";
         var service = new StockWorkbookAnalysisService(new Repository(first, second), new Inspector(),
-            new StockWorkbookParser(), new Resolver());
+            new StockWorkbookParser(), NoAreas(), Companies(), new Resolver());
         var workbook = ClosedXmlSelloutWorkbookInspectorTests.BuildMultiSheetWorkbook(
             ("Stock", [(3, 1, "P1"), (3, 2, "Sheet one"), (3, 3, "4")]),
             ("Stock 2", [(3, 1, "P2"), (3, 2, "Sheet two"), (3, 3, "9"), (4, 1, "P3"), (4, 2, "Sheet two"), (4, 3, "1")]));
@@ -116,7 +117,7 @@ public sealed class StockWorkbookAnalysisServiceTests
     public async Task AnalyzeAsync_keeps_the_single_mapping_and_reports_skipped_worksheets()
     {
         var service = new StockWorkbookAnalysisService(new Repository(Mapping()),
-            new Inspector(true, "Cover"), new StockWorkbookParser(), new Resolver());
+            new Inspector(true, "Cover"), new StockWorkbookParser(), NoAreas(), Companies(), new Resolver());
         var workbook = ClosedXmlSelloutWorkbookInspectorTests.BuildMultiSheetWorkbook(
             ("Cover", [(1, 1, "Laporan stok")]),
             ("Stock", [(3, 1, "P1"), (3, 2, "Only sheet"), (3, 3, "4")]));
@@ -139,7 +140,7 @@ public sealed class StockWorkbookAnalysisServiceTests
         second.Name = "Weekly Stock";
         second.WorksheetName = "Stock 2";
         var service = new StockWorkbookAnalysisService(new Repository(first, second), new Inspector(),
-            new StockWorkbookParser(), new Resolver());
+            new StockWorkbookParser(), NoAreas(), Companies(), new Resolver());
         var workbook = ClosedXmlSelloutWorkbookInspectorTests.BuildMultiSheetWorkbook(
             ("Stock", [(3, 1, "P1"), (3, 2, "Valid"), (3, 3, "4")]),
             ("Stock 2", [(3, 1, "P2"), (3, 2, "Negative"), (3, 3, "-1")]));
@@ -151,6 +152,127 @@ public sealed class StockWorkbookAnalysisServiceTests
         Assert.Equal(StockCanonicalField.SaldoAkhir, error.Field);
         Assert.Equal(1, result.Sheets.Single(sheet => sheet.WorksheetName == "Stock 2").InvalidRows);
         Assert.Equal(0, result.Sheets.Single(sheet => sheet.WorksheetName == "Stock").InvalidRows);
+    }
+
+    [Fact]
+    public async Task Rows_get_the_area_and_condition_their_cells_resolve_to()
+    {
+        var service = AreaService(AreaAndConditionMapping(), [new StockArea { Id = 5, CompanyId = 7, Name = "Medan" }]);
+        var workbook = ClosedXmlSelloutWorkbookInspectorTests.BuildWorkbook("Stock",
+            [(3, 1, "P1"), (3, 2, "N"), (3, 3, "4"), (3, 4, "medan"), (3, 5, "BAD"),
+             (4, 1, "P2"), (4, 2, "N"), (4, 3, "4"), (4, 4, "Medan"), (4, 5, "good")]);
+
+        var result = await service.AnalyzeAsync(workbook, 7, CancellationToken.None);
+
+        Assert.Equal(2, result.ValidRows);
+        Assert.All(result.Rows, row => Assert.Equal(5, row.StockAreaId));
+        Assert.Equal([StockCondition.Bad, StockCondition.Good], result.Rows.Select(row => row.Condition));
+    }
+
+    [Fact]
+    public async Task An_unresolvable_area_invalidates_only_that_row_and_names_the_text()
+    {
+        var service = AreaService(AreaAndConditionMapping(), [new StockArea { Id = 5, CompanyId = 7, Name = "Medan" }]);
+        var workbook = ClosedXmlSelloutWorkbookInspectorTests.BuildWorkbook("Stock",
+            [(3, 1, "P1"), (3, 2, "N"), (3, 3, "4"), (3, 4, "Narnia"), (3, 5, "GOOD"),
+             (4, 1, "P2"), (4, 2, "N"), (4, 3, "4"), (4, 4, "Medan"), (4, 5, "GOOD")]);
+
+        var result = await service.AnalyzeAsync(workbook, 7, CancellationToken.None);
+
+        Assert.Equal(1, result.ValidRows);
+        var error = Assert.Single(result.RowErrors);
+        Assert.Equal(StockCanonicalField.Area, error.Field);
+        Assert.Equal("Narnia", error.RejectedValue);
+        Assert.Equal("Stock", error.WorksheetName);
+        Assert.Contains("'Narnia'", error.Reason);
+        Assert.Contains("Acme", error.Reason);
+        Assert.Contains("Narnia", result.Rows[0].ValidationErrorsJson);
+        Assert.False(result.Rows[0].IsValid);
+        Assert.True(result.Rows[1].IsValid);
+    }
+
+    [Fact]
+    public async Task A_template_without_area_or_condition_yields_no_area_and_good()
+    {
+        var service = AreaService(Mapping(), []);
+        var workbook = ClosedXmlSelloutWorkbookInspectorTests.BuildWorkbook("Stock",
+            [(3, 1, "P1"), (3, 2, "N"), (3, 3, "4")]);
+
+        var result = await service.AnalyzeAsync(workbook, 7, CancellationToken.None);
+
+        var row = Assert.Single(result.Rows);
+        Assert.True(row.IsValid);
+        Assert.Null(row.StockAreaId);
+        Assert.Equal(StockCondition.Good, row.Condition);
+    }
+
+    [Fact]
+    public async Task A_company_with_areas_refuses_a_template_that_does_not_map_area()
+    {
+        var service = AreaService(Mapping(), [new StockArea { Id = 5, CompanyId = 7, Name = "Medan" }]);
+        var workbook = ClosedXmlSelloutWorkbookInspectorTests.BuildWorkbook("Stock",
+            [(3, 1, "P1"), (3, 2, "N"), (3, 3, "4")]);
+
+        var result = await service.AnalyzeAsync(workbook, 7, CancellationToken.None);
+
+        Assert.Equal("Template 'Daily Stock' does not map an Area column, but Acme has Stock areas registered.",
+            Assert.Single(result.Errors));
+        Assert.Empty(result.Rows);
+    }
+
+    [Fact]
+    public async Task Inactive_areas_do_not_resolve()
+    {
+        var service = AreaService(AreaAndConditionMapping(),
+            [new StockArea { Id = 5, CompanyId = 7, Name = "Medan", IsActive = false },
+             new StockArea { Id = 6, CompanyId = 7, Name = "Binjai" }]);
+        var workbook = ClosedXmlSelloutWorkbookInspectorTests.BuildWorkbook("Stock",
+            [(3, 1, "P1"), (3, 2, "N"), (3, 3, "4"), (3, 4, "Medan"), (3, 5, "GOOD")]);
+
+        var result = await service.AnalyzeAsync(workbook, 7, CancellationToken.None);
+
+        Assert.Equal(0, result.ValidRows);
+        Assert.Contains("'Medan'", Assert.Single(result.RowErrors).Reason);
+    }
+
+    private static StockWorkbookAnalysisService AreaService(StockTemplateMapping mapping, StockArea[] areas) =>
+        new(new Repository(mapping), new Inspector(), new StockWorkbookParser(), new AreaLookup(areas), Companies(),
+            new Resolver());
+
+    private static StockTemplateMapping AreaAndConditionMapping()
+    {
+        var mapping = Mapping();
+        mapping.GoodConditionValues = "GOOD";
+        mapping.BadConditionValues = "BAD";
+        mapping.Columns.Add(new() { SourceColumnNumber = 4, SourceHeader = "Area", CanonicalField = StockCanonicalField.Area });
+        mapping.Columns.Add(new() { SourceColumnNumber = 5, SourceHeader = "Cond", CanonicalField = StockCanonicalField.Condition });
+        return mapping;
+    }
+
+    private static AreaLookup NoAreas() => new([]);
+    private static CompanyLookup Companies() => new();
+
+    private sealed class AreaLookup(params StockArea[] areas) : IStockAreaRepository
+    {
+        public Task<IReadOnlyList<StockArea>> ListAsync(int companyId, bool activeOnly, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<StockArea>>(
+                areas.Where(a => a.CompanyId == companyId).Where(a => !activeOnly || a.IsActive).ToList());
+        public Task<StockArea?> GetAsync(int id, int companyId, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<int> InsertAsync(StockArea area, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task UpdateAsync(StockArea area, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task SetActiveAsync(int id, int companyId, bool isActive, string modifiedBy, DateTime modifiedDate, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<bool> DeleteAsync(int id, int companyId, CancellationToken cancellationToken) => throw new NotSupportedException();
+    }
+
+    private sealed class CompanyLookup : ICompanyRepository
+    {
+        public Task<Company?> GetCompanyByIdAsync(int id, CancellationToken cancellationToken) =>
+            Task.FromResult<Company?>(new Company { Id = id, Name = "Acme" });
+        public Task<Company> CreateCompanyAsync(Company company, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<PagedList<Company>> GetCompaniesAsync(PagedListRequest pagedListRequest, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<Company> UpdateCompanyAsync(Company company, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<IReadOnlyList<Company>> GetAllAsync(CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<IEnumerable<Company>> GetAllWithContactEmailAsync(CancellationToken cancellationToken) => throw new NotSupportedException();
     }
 
     private static StockTemplateMapping Mapping() => new()

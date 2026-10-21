@@ -76,6 +76,27 @@ public sealed class StockUploadServiceTests
     }
 
     [Fact]
+    public async Task Upload_stages_the_area_condition_and_raw_texts_of_each_row()
+    {
+        var analysis = Analysis(1, 0);
+        var source = analysis.Rows[0];
+        source.StockAreaId = 5;
+        source.Condition = StockCondition.Bad;
+        source.SourceAreaText = " Medan ";
+        source.SourceConditionText = "BS";
+        var (service, repository, _) = CreateService(analysis);
+
+        await service.UploadAsync(File(), "stock.xlsx", new DateTime(2026, 8, 10), 7,
+            true, "user", ConfirmedSha(), CancellationToken.None);
+
+        var staged = Assert.Single(repository.StagingRows);
+        Assert.Equal(5, staged.StockAreaId);
+        Assert.Equal(StockCondition.Bad, staged.Condition);
+        Assert.Equal(" Medan ", staged.SourceAreaText);
+        Assert.Equal("BS", staged.SourceConditionText);
+    }
+
+    [Fact]
     public async Task Upload_with_zero_valid_rows_fails_but_commits_staging_diagnostics()
     {
         var (service, repository, transaction) = CreateService(Analysis(0, 2));

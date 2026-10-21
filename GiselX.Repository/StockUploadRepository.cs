@@ -32,13 +32,15 @@ public sealed class StockUploadRepository(IDbConnection connection, IDbTransacti
              DistributorProductId, DistributorProductName, ItemMappingId,
              ProductPackaging, ProductPcsInCtn, ProductNetto, ProductUnit, SmallestUnit, SmallestUnitQty,
              PriceUnit, SaldoAwal, SaldoMasukPO,
-             SaldoAkhir, BatchNumber, ExpiredDate, IsValid, ValidationErrorsJson)
+             SaldoAkhir, BatchNumber, ExpiredDate, IsValid, ValidationErrorsJson,
+             StockAreaId, Condition, SourceAreaText, SourceConditionText)
             VALUES (@StockUploadBatchId, @StockTemplateMappingId, @SourceWorksheetName,
              @SourceRowNumber, @ProductId, @ProductName,
              @DistributorProductId, @DistributorProductName, @ItemMappingId,
              @ProductPackaging, @ProductPcsInCtn, @ProductNetto, @ProductUnit, @SmallestUnit, @SmallestUnitQty,
              @PriceUnit, @SaldoAwal, @SaldoMasukPO,
-             @SaldoAkhir, @BatchNumber, @ExpiredDate, @IsValid, @ValidationErrorsJson)
+             @SaldoAkhir, @BatchNumber, @ExpiredDate, @IsValid, @ValidationErrorsJson,
+             @StockAreaId, @Condition, @SourceAreaText, @SourceConditionText)
             """;
         foreach (var chunk in rows.Chunk(500))
             await connection.ExecuteAsync(new CommandDefinition(sql, chunk, transaction,
