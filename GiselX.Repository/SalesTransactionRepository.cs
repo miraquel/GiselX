@@ -9,7 +9,7 @@ namespace GiselX.Repository;
 
 public class SalesTransactionRepository : ISalesTransactionRepository
 {
-    private static readonly HashSet<string> SelectableFields =
+    internal static readonly HashSet<string> SelectableFields =
     [
         nameof(SalesTransaction.CustomerId), nameof(SalesTransaction.CustomerName),
         nameof(SalesTransaction.CustomerAlias), nameof(SalesTransaction.CustomerAddress),
@@ -25,7 +25,7 @@ public class SalesTransactionRepository : ISalesTransactionRepository
         nameof(SalesTransaction.ShipDate), nameof(SalesTransaction.CreatedDate),
         nameof(SalesTransaction.CompanyName)
     ];
-    private static readonly HashSet<string> NormalSelectableFields = SelectableFields
+    internal static readonly HashSet<string> NormalSelectableFields = SelectableFields
         .Where(field => field != nameof(SalesTransaction.CompanyName)).ToHashSet();
 
     private readonly IDbConnection _dbConnection;
@@ -287,69 +287,12 @@ public class SalesTransactionRepository : ISalesTransactionRepository
         return await _dbConnection.QueryAsync<Period>(command);
     }
 
-    public Task<SalesSelectionSummary> SummarizeAsync(PagedListRequest request, bool useDistributorIdentity,
-        CancellationToken cancellationToken)
+    public Task<SalesSelectionSummary> SummarizeAsync(PagedListRequest request, int companyId,
+        bool useDistributorIdentity, CancellationToken cancellationToken)
     {
-        var parameters = new DynamicParameters();
-        var clauses = new List<string>();
-        var periodClauses = new List<string>();
-        if (request.Filters.TryGetValue("Year", out var yearText) && int.TryParse(yearText, out var year))
-        { parameters.Add("Year", year); periodClauses.Add("YEAR(st.InvoiceDate)=@Year"); }
-        if (request.Filters.TryGetValue("Month", out var monthText) && int.TryParse(monthText, out var month))
-        { parameters.Add("Month", month); periodClauses.Add("MONTH(st.InvoiceDate)=@Month"); }
-
-        foreach (var filter in request.Filters.Where(filter => SelectableFields.Contains(filter.Key)))
-        {
-            if (string.IsNullOrWhiteSpace(filter.Value)) continue;
-            var property = typeof(SalesTransaction).GetProperty(filter.Key);
-            if (property is null) continue;
-            var expression = GetAdministratorColumnExpression(filter.Key, useDistributorIdentity);
-            switch (property.PropertyType)
-            {
-                case { } type when type == typeof(string):
-                    var text = filter.Value.Replace('*', '%');
-                    parameters.Add(filter.Key, text.Contains('%') ? text : $"%{text}%");
-                    clauses.Add($"{expression} LIKE @{filter.Key}");
-                    break;
-                case { } type when type == typeof(int):
-                    if (int.TryParse(filter.Value, out var integer))
-                    { parameters.Add(filter.Key, integer); clauses.Add($"{expression}=@{filter.Key}"); }
-                    break;
-                case { } type when type == typeof(decimal):
-                    if (decimal.TryParse(filter.Value, out var number))
-                    { parameters.Add(filter.Key, number); clauses.Add($"{expression}=@{filter.Key}"); }
-                    break;
-                case { } type when type == typeof(DateTime):
-                    if (DateTime.TryParse(filter.Value, out var date))
-                    { parameters.Add(filter.Key, date); clauses.Add($"CONVERT(date,{expression})=CONVERT(date,@{filter.Key})"); }
-                    break;
-            }
-        }
-        if (!string.IsNullOrWhiteSpace(request.SearchTerm))
-        {
-            var search = request.SearchTerm.Replace('*', '%');
-            parameters.Add("Search", search.Contains('%') ? search : $"%{search}%");
-            clauses.Add($"({GetAdministratorColumnExpression(nameof(SalesTransaction.ProductId), useDistributorIdentity)} LIKE @Search OR " +
-                        $"{GetAdministratorColumnExpression(nameof(SalesTransaction.ProductName), useDistributorIdentity)} LIKE @Search OR c.Name LIKE @Search)");
-        }
-
-        var filters = clauses.Count == 0 ? string.Empty : " AND " + string.Join(" AND ", clauses);
-        var periodFilter = periodClauses.Count == 0 ? string.Empty : " WHERE " + string.Join(" AND ", periodClauses);
-        return _dbConnection.QuerySingleAsync<SalesSelectionSummary>(new CommandDefinition($"""
-            WITH LatestUploads AS (
-                SELECT st.*, MAX(st.CreatedDate) OVER (PARTITION BY CompanyId) AS LatestCreatedDate
-                FROM SalesTransaction st {periodFilter}
-            )
-            SELECT COUNT(DISTINCT st.CompanyId) AS DistributorCount,
-                   COUNT(*) AS [RowCount],
-                   COALESCE(SUM(st.InvoiceQty),0) AS InvoiceQty,
-                   COALESCE(SUM(COALESCE(st.GrossValue, st.InvoiceQty * st.UnitPrice)),0) AS GrossValue,
-                   COALESCE(SUM(st.DiscountValue),0) AS DiscountValue,
-                   COALESCE(SUM(COALESCE(st.NetValue,
-                       COALESCE(st.GrossValue, st.InvoiceQty * st.UnitPrice) - COALESCE(st.DiscountValue,0))),0) AS NetValue
-            FROM LatestUploads st INNER JOIN Company c ON c.Id=st.CompanyId
-            WHERE st.CreatedDate=st.LatestCreatedDate {filters};
-            """, parameters, _dbTransaction, cancellationToken: cancellationToken));
+        var (sql, parameters) = SalesSelectionSummaryQuery.Build(request, companyId, useDistributorIdentity);
+        return _dbConnection.QuerySingleAsync<SalesSelectionSummary>(new CommandDefinition(sql, parameters,
+            _dbTransaction, cancellationToken: cancellationToken));
     }
 
     private async Task<PagedList<SalesTransaction>> SelectAllAsync(PagedListRequest request,
@@ -463,7 +406,7 @@ public class SalesTransactionRepository : ISalesTransactionRepository
             """, new { Year = year, Month = month }, _dbTransaction, cancellationToken: cancellationToken));
     }
 
-    private static string GetAdministratorColumnExpression(string field, bool useDistributorIdentity) => field switch
+    internal static string GetAdministratorColumnExpression(string field, bool useDistributorIdentity) => field switch
     {
         nameof(SalesTransaction.CompanyName) => "c.Name",
         nameof(SalesTransaction.ProductId) when useDistributorIdentity =>

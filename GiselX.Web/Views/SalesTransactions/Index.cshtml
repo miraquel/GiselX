@@ -59,20 +59,20 @@
                 <select id="monthSelect" name="month" class="form-control"></select>
             </div>
         </div>
-        @if (User.IsInRole("Administrator"))
-        {
-            <div class="mt-4">
-                <div class="d-flex justify-content-between align-items-center mb-2"><h6 class="mb-0">Selected data summary</h6><small class="text-muted">Updates with period, distributor, search, and column filters</small></div>
-                <div class="row g-2" id="salesSelectionSummary">
+        <div class="mt-4">
+            <div class="d-flex justify-content-between align-items-center mb-2"><h6 class="mb-0">Selected data summary</h6><small class="text-muted">@(User.IsInRole("Administrator") ? "Updates with period, distributor, search, and column filters" : "Updates with period, search, and column filters")</small></div>
+            <div class="row g-2" id="salesSelectionSummary">
+                @if (User.IsInRole("Administrator"))
+                {
                     <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Distributors</small><div class="fs-5 fw-semibold" id="salesSummaryDistributors">—</div></div></div>
-                    <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Rows</small><div class="fs-5 fw-semibold" id="salesSummaryRows">—</div></div></div>
-                    <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Invoice quantity</small><div class="fs-5 fw-semibold" id="salesSummaryQty">—</div></div></div>
-                    <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Gross value</small><div class="fs-5 fw-semibold" id="salesSummaryGross">—</div></div></div>
-                    <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Discount</small><div class="fs-5 fw-semibold" id="salesSummaryDiscount">—</div></div></div>
-                    <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Net value</small><div class="fs-5 fw-semibold" id="salesSummaryNet">—</div></div></div>
-                </div>
+                }
+                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Rows</small><div class="fs-5 fw-semibold" id="salesSummaryRows">—</div></div></div>
+                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Invoice quantity</small><div class="fs-5 fw-semibold" id="salesSummaryQty">—</div></div></div>
+                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Gross value</small><div class="fs-5 fw-semibold" id="salesSummaryGross">—</div></div></div>
+                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Discount</small><div class="fs-5 fw-semibold" id="salesSummaryDiscount">—</div></div></div>
+                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Net value</small><div class="fs-5 fw-semibold" id="salesSummaryNet">—</div></div></div>
             </div>
-        }
+        </div>
     </div>
     <div class="card-datatable text-nowrap">
         <table id="salestransaction-table" class="datatables-basic table table-bordered" style="width: 100%;">
@@ -210,9 +210,6 @@
             let table;
 
             async function refreshSalesSummary(query) {
-                @if (User.IsInRole("Administrator"))
-                {
-                    <text>
                     try {
                         const requestId = ++salesSummaryRequest;
                         const parameters = new URLSearchParams(Object.entries(query).filter(([, value]) => value !== null && value !== undefined && value !== ''));
@@ -226,8 +223,6 @@
                         $('#salesSummaryDiscount').text(numberFormatter.format(data.discountValue || 0));
                         $('#salesSummaryNet').text(numberFormatter.format(data.netValue || 0));
                     } catch { $('#salesSelectionSummary .fw-semibold').text('Unavailable'); }
-                    </text>
-                }
             }
 
             function addTextRow(target, cells) {

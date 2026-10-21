@@ -41,33 +41,35 @@ public sealed class AdministratorServiceScopeTests
     }
 
     [Theory]
-    [InlineData(true, 200)]
-    [InlineData(false, 403)]
-    public async Task Stock_filtered_summary_is_administrator_only(bool isAdministrator, int expectedStatus)
+    [InlineData(true, 0)]
+    [InlineData(false, 7)]
+    public async Task Stock_filtered_summary_uses_cross_company_scope_only_for_administrator(bool isAdministrator,
+        int expectedCompanyId)
     {
         var repository = new CapturingStockRepository();
         var service = new StockService(repository, null!, Claims(isAdministrator), UserManager());
 
         var response = await service.SelectSummaryAsync(new PagedListRequestDto(), false, CancellationToken.None);
 
-        Assert.Equal(expectedStatus, response.StatusCode);
-        if (isAdministrator) Assert.Equal((2, 5, 90m),
-            (response.Data!.DistributorCount, response.Data.RowCount, response.Data.SaldoAkhir));
+        Assert.Equal(200, response.StatusCode);
+        Assert.Equal(expectedCompanyId, repository.SummaryCompanyId);
+        Assert.Equal((2, 5, 90m), (response.Data!.DistributorCount, response.Data.RowCount, response.Data.SaldoAkhir));
     }
 
     [Theory]
-    [InlineData(true, 200)]
-    [InlineData(false, 403)]
-    public async Task Sellout_filtered_summary_is_administrator_only(bool isAdministrator, int expectedStatus)
+    [InlineData(true, 0)]
+    [InlineData(false, 7)]
+    public async Task Sellout_filtered_summary_uses_cross_company_scope_only_for_administrator(bool isAdministrator,
+        int expectedCompanyId)
     {
         var repository = new CapturingSalesRepository();
         var service = new SalesTransactionService(repository, null!, Claims(isAdministrator), UserManager());
 
         var response = await service.SelectSummaryAsync(new PagedListRequestDto(), false, CancellationToken.None);
 
-        Assert.Equal(expectedStatus, response.StatusCode);
-        if (isAdministrator) Assert.Equal((3, 8, 120m),
-            (response.Data!.DistributorCount, response.Data.RowCount, response.Data.NetValue));
+        Assert.Equal(200, response.StatusCode);
+        Assert.Equal(expectedCompanyId, repository.SummaryCompanyId);
+        Assert.Equal((3, 8, 120m), (response.Data!.DistributorCount, response.Data.RowCount, response.Data.NetValue));
     }
 
     [Theory]
@@ -164,10 +166,14 @@ public sealed class AdministratorServiceScopeTests
     {
         public int? SelectedCompanyId { get; private set; }
         public int? PeriodCompanyId { get; private set; }
+        public int? SummaryCompanyId { get; private set; }
         public Task<PagedList<Stock>> SelectAsync(PagedListRequest request, int companyId, bool identity, CancellationToken token)
         { SelectedCompanyId = companyId; return Task.FromResult(new PagedList<Stock>([], 1, 10, 0)); }
-        public Task<StockSelectionSummary> SummarizeAsync(PagedListRequest request, bool identity, CancellationToken token) =>
-            Task.FromResult(new StockSelectionSummary { DistributorCount = 2, RowCount = 5, SaldoAkhir = 90m });
+        public Task<StockSelectionSummary> SummarizeAsync(PagedListRequest request, int companyId, bool identity, CancellationToken token)
+        {
+            SummaryCompanyId = companyId;
+            return Task.FromResult(new StockSelectionSummary { DistributorCount = 2, RowCount = 5, SaldoAkhir = 90m });
+        }
         public Task UploadAsync(IEnumerable<Stock> values, CancellationToken token) => throw new NotSupportedException();
         public Task<IEnumerable<Stock>> SelectByCustAsync(int id, CancellationToken token) => throw new NotSupportedException();
         public Task<IEnumerable<Stock>> SelectByCustPeriodAsync(int id, int year, int month, CancellationToken token)
@@ -181,10 +187,14 @@ public sealed class AdministratorServiceScopeTests
     {
         public int? SelectedCompanyId { get; private set; }
         public int? PeriodCompanyId { get; private set; }
+        public int? SummaryCompanyId { get; private set; }
         public Task<PagedList<SalesTransaction>> SelectAsync(PagedListRequest request, int companyId, bool identity, CancellationToken token)
         { SelectedCompanyId = companyId; return Task.FromResult(new PagedList<SalesTransaction>([], 1, 10, 0)); }
-        public Task<SalesSelectionSummary> SummarizeAsync(PagedListRequest request, bool identity, CancellationToken token) =>
-            Task.FromResult(new SalesSelectionSummary { DistributorCount = 3, RowCount = 8, NetValue = 120m });
+        public Task<SalesSelectionSummary> SummarizeAsync(PagedListRequest request, int companyId, bool identity, CancellationToken token)
+        {
+            SummaryCompanyId = companyId;
+            return Task.FromResult(new SalesSelectionSummary { DistributorCount = 3, RowCount = 8, NetValue = 120m });
+        }
         public Task UploadAsync(IEnumerable<SalesTransaction> values, CancellationToken token) => throw new NotSupportedException();
         public Task<IEnumerable<SalesTransaction>> SelectByCustAsync(int id, CancellationToken token) => throw new NotSupportedException();
         public Task<IEnumerable<SalesTransaction>> SelectByCustPeriodAsync(int id, int year, int month, bool identity, CancellationToken token)

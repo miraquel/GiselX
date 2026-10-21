@@ -178,15 +178,9 @@ public class StockService : IStockService
     public async Task<ServiceResponse<StockSelectionSummaryDto>> SelectSummaryAsync(PagedListRequestDto request,
         bool useDistributorIdentity, CancellationToken cancellationToken)
     {
-        if (!_userClaimDto.IsAdministrator)
-            return new ServiceResponse<StockSelectionSummaryDto>
-            {
-                Errors = ["Administrator access is required."],
-                StatusCode = StatusCodes.Status403Forbidden
-            };
-
+        var companyId = await ResolveCompanyScopeAsync();
         var summary = await _stockRepository.SummarizeAsync(
-            _mapper.MapToEntity(request), useDistributorIdentity, cancellationToken);
+            _mapper.MapToEntity(request), companyId, useDistributorIdentity, cancellationToken);
         return new ServiceResponse<StockSelectionSummaryDto>
         {
             Data = new StockSelectionSummaryDto

@@ -222,10 +222,11 @@ public class StockRepository : IStockRepository
             Math.Clamp(pagedListRequest.PageSize, 1, 500), totalCount);
     }
 
-    public Task<StockSelectionSummary> SummarizeAsync(PagedListRequest request, bool useDistributorIdentity,
-        CancellationToken cancellationToken)
+    public Task<StockSelectionSummary> SummarizeAsync(PagedListRequest request, int companyId,
+        bool useDistributorIdentity, CancellationToken cancellationToken)
     {
         var parameters = new DynamicParameters();
+        parameters.Add("CompanyId", companyId);
         var clauses = new List<string>();
         var allowed = new HashSet<string>(StringComparer.Ordinal)
         {
@@ -285,7 +286,7 @@ public class StockRepository : IStockRepository
             FROM Stock s
             INNER JOIN RankedBatches rb ON rb.Id=s.StockUploadBatchId AND rb.BatchRank=1
             INNER JOIN Company c ON c.Id=s.CompanyId
-            WHERE 1=1 {filters};
+            WHERE (@CompanyId=0 OR s.CompanyId=@CompanyId) {filters};
             """, parameters, _dbTransaction, cancellationToken: cancellationToken));
     }
 

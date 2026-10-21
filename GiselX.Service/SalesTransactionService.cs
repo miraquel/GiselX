@@ -159,15 +159,9 @@ public class SalesTransactionService : ISalesTransactionService
     public async Task<ServiceResponse<SalesSelectionSummaryDto>> SelectSummaryAsync(PagedListRequestDto request,
         bool useDistributorIdentity, CancellationToken cancellationToken)
     {
-        if (!_userClaimDto.IsAdministrator)
-            return new ServiceResponse<SalesSelectionSummaryDto>
-            {
-                Errors = ["Administrator access is required."],
-                StatusCode = StatusCodes.Status403Forbidden
-            };
-
+        var companyId = await ResolveCompanyScopeAsync();
         var summary = await _salesTransactionRepository.SummarizeAsync(
-            _mapper.MapToEntity(request), useDistributorIdentity, cancellationToken);
+            _mapper.MapToEntity(request), companyId, useDistributorIdentity, cancellationToken);
         return new ServiceResponse<SalesSelectionSummaryDto>
         {
             Data = new SalesSelectionSummaryDto

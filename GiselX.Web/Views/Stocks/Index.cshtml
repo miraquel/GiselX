@@ -48,20 +48,20 @@
                 <select id="monthSelect" name="month" class="form-control"></select>
             </div>
         </div>
-        @if (User.IsInRole("Administrator"))
-        {
-            <div class="mt-4">
-                <div class="d-flex justify-content-between align-items-center mb-2"><h6 class="mb-0">Selected data summary</h6><small class="text-muted">Latest snapshot in the selected month; updates with distributor and table filters</small></div>
-                <div class="row g-2" id="stockSelectionSummary">
+        <div class="mt-4">
+            <div class="d-flex justify-content-between align-items-center mb-2"><h6 class="mb-0">Selected data summary</h6><small class="text-muted">@(User.IsInRole("Administrator") ? "Latest snapshot in the selected month; updates with distributor and table filters" : "Latest snapshot in the selected month; updates with table filters")</small></div>
+            <div class="row g-2" id="stockSelectionSummary">
+                @if (User.IsInRole("Administrator"))
+                {
                     <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Distributors</small><div class="fs-5 fw-semibold" id="stockSummaryDistributors">—</div></div></div>
-                    <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Rows</small><div class="fs-5 fw-semibold" id="stockSummaryRows">—</div></div></div>
-                    <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Saldo Awal</small><div class="fs-5 fw-semibold" id="stockSummaryAwal">—</div></div></div>
-                    <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Masuk PO</small><div class="fs-5 fw-semibold" id="stockSummaryMasuk">—</div></div></div>
-                    <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Saldo Akhir</small><div class="fs-5 fw-semibold" id="stockSummaryAkhir">—</div></div></div>
-                    <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Stock value</small><div class="fs-5 fw-semibold" id="stockSummaryValue">—</div></div></div>
-                </div>
+                }
+                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Rows</small><div class="fs-5 fw-semibold" id="stockSummaryRows">—</div></div></div>
+                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Saldo Awal</small><div class="fs-5 fw-semibold" id="stockSummaryAwal">—</div></div></div>
+                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Masuk PO</small><div class="fs-5 fw-semibold" id="stockSummaryMasuk">—</div></div></div>
+                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Saldo Akhir</small><div class="fs-5 fw-semibold" id="stockSummaryAkhir">—</div></div></div>
+                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Stock value</small><div class="fs-5 fw-semibold" id="stockSummaryValue">—</div></div></div>
             </div>
-        }
+        </div>
     </div>
     <div class="card-datatable text-nowrap">
         <table id="stock-table" class="table table-bordered" style="width:100%"><thead><tr>
@@ -144,9 +144,6 @@ $(function () {
  let lastStockQuery = {};
  let stockSummaryRequest = 0;
  async function refreshStockSummary(query) {
-   @if (User.IsInRole("Administrator"))
-   {
-     <text>
      try {
        const requestId = ++stockSummaryRequest;
        const parameters = new URLSearchParams(Object.entries(query).filter(([, value]) => value !== null && value !== undefined && value !== ''));
@@ -160,8 +157,6 @@ $(function () {
        $('#stockSummaryAkhir').text(numberFormatter.format(data.saldoAkhir || 0));
        $('#stockSummaryValue').text(numberFormatter.format(data.stockValue || 0));
      } catch { $('#stockSelectionSummary .fw-semibold').text('Unavailable'); }
-     </text>
-   }
  }
  // Browsed by month like Sellout: the table stays hidden and unloaded until a year and a month are
  // chosen, and the server shows each distributor's latest snapshot inside that month.
