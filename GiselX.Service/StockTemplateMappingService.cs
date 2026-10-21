@@ -164,6 +164,8 @@ public sealed class StockTemplateMappingService(
         mapping.Columns = ToEntities(dto.Columns);
     }
 
+    private const int ConditionValuesMaxLength = 500;
+
     private static bool MapsCondition(SaveStockTemplateMappingDto dto) =>
         dto.Columns.Any(column => column.CanonicalField == StockCanonicalField.Condition);
 
@@ -180,6 +182,10 @@ public sealed class StockTemplateMappingService(
         if (!MapsCondition(dto)) return;
         var good = StockTextNormalizer.SplitList(dto.GoodConditionValues);
         var bad = StockTextNormalizer.SplitList(dto.BadConditionValues);
+        if (string.Join(";", good).Length > ConditionValuesMaxLength)
+            errors.Add("Good values must not exceed 500 characters in total.");
+        if (string.Join(";", bad).Length > ConditionValuesMaxLength)
+            errors.Add("Bad values must not exceed 500 characters in total.");
         if (good.Count == 0 || bad.Count == 0)
         {
             errors.Add("Map at least one Good value and one Bad value when Condition is mapped.");

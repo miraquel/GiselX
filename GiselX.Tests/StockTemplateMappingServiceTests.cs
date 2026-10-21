@@ -156,6 +156,36 @@ public sealed class StockTemplateMappingServiceTests
         Assert.Equal("BAD;RUSAK", mapping.BadConditionValues);
     }
 
+    [Fact]
+    public async Task Good_values_longer_than_500_characters_are_rejected()
+    {
+        var dto = ConditionMapping(LongList(), "BAD");
+        var (service, repository, transaction) = CreateService();
+
+        var response = await service.SaveAsync(dto, "admin", CancellationToken.None);
+
+        Assert.False(response.IsSuccess);
+        Assert.Contains("Good values must not exceed 500 characters in total.", response.Errors);
+        Assert.Empty(repository.Inserted);
+        Assert.False(transaction.CommitCalled);
+    }
+
+    [Fact]
+    public async Task Bad_values_longer_than_500_characters_are_rejected()
+    {
+        var dto = ConditionMapping("GOOD", LongList());
+        var (service, repository, transaction) = CreateService();
+
+        var response = await service.SaveAsync(dto, "admin", CancellationToken.None);
+
+        Assert.False(response.IsSuccess);
+        Assert.Contains("Bad values must not exceed 500 characters in total.", response.Errors);
+        Assert.Empty(repository.Inserted);
+        Assert.False(transaction.CommitCalled);
+    }
+
+    private static string LongList() => string.Join(";", Enumerable.Range(0, 60).Select(i => $"VALUE{i:000}"));
+
     private static SaveStockTemplateMappingDto ConditionMapping(string? good, string? bad)
     {
         var dto = ValidMapping();
