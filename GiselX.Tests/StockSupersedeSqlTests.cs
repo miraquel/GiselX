@@ -54,6 +54,37 @@ public sealed class StockSupersedeSqlTests
         Assert.Equal(2, guarded);
     }
 
+    [Fact]
+    public void The_delete_is_limited_to_the_areas_of_this_uploads_valid_rows()
+    {
+        // Without this, a Binjai upload would wipe Medan's rows for the same date.
+        var sql = ReadRepository();
+
+        Assert.Contains("s.StockUploadBatchId=@BatchId AND s.IsValid=1", sql, StringComparison.Ordinal);
+        Assert.Contains("COALESCE(s.StockAreaId,0)=COALESCE(stock.StockAreaId,0)", sql, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_prior_batch_is_replaced_only_when_none_of_its_rows_remain()
+    {
+        var sql = ReadRepository();
+
+        Assert.Contains(
+            "NOT EXISTS (SELECT 1 FROM Stock remaining WHERE remaining.StockUploadBatchId=prior.Id)",
+            sql, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Publication_copies_area_and_condition_into_stock()
+    {
+        var sql = ReadRepository();
+        var insert = sql.Substring(sql.IndexOf("INSERT INTO Stock (", StringComparison.Ordinal));
+        var columns = insert.Substring(0, insert.IndexOf("SELECT", StringComparison.Ordinal));
+
+        Assert.Contains("StockAreaId", columns, StringComparison.Ordinal);
+        Assert.Contains("Condition", columns, StringComparison.Ordinal);
+    }
+
     private static string ReadRepository() =>
         File.ReadAllText(Path.Combine(RepositoryRoot(), "GiselX.Repository", "StockUploadRepository.cs"));
 

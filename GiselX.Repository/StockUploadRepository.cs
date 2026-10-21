@@ -75,7 +75,13 @@ public sealed class StockUploadRepository(IDbConnection connection, IDbTransacti
             JOIN StockUploadBatch prior ON prior.Id = stock.StockUploadBatchId
             WHERE @StockDate IS NOT NULL
               AND prior.CompanyId=@CompanyId AND prior.StockDate=@StockDate
-              AND prior.Id<>@BatchId AND prior.Status IN (2,3);
+              AND prior.Id<>@BatchId AND prior.Status IN (2,3)
+              -- Only the areas this upload actually carries: a Binjai file must not erase Medan's
+              -- stock for the same date. No area (NULL) counts as one value, so a company without
+              -- areas still replaces its whole snapshot. Area ids are identities, never 0.
+              AND EXISTS (SELECT 1 FROM StockStaging s
+                          WHERE s.StockUploadBatchId=@BatchId AND s.IsValid=1
+                            AND COALESCE(s.StockAreaId,0)=COALESCE(stock.StockAreaId,0));
 
             -- Status 4 is Replaced. Stock numbers it 4 because 3 is already CompletedWithWarnings
             -- here; the Sellout enum uses the two the other way round.
@@ -83,20 +89,22 @@ public sealed class StockUploadRepository(IDbConnection connection, IDbTransacti
             FROM StockUploadBatch prior
             WHERE @StockDate IS NOT NULL
               AND prior.CompanyId=@CompanyId AND prior.StockDate=@StockDate
-              AND prior.Id<>@BatchId AND prior.Status IN (2,3);
+              AND prior.Id<>@BatchId AND prior.Status IN (2,3)
+              -- A batch that also carried other areas keeps those rows and so stays live.
+              AND NOT EXISTS (SELECT 1 FROM Stock remaining WHERE remaining.StockUploadBatchId=prior.Id);
 
             INSERT INTO Stock (ProductId, ProductName, DistributorProductId, DistributorProductName, ItemMappingId,
              ProductPackaging, ProductPcsInCtn, ProductNetto,
              ProductUnit, SmallestUnit, SmallestUnitQty, PriceUnit, SaldoAwal, SaldoMasukPO, SaldoAkhir,
              BatchNumber, ExpiredDate,
-             CompanyId, CreatedDate, StockUploadBatchId, StockDate)
+             CompanyId, CreatedDate, StockUploadBatchId, StockDate, StockAreaId, Condition)
             SELECT COALESCE(s.ProductId,''), COALESCE(s.ProductName,''), s.DistributorProductId,
              s.DistributorProductName, s.ItemMappingId, COALESCE(s.ProductPackaging,''),
              COALESCE(s.ProductPcsInCtn,0), COALESCE(s.ProductNetto,0), COALESCE(s.ProductUnit,''),
              s.SmallestUnit, s.SmallestUnitQty, s.PriceUnit,
              COALESCE(s.SaldoAwal,0), COALESCE(s.SaldoMasukPO,0), s.SaldoAkhir,
              COALESCE(s.BatchNumber,''), COALESCE(s.ExpiredDate,CONVERT(date,'17530101')),
-             b.CompanyId, SYSUTCDATETIME(), b.Id, b.StockDate
+             b.CompanyId, SYSUTCDATETIME(), b.Id, b.StockDate, s.StockAreaId, s.Condition
             FROM StockStaging s JOIN StockUploadBatch b ON b.Id=s.StockUploadBatchId
             WHERE b.Id=@BatchId AND b.CompanyId=@CompanyId AND b.Status=0 AND s.IsValid=1;
 
