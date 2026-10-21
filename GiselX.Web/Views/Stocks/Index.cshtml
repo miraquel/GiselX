@@ -193,7 +193,7 @@ $(function () {
  function loadTable() {
    if (table) { table.ajax.reload(); return; }
    table = $('#stock-table').DataTable({
-   processing:true, serverSide:true, searching:true, ordering:true, scrollX:true, order:[[0,'asc']],
+   processing:true, serverSide:true, searching:true, ordering:true, scrollX:true, order:[[@(User.IsInRole("Administrator") ? 3 : 2),'asc']],
    ajax:{
      url:'/api/Stocks/Select',
      data:function(d){

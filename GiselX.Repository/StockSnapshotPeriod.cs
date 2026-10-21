@@ -31,7 +31,7 @@ public static class StockSnapshotPeriod
     /// distributor can hold several live batches on one date, one per area, and one batch can carry
     /// several areas, so the unit ranked is the (batch, area) pair that still has Stock rows — a partly
     /// replaced batch ranks only the areas it still holds. With a month chosen the winner is the latest
-    /// snapshot dated inside that month, otherwise the most recently published batch.
+    /// snapshot dated inside that month, otherwise the latest snapshot date overall (same order, no window).
     /// </summary>
     public static string RankedBatches(bool hasPeriod) => hasPeriod
         ? """
@@ -46,7 +46,7 @@ public static class StockSnapshotPeriod
         : """
           WITH RankedBatches AS (
               SELECT b.Id, b.CompanyId, COALESCE(d.StockAreaId,0) AS AreaKey,
-                     ROW_NUMBER() OVER (PARTITION BY b.CompanyId, COALESCE(d.StockAreaId,0) ORDER BY b.CompletedDate DESC, b.Id DESC) AS BatchRank
+                     ROW_NUMBER() OVER (PARTITION BY b.CompanyId, COALESCE(d.StockAreaId,0) ORDER BY b.StockDate DESC, b.CompletedDate DESC, b.Id DESC) AS BatchRank
               FROM (SELECT DISTINCT StockUploadBatchId, StockAreaId FROM Stock WHERE StockUploadBatchId IS NOT NULL) d
               INNER JOIN StockUploadBatch b ON b.Id=d.StockUploadBatchId
               WHERE b.Status IN (2,3)

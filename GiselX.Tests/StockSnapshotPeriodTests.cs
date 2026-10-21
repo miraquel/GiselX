@@ -59,7 +59,7 @@ public sealed class StockSnapshotPeriodTests
     {
         var sql = Normalize(StockSnapshotPeriod.RankedBatches(hasPeriod: false));
 
-        Assert.Contains("PARTITION BY b.CompanyId, COALESCE(d.StockAreaId,0) ORDER BY b.CompletedDate DESC, b.Id DESC", sql, StringComparison.Ordinal);
+        Assert.Contains("PARTITION BY b.CompanyId, COALESCE(d.StockAreaId,0) ORDER BY b.StockDate DESC, b.CompletedDate DESC, b.Id DESC", sql, StringComparison.Ordinal);
         Assert.DoesNotContain("@PeriodStart", sql, StringComparison.Ordinal);
     }
 
