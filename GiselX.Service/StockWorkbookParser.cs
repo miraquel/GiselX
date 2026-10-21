@@ -43,6 +43,15 @@ public sealed class StockWorkbookParser
             foreach (var column in mapping.Columns)
             {
                 var raw = source.Value.GetValueOrDefault(column.SourceColumnNumber);
+                if (column.CanonicalField is StockCanonicalField.Area or StockCanonicalField.Condition)
+                {
+                    // Kept exactly as typed: the converter would trim it, but the area and the Good/Bad
+                    // lists are matched later by one shared normaliser, and the audit row should show what
+                    // the distributor actually wrote.
+                    Assign(row, column.CanonicalField, string.IsNullOrWhiteSpace(raw) ? null : raw);
+                    continue;
+                }
+
                 if (!StockCellValueConverter.TryConvert(raw, column.CanonicalField, out var value))
                 {
                     errors.Add(Error(source.Key, column.CanonicalField, raw,
@@ -196,6 +205,8 @@ public sealed class StockWorkbookParser
         StockCanonicalField.SaldoAkhir => row.SaldoAkhir,
         StockCanonicalField.BatchNumber => row.BatchNumber,
         StockCanonicalField.ExpiredDate => row.ExpiredDate,
+        StockCanonicalField.Area => row.SourceAreaText,
+        StockCanonicalField.Condition => row.SourceConditionText,
         _ => throw new ArgumentOutOfRangeException(nameof(field))
     };
 
@@ -217,6 +228,8 @@ public sealed class StockWorkbookParser
             case StockCanonicalField.SaldoAkhir: row.SaldoAkhir = (decimal?)value; break;
             case StockCanonicalField.BatchNumber: row.BatchNumber = (string?)value; break;
             case StockCanonicalField.ExpiredDate: row.ExpiredDate = (DateTime?)value; break;
+            case StockCanonicalField.Area: row.SourceAreaText = (string?)value; break;
+            case StockCanonicalField.Condition: row.SourceConditionText = (string?)value; break;
             default: throw new ArgumentOutOfRangeException(nameof(field));
         }
     }

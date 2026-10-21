@@ -299,6 +299,72 @@ public sealed class StockWorkbookParserTests
             error.Reason == "Value exceeds the maximum length of 50.");
     }
 
+    [Fact]
+    public void Mapped_area_and_condition_cells_are_kept_as_raw_text()
+    {
+        var result = ParseWithAreaAndCondition(CoreRow(3, "4").Append((3, 4, " Medan ")).Append((3, 5, "BS")).ToArray());
+
+        var row = Assert.Single(result.Rows);
+        Assert.True(row.IsValid);
+        Assert.Equal(" Medan ", row.SourceAreaText);
+        Assert.Equal("BS", row.SourceConditionText);
+        Assert.Null(row.StockAreaId);
+        Assert.Equal(StockCondition.Good, row.Condition);
+    }
+
+    [Fact]
+    public void A_template_without_area_or_condition_leaves_both_null()
+    {
+        var row = Assert.Single(Parse(CoreRow(3, "4")).Rows);
+
+        Assert.Null(row.SourceAreaText);
+        Assert.Null(row.SourceConditionText);
+    }
+
+    [Fact]
+    public void Area_and_condition_are_not_required_fields()
+    {
+        Assert.DoesNotContain(StockCanonicalField.Area, StockCanonicalFieldCatalog.RequiredFields);
+        Assert.DoesNotContain(StockCanonicalField.Condition, StockCanonicalFieldCatalog.RequiredFields);
+    }
+
+    [Fact]
+    public void Existing_canonical_field_numbers_are_unchanged()
+    {
+        Assert.Equal(13, (int)StockCanonicalField.SmallestUnitQty);
+        Assert.Equal(14, (int)StockCanonicalField.Area);
+        Assert.Equal(15, (int)StockCanonicalField.Condition);
+    }
+
+    [Fact]
+    public void Area_longer_than_200_characters_is_rejected()
+    {
+        var result = ParseWithAreaAndCondition(CoreRow(3, "4").Append((3, 4, new string('a', 201))).ToArray());
+
+        Assert.False(Assert.Single(result.Rows).IsValid);
+        Assert.Contains(result.Errors, error => error.Field == StockCanonicalField.Area);
+    }
+
+    private static StockParseResult ParseWithAreaAndCondition((int Row, int Column, string Value)[] cells)
+    {
+        var mapping = new StockTemplateMappingDto
+        {
+            WorksheetName = "Stock",
+            HeaderRowNumber = 1,
+            FirstDataRowNumber = 3,
+            Columns =
+            [
+                Column(1, StockCanonicalField.ProductId),
+                Column(2, StockCanonicalField.ProductName),
+                Column(3, StockCanonicalField.SaldoAkhir),
+                Column(4, StockCanonicalField.Area),
+                Column(5, StockCanonicalField.Condition)
+            ]
+        };
+        return new StockWorkbookParser().Parse(
+            ClosedXmlSelloutWorkbookInspectorTests.BuildWorkbook("Stock", cells), mapping);
+    }
+
     private static StockParseResult ParseWithSmallestUnit((int Row, int Column, string Value)[] cells)
     {
         var mapping = new StockTemplateMappingDto

@@ -46,6 +46,8 @@ public static class StockCanonicalFieldCatalog
         StockCanonicalField.ProductUnit => 50,
         StockCanonicalField.SmallestUnit => 50,
         StockCanonicalField.BatchNumber => 100,
+        StockCanonicalField.Area => 200,
+        StockCanonicalField.Condition => 200,
         _ => null
     };
 }

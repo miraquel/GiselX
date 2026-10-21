@@ -1,3 +1,5 @@
+using GiselX.Domain;
+
 namespace GiselX.Service.Dto;
 
 public sealed class StockStagingRowDto
@@ -22,6 +24,10 @@ public sealed class StockStagingRowDto
     public decimal? SaldoAkhir { get; set; }
     public string? BatchNumber { get; set; }
     public DateTime? ExpiredDate { get; set; }
+    public string? SourceAreaText { get; set; }
+    public string? SourceConditionText { get; set; }
+    public int? StockAreaId { get; set; }
+    public StockCondition Condition { get; set; } = StockCondition.Good;
     public bool IsValid { get; set; }
     public string ValidationErrorsJson { get; set; } = "[]";
 }

@@ -15,5 +15,7 @@ public enum StockCanonicalField
     ExpiredDate,
     PriceUnit,
     SmallestUnit,
-    SmallestUnitQty
+    SmallestUnitQty,
+    Area,
+    Condition
 }
