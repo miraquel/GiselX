@@ -52,7 +52,11 @@ public sealed class StockPersistenceModelTests
             .SequenceEqual([nameof(StockUploadBatch.CompanyId), nameof(StockUploadBatch.CompletedDate), nameof(StockUploadBatch.Id)]));
         Assert.Contains(batch.GetIndexes(), index => Names(index)
             .SequenceEqual([nameof(StockUploadBatch.CompanyId), nameof(StockUploadBatch.StockDate)]));
-        Assert.Contains(stock.GetIndexes(), index => Names(index).SequenceEqual([nameof(Stock.StockUploadBatchId)]));
+        // Every Stock reader enumerates the distinct (batch, area) pairs, and publication looks up
+        // the area of a batch's rows, so the batch index leads into the area.
+        Assert.Contains(stock.GetIndexes(), index => Names(index)
+            .SequenceEqual([nameof(Stock.StockUploadBatchId), nameof(Stock.StockAreaId)]));
+        Assert.DoesNotContain(stock.GetIndexes(), index => Names(index).SequenceEqual([nameof(Stock.StockUploadBatchId)]));
     }
 
     [Fact]

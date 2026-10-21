@@ -498,7 +498,9 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
 
             // GiselStock_* SPs filter by CompanyId and pick the latest CreatedDate batch
             entity.HasIndex(e => new { e.CompanyId, e.CreatedDate });
-            entity.HasIndex(e => e.StockUploadBatchId);
+            // Readers enumerate distinct (batch, area) pairs and publication looks up a batch's areas,
+            // so the batch index carries the area. IX_Stock_StockAreaId remains for the FK.
+            entity.HasIndex(e => new { e.StockUploadBatchId, e.StockAreaId });
             entity.HasIndex(e => e.StockAreaId);
 
             entity.HasOne(d => d.StockArea).WithMany()

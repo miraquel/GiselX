@@ -41,6 +41,15 @@ public sealed class StockAreaManualSqlScriptTests
     }
 
     [Fact]
+    public void Script_replaces_the_batch_index_with_the_guarded_batch_and_area_index()
+    {
+        var sql = Regex.Replace(ReadScript(), @"\s+", " ");
+
+        Assert.Contains("name = N'IX_Stock_StockUploadBatchId' AND object_id = OBJECT_ID(N'dbo.Stock', N'U') ) DROP INDEX IX_Stock_StockUploadBatchId ON dbo.Stock;", sql);
+        Assert.Contains("name = N'IX_Stock_StockUploadBatchId_StockAreaId' AND object_id = OBJECT_ID(N'dbo.Stock', N'U') ) CREATE INDEX IX_Stock_StockUploadBatchId_StockAreaId ON dbo.Stock (StockUploadBatchId, StockAreaId);", sql);
+    }
+
+    [Fact]
     public void Script_has_no_destructive_statement()
     {
         var sql = ReadScript();

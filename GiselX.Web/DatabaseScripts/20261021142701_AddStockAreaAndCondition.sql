@@ -83,6 +83,8 @@ BEGIN TRY
     IF COL_LENGTH(N'dbo.StockTemplateMapping', N'BadConditionValues') IS NULL
         ALTER TABLE dbo.StockTemplateMapping ADD BadConditionValues nvarchar(500) NULL;
 
+    -- DDL such as CREATE INDEX and ADD CONSTRAINT is resolved when it executes, not when the batch is
+    -- compiled, so the statements below may name StockAreaId although this same batch adds it above.
     IF NOT EXISTS
     (
         SELECT 1 FROM sys.indexes
@@ -90,6 +92,24 @@ BEGIN TRY
           AND object_id = OBJECT_ID(N'dbo.Stock', N'U')
     )
         CREATE INDEX IX_Stock_StockAreaId ON dbo.Stock (StockAreaId);
+
+    -- Readers enumerate distinct (batch, area) pairs, so the single-column batch index becomes
+    -- (StockUploadBatchId, StockAreaId); the composite serves every lookup the old one did.
+    IF EXISTS
+    (
+        SELECT 1 FROM sys.indexes
+        WHERE name = N'IX_Stock_StockUploadBatchId'
+          AND object_id = OBJECT_ID(N'dbo.Stock', N'U')
+    )
+        DROP INDEX IX_Stock_StockUploadBatchId ON dbo.Stock;
+
+    IF NOT EXISTS
+    (
+        SELECT 1 FROM sys.indexes
+        WHERE name = N'IX_Stock_StockUploadBatchId_StockAreaId'
+          AND object_id = OBJECT_ID(N'dbo.Stock', N'U')
+    )
+        CREATE INDEX IX_Stock_StockUploadBatchId_StockAreaId ON dbo.Stock (StockUploadBatchId, StockAreaId);
 
     IF NOT EXISTS
     (

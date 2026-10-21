@@ -96,10 +96,19 @@ namespace GiselX.Web.Context.Migrations
                 table: "StockStaging",
                 column: "StockAreaId");
 
+            migrationBuilder.DropIndex(
+                name: "IX_Stock_StockUploadBatchId",
+                table: "Stock");
+
             migrationBuilder.CreateIndex(
                 name: "IX_Stock_StockAreaId",
                 table: "Stock",
                 column: "StockAreaId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Stock_StockUploadBatchId_StockAreaId",
+                table: "Stock",
+                columns: new[] { "StockUploadBatchId", "StockAreaId" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_StockArea_CompanyId_Name",
@@ -145,6 +154,15 @@ namespace GiselX.Web.Context.Migrations
             migrationBuilder.DropIndex(
                 name: "IX_Stock_StockAreaId",
                 table: "Stock");
+
+            migrationBuilder.DropIndex(
+                name: "IX_Stock_StockUploadBatchId_StockAreaId",
+                table: "Stock");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Stock_StockUploadBatchId",
+                table: "Stock",
+                column: "StockUploadBatchId");
 
             migrationBuilder.DropColumn(
                 name: "BadConditionValues",

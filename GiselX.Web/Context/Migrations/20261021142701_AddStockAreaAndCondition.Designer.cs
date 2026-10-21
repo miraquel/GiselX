@@ -1281,9 +1281,9 @@ namespace GiselX.Web.Context.Migrations
 
                     b.HasIndex("StockAreaId");
 
-                    b.HasIndex("StockUploadBatchId");
-
                     b.HasIndex("CompanyId", "CreatedDate");
+
+                    b.HasIndex("StockUploadBatchId", "StockAreaId");
 
                     b.ToTable("Stock");
                 });
