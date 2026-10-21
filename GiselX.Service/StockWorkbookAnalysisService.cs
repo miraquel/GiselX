@@ -28,12 +28,15 @@ public sealed class StockWorkbookAnalysisService(
             };
 
         var itemMappingContext = await itemMappingResolver.LoadAsync(companyId, cancellationToken);
-        var activeAreas = await areaRepository.ListAsync(companyId, true, cancellationToken);
+        // The Area guard follows whether the company has ANY area: deactivating the last one must not
+        // let rows without an area mix with earlier per-area rows. Only active areas resolve.
+        var allAreas = await areaRepository.ListAsync(companyId, false, cancellationToken);
+        var activeAreas = allAreas.Where(area => area.IsActive).ToList();
         var companyName = (await companyRepository.GetCompanyByIdAsync(companyId, cancellationToken))?.Name
             ?? "this distributor";
         var matcher = new StockAreaMatcher(activeAreas, companyName);
 
-        if (activeAreas.Count > 0)
+        if (allAreas.Count > 0)
         {
             var refusals = detection.Matches
                 .Where(match => match.Mapping.Columns.All(column => column.CanonicalField != StockCanonicalField.Area))

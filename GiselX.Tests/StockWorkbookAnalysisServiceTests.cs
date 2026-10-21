@@ -221,6 +221,20 @@ public sealed class StockWorkbookAnalysisServiceTests
     }
 
     [Fact]
+    public async Task A_company_whose_only_area_is_inactive_still_refuses_a_template_without_area()
+    {
+        var service = AreaService(Mapping(), [new StockArea { Id = 5, CompanyId = 7, Name = "Medan", IsActive = false }]);
+        var workbook = ClosedXmlSelloutWorkbookInspectorTests.BuildWorkbook("Stock",
+            [(3, 1, "P1"), (3, 2, "N"), (3, 3, "4")]);
+
+        var result = await service.AnalyzeAsync(workbook, 7, CancellationToken.None);
+
+        Assert.Equal("Template 'Daily Stock' does not map an Area column, but Acme has Stock areas registered.",
+            Assert.Single(result.Errors));
+        Assert.Empty(result.Rows);
+    }
+
+    [Fact]
     public async Task Inactive_areas_do_not_resolve()
     {
         var service = AreaService(AreaAndConditionMapping(),
