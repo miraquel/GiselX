@@ -267,14 +267,15 @@ public sealed class StockUploadServiceTests
 
     private static (StockUploadService Service, Repository Repository, Transaction Transaction) CreateService(
         StockWorkbookAnalysisDto analysis, IUploadNotificationDispatcher? notifications = null,
-        IUploadArchive? archive = null)
+        IUploadArchive? archive = null, IReadOnlyList<PublishedStockArea>? published = null,
+        IReadOnlyList<StockArea>? areas = null)
     {
-        var repository = new Repository();
+        var repository = new Repository { PublishedAreas = published ?? [] };
         var transaction = new Transaction();
         return (new StockUploadService(repository, new AnalysisService(analysis), transaction,
             Options.Create(new StockUploadOptions()),
             notifications ?? new RecordingUploadNotificationDispatcher(),
-            archive ?? new RecordingUploadArchive()), repository, transaction);
+            archive ?? new RecordingUploadArchive(), new StubStockAreaRepository(areas ?? [])), repository, transaction);
     }
 
     private static StockWorkbookAnalysisDto Analysis(int valid, int invalid)
@@ -369,6 +370,109 @@ public sealed class StockUploadServiceTests
         Assert.Equal(ConfirmedSha(), response.Data!.FileSha256);
     }
 
+    private static StockStagingRowDto AreaRow(int? areaId, StockCondition condition, decimal saldoAkhir,
+        bool valid = true) => new()
+    {
+        SourceRowNumber = 3, ProductId = "P", ProductName = "Row", SaldoAkhir = saldoAkhir, IsValid = valid,
+        StockAreaId = areaId, Condition = condition
+    };
+
+    private static PublishedStockArea Published(int? areaId, string? name, int rows, string by = "siti") => new()
+    {
+        StockAreaId = areaId, AreaName = name, RowCount = rows, UploadedBy = by,
+        UploadedDate = new DateTime(2026, 8, 9), OriginalFileName = "old.xlsx"
+    };
+
+    [Fact]
+    public async Task Preflight_lists_each_uploaded_area_with_good_and_bad_totals()
+    {
+        var analysis = Analysis(0, 0);
+        analysis.Rows =
+        [
+            AreaRow(1, StockCondition.Good, 10m), AreaRow(1, StockCondition.Good, 5m),
+            AreaRow(1, StockCondition.Bad, 2m), AreaRow(2, StockCondition.Good, 7m),
+            AreaRow(2, StockCondition.Bad, 99m, valid: false)
+        ];
+        var (service, _, _) = CreateService(analysis, areas:
+        [
+            new StockArea { Id = 1, Name = "Medan" }, new StockArea { Id = 2, Name = "Binjai" }
+        ]);
+
+        var response = await service.PreflightAsync(File(), "stock.xlsx", new DateTime(2026, 8, 10), 7,
+            CancellationToken.None);
+
+        var areas = response.Data!.Areas;
+        Assert.Equal(["Binjai", "Medan"], areas.Select(area => area.AreaName));
+        Assert.Equal((1, 7m, 0m), (areas[0].ValidRows, areas[0].SaldoAkhirGood, areas[0].SaldoAkhirBad));
+        Assert.Equal((3, 15m, 2m), (areas[1].ValidRows, areas[1].SaldoAkhirGood, areas[1].SaldoAkhirBad));
+    }
+
+    [Fact]
+    public async Task Preflight_names_what_each_area_replaces_and_leaves_other_areas_untouched()
+    {
+        var analysis = Analysis(0, 0);
+        analysis.Rows = [AreaRow(1, StockCondition.Good, 10m)];
+        var medan = Published(1, "Medan", 40);
+        var binjai = Published(2, "Binjai", 25);
+        var (service, _, _) = CreateService(analysis, published: [binjai, medan],
+            areas: [new StockArea { Id = 1, Name = "Medan" }]);
+
+        var response = await service.PreflightAsync(File(), "stock.xlsx", new DateTime(2026, 8, 10), 7,
+            CancellationToken.None);
+
+        Assert.Same(medan, Assert.Single(response.Data!.Areas[0].Replaces));
+        Assert.Equal(["Binjai"], response.Data.UntouchedAreaNames);
+    }
+
+    [Fact]
+    public async Task Preflight_for_a_company_without_areas_shows_the_no_area_snapshot_it_replaces()
+    {
+        var analysis = Analysis(2, 0);
+        var earlier = Published(null, null, 120);
+        var (service, _, _) = CreateService(analysis, published: [earlier]);
+
+        var response = await service.PreflightAsync(File(), "stock.xlsx", new DateTime(2026, 8, 10), 7,
+            CancellationToken.None);
+
+        var area = Assert.Single(response.Data!.Areas);
+        Assert.Equal("(no area)", area.AreaName);
+        Assert.Equal(2, area.ValidRows);
+        Assert.Same(earlier, Assert.Single(area.Replaces));
+        Assert.Empty(response.Data.UntouchedAreaNames);
+    }
+
+    [Fact]
+    public async Task Preflight_with_workbook_errors_does_not_look_up_published_areas()
+    {
+        var analysis = Analysis(1, 0);
+        analysis.Errors = ["No mapping matched."];
+        var (service, repository, _) = CreateService(analysis, published: [Published(1, "Medan", 1)]);
+
+        var response = await service.PreflightAsync(File(), "stock.xlsx", new DateTime(2026, 8, 10), 7,
+            CancellationToken.None);
+
+        Assert.Equal(0, repository.PublishedAreaQueries);
+        Assert.Empty(response.Data!.Areas);
+        Assert.Empty(response.Data.UntouchedAreaNames);
+    }
+
+    [Fact]
+    public async Task Preflight_still_performs_no_writes()
+    {
+        var analysis = Analysis(0, 0);
+        analysis.Rows = [AreaRow(1, StockCondition.Good, 10m)];
+        var (service, repository, transaction) = CreateService(analysis,
+            published: [Published(1, "Medan", 4)], areas: [new StockArea { Id = 1, Name = "Medan" }]);
+
+        await service.PreflightAsync(File(), "stock.xlsx", new DateTime(2026, 8, 10), 7, CancellationToken.None);
+
+        Assert.Equal(1, repository.PublishedAreaQueries);
+        Assert.Empty(repository.Batches);
+        Assert.Empty(repository.StagingRows);
+        Assert.Empty(repository.PublishedSourceRows);
+        Assert.Equal(0, transaction.CommitCount);
+    }
+
     private static MemoryStream File() => new([1, 2, 3]);
 
     /// <summary>The SHA-256 preflight reports for the bytes File() supplies, quoted back on upload.</summary>
@@ -386,6 +490,11 @@ public sealed class StockUploadServiceTests
         public List<StockUploadBatch> Batches { get; } = [];
         public List<StockStaging> StagingRows { get; } = [];
         public List<int> PublishedSourceRows { get; } = [];
+        public IReadOnlyList<PublishedStockArea> PublishedAreas { get; set; } = [];
+        public int PublishedAreaQueries { get; private set; }
+        public Task<IReadOnlyList<PublishedStockArea>> GetPublishedAreasAsync(int companyId, DateTime stockDate,
+            CancellationToken cancellationToken)
+        { PublishedAreaQueries++; return Task.FromResult(PublishedAreas); }
         public Task<long> InsertBatchAsync(StockUploadBatch batch, CancellationToken cancellationToken)
         {
             batch.Id = 9; Batches.Add(batch); return Task.FromResult(9L);
@@ -419,4 +528,20 @@ public sealed class StockUploadServiceTests
         public void Dispose() { }
         public void Rollback() { }
     }
+}
+
+internal sealed class StubStockAreaRepository(IReadOnlyList<StockArea> areas) : IStockAreaRepository
+{
+    public Task<IReadOnlyList<StockArea>> ListAsync(int companyId, bool activeOnly,
+        CancellationToken cancellationToken) => Task.FromResult(areas);
+    public Task<StockArea?> GetAsync(int id, int companyId, CancellationToken cancellationToken) =>
+        throw new NotSupportedException();
+    public Task<int> InsertAsync(StockArea area, CancellationToken cancellationToken) =>
+        throw new NotSupportedException();
+    public Task UpdateAsync(StockArea area, CancellationToken cancellationToken) =>
+        throw new NotSupportedException();
+    public Task SetActiveAsync(int id, int companyId, bool isActive, string modifiedBy, DateTime modifiedDate,
+        CancellationToken cancellationToken) => throw new NotSupportedException();
+    public Task<bool> DeleteAsync(int id, int companyId, CancellationToken cancellationToken) =>
+        throw new NotSupportedException();
 }

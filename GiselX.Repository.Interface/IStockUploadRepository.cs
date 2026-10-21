@@ -16,4 +16,11 @@ public interface IStockUploadRepository
     /// <summary>A <paramref name="companyId"/> of 0 matches any company — the Administrator scope.</summary>
     Task<(StockUploadBatch Batch, IReadOnlyList<StockStaging> Rows)?> GetBatchAsync(long batchId, int companyId,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// What is already published for the company on <paramref name="stockDate"/>: one entry per area
+    /// per live batch. Read-only, so a preview can call it.
+    /// </summary>
+    Task<IReadOnlyList<PublishedStockArea>> GetPublishedAreasAsync(int companyId, DateTime stockDate,
+        CancellationToken cancellationToken) => throw new NotSupportedException();
 }

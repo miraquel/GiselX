@@ -27,6 +27,12 @@ public sealed class StockUploadPreflightDto
     /// </summary>
     public IReadOnlyList<string> IgnoredWorksheetNames { get; set; } = [];
 
+    /// <summary>One entry per area the valid rows carry, with the published rows it would replace.</summary>
+    public IReadOnlyList<StockAreaReplacementDto> Areas { get; set; } = [];
+
+    /// <summary>Areas published for this date that this upload does not contain, so leaves alone.</summary>
+    public IReadOnlyList<string> UntouchedAreaNames { get; set; } = [];
+
     public IReadOnlyList<int> IgnoredSummaryRowNumbers { get; set; } = [];
     public IReadOnlyList<StockStagingErrorDto> RowErrors { get; set; } = [];
     public IReadOnlyList<string> Errors { get; set; } = [];

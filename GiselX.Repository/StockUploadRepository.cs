@@ -113,6 +113,24 @@ public sealed class StockUploadRepository(IDbConnection connection, IDbTransacti
             """, new { BatchId = batchId, CompanyId = companyId, Status = (int)status }, transaction,
             cancellationToken: cancellationToken));
 
+    public async Task<IReadOnlyList<PublishedStockArea>> GetPublishedAreasAsync(int companyId,
+        DateTime stockDate, CancellationToken cancellationToken)
+    {
+        // Status 2 is Completed and 3 CompletedWithWarnings: the batches whose rows are still live.
+        var values = await connection.QueryAsync<PublishedStockArea>(new CommandDefinition("""
+            SELECT stock.StockAreaId, area.Name AreaName, COUNT(*) [RowCount],
+                   b.UploadedDate, b.UploadedBy, b.OriginalFileName
+            FROM Stock stock
+            JOIN StockUploadBatch b ON b.Id=stock.StockUploadBatchId
+            LEFT JOIN StockArea area ON area.Id=stock.StockAreaId
+            WHERE b.CompanyId=@CompanyId AND b.StockDate=@StockDate AND b.Status IN (2,3)
+            GROUP BY b.Id, stock.StockAreaId, area.Name, b.UploadedDate, b.UploadedBy, b.OriginalFileName
+            ORDER BY CASE WHEN area.Name IS NULL THEN 0 ELSE 1 END, area.Name, b.UploadedDate;
+            """, new { CompanyId = companyId, StockDate = stockDate.Date }, transaction,
+            cancellationToken: cancellationToken));
+        return values.ToList();
+    }
+
     public async Task<(StockUploadBatch Batch, IReadOnlyList<StockStaging> Rows)?> GetBatchAsync(
         long batchId, int companyId, CancellationToken cancellationToken)
     {

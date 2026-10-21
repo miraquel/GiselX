@@ -113,6 +113,12 @@
             </div>
         </div>
         <hr class="my-4" />
+        <h6>Areas</h6>
+        <div class="table-responsive mb-2"><table class="table table-sm table-bordered mb-0">
+            <thead><tr><th>Area</th><th class="text-end">Valid rows</th><th class="text-end">Good Saldo Akhir</th><th class="text-end">Bad Saldo Akhir</th><th>Replaces</th></tr></thead>
+            <tbody id="areaBreakdown"></tbody>
+        </table></div>
+        <div class="small text-muted mb-4" id="untouchedAreas"></div>
         <h6>Worksheets in this workbook</h6>
         <div class="table-responsive mb-4"><table class="table table-sm table-bordered mb-0">
             <thead><tr><th>Worksheet</th><th>Mapping</th><th class="text-end">Rows</th><th class="text-end">Ready</th><th class="text-end">Invalid</th><th class="text-end">Ignored summary rows</th></tr></thead>
@@ -247,6 +253,20 @@ $(function () {
      .append($('<td class="text-end">').text(numberFormatter.format(s.invalidRows||0)))
      .append($('<td class="text-end">').text(s.ignoredSummaryRowNumbers?.join(', ')||'—'))));
    if(!sheets.children().length) sheets.append($('<tr>').append($('<td colspan="6" class="text-muted">').text('No mapped worksheet was detected.')));
+   const areaRows=$('#areaBreakdown').empty();
+   (preflight.areas||[]).forEach(a=>{
+     const replaces=$('<td>');
+     if(!(a.replaces||[]).length) replaces.text('nothing published yet for this date');
+     else a.replaces.forEach(r=>replaces.append($('<div>').text(`replaces ${numberFormatter.format(r.rowCount||0)} rows uploaded ${(r.uploadedDate||'').substring(0,10)} by ${r.uploadedBy||''} (${r.originalFileName||''})`)));
+     areaRows.append($('<tr>')
+       .append($('<td>').text(a.areaName||''))
+       .append($('<td class="text-end">').text(numberFormatter.format(a.validRows||0)))
+       .append($('<td class="text-end">').text(numberFormatter.format(a.saldoAkhirGood||0)))
+       .append($('<td class="text-end">').text(numberFormatter.format(a.saldoAkhirBad||0)))
+       .append(replaces));
+   });
+   if(!areaRows.children().length) areaRows.append($('<tr>').append($('<td colspan="5" class="text-muted">').text('No area information is available.')));
+   $('#untouchedAreas').text((preflight.untouchedAreaNames||[]).length?`Not affected: ${preflight.untouchedAreaNames.join(', ')}`:'');
    $('#totalSaldoAwal').text(numberFormatter.format(preflight.totalSaldoAwal || 0));
    $('#totalSaldoMasukPo').text(numberFormatter.format(preflight.totalSaldoMasukPo || 0));
    $('#totalSaldoAkhir').text(numberFormatter.format(preflight.totalSaldoAkhir || 0));

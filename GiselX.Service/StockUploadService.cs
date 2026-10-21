@@ -17,7 +17,8 @@ public sealed class StockUploadService(
     IDbTransaction transaction,
     IOptions<StockUploadOptions> options,
     IUploadNotificationDispatcher notifications,
-    IUploadArchive archive) : IStockUploadService
+    IUploadArchive archive,
+    IStockAreaRepository areaRepository) : IStockUploadService
 {
     public async Task<ServiceResponse<StockUploadPreflightDto>> PreflightAsync(Stream file,
         string originalFileName, DateTime stockDate, int companyId, CancellationToken cancellationToken)
@@ -25,9 +26,21 @@ public sealed class StockUploadService(
         var request = await ReadRequestAsync(file, originalFileName, stockDate, cancellationToken);
         if (request.Error is not null) return PreflightFailure(request.Error);
         var analysis = await analysisService.AnalyzeAsync(request.Content!, companyId, cancellationToken);
+        var data = ToPreflight(analysis, stockDate.Date, request.SourceSha256!);
+
+        // Read-only: shows what publishing would replace. Skipped when the workbook is refused,
+        // because nothing would be published and the lists would only mislead.
+        if (analysis.Errors.Count == 0)
+        {
+            var published = await repository.GetPublishedAreasAsync(companyId, stockDate.Date, cancellationToken);
+            var names = (await areaRepository.ListAsync(companyId, false, cancellationToken))
+                .ToDictionary(area => area.Id, area => area.Name);
+            (data.Areas, data.UntouchedAreaNames) = DescribeAreas(analysis, published, names);
+        }
+
         return new ServiceResponse<StockUploadPreflightDto>
         {
-            Data = ToPreflight(analysis, stockDate.Date, request.SourceSha256!),
+            Data = data,
             Errors = analysis.Errors.ToList(),
             Message = analysis.Errors.Count == 0 ? "Workbook analysis completed." : "Workbook validation failed.",
             StatusCode = analysis.Errors.Count == 0 ? StatusCodes.Status200OK : StatusCodes.Status400BadRequest
@@ -239,6 +252,40 @@ public sealed class StockUploadService(
         BatchNumber = row.BatchNumber, ExpiredDate = row.ExpiredDate, IsValid = row.IsValid,
         ValidationErrorsJson = row.ValidationErrorsJson
     };
+
+    private const string NoAreaName = "(no area)";
+
+    /// <summary>
+    /// The scope of a publication is the areas carried by valid rows, so that is what is listed and
+    /// what is matched against the published entries; every other published area is untouched.
+    /// </summary>
+    private static (IReadOnlyList<StockAreaReplacementDto> Areas, IReadOnlyList<string> Untouched) DescribeAreas(
+        StockWorkbookAnalysisDto analysis, IReadOnlyList<PublishedStockArea> published,
+        IReadOnlyDictionary<int, string> names)
+    {
+        string NameOf(int? areaId) => areaId is null
+            ? NoAreaName
+            : published.FirstOrDefault(entry => entry.StockAreaId == areaId)?.AreaName
+              ?? (names.TryGetValue(areaId.Value, out var name) ? name : $"Area {areaId}");
+
+        var areas = analysis.Rows.Where(row => row.IsValid).GroupBy(row => row.StockAreaId)
+            .Select(group => new StockAreaReplacementDto
+            {
+                AreaName = NameOf(group.Key),
+                ValidRows = group.Count(),
+                SaldoAkhirGood = group.Where(row => row.Condition == StockCondition.Good).Sum(row => row.SaldoAkhir ?? 0m),
+                SaldoAkhirBad = group.Where(row => row.Condition == StockCondition.Bad).Sum(row => row.SaldoAkhir ?? 0m),
+                Replaces = published.Where(entry => entry.StockAreaId == group.Key).ToList()
+            })
+            // "(no area)" sorts first, the rest alphabetically.
+            .OrderBy(area => area.AreaName == NoAreaName ? 0 : 1)
+            .ThenBy(area => area.AreaName, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+        var scope = analysis.Rows.Where(row => row.IsValid).Select(row => row.StockAreaId).ToHashSet();
+        var untouched = published.Where(entry => !scope.Contains(entry.StockAreaId))
+            .Select(entry => entry.AreaName ?? NoAreaName).Distinct().ToList();
+        return (areas, untouched);
+    }
 
     private static StockUploadPreflightDto ToPreflight(StockWorkbookAnalysisDto analysis, DateTime stockDate,
         string fileSha256) => new()

@@ -82,7 +82,8 @@ public sealed class UploadSourceDownloadTests
             new NoopTransaction(),
             Options.Create(new StockUploadOptions()),
             new RecordingUploadNotificationDispatcher(),
-            archive);
+            archive,
+            new StubStockAreaRepository([]));
         return (service, archive);
     }
 
