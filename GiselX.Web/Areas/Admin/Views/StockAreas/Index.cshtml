@@ -1,0 +1,75 @@
+@model IReadOnlyList<GiselX.Service.Dto.StockAreaDto>
+@{
+    ViewData["Title"] = "Stock Areas";
+    Layout = "_ContentNavbarLayout";
+    var companyId = (int)ViewBag.CompanyId;
+}
+
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <div>
+            <h5 class="mb-1">Stock Areas — @ViewBag.CompanyName</h5>
+            <small class="text-muted">The locations this distributor reports stock for. A Stock workbook's area column is matched against these names and aliases.</small>
+        </div>
+        <div class="d-flex gap-2">
+            <a asp-controller="Companies" asp-action="Edit" asp-route-id="@companyId" class="btn btn-outline-secondary">Back to company</a>
+            <a asp-action="Create" asp-route-companyId="@companyId" class="btn btn-primary">Add Area</a>
+        </div>
+    </div>
+    <div class="card-body">
+        @if (TempData["StatusMessage"] is string status)
+        {
+            <div class="alert alert-success">@status</div>
+        }
+        @if (TempData["ErrorMessage"] is string error)
+        {
+            <div class="alert alert-danger">@error</div>
+        }
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead><tr><th>No</th><th>Name</th><th>Aliases</th><th>Status</th><th>Actions</th></tr></thead>
+                <tbody>
+                @if (Model.Count == 0)
+                {
+                    <tr><td colspan="5" class="text-muted">No areas have been added for this company.</td></tr>
+                }
+                else
+                {
+                    @for (var index = 0; index < Model.Count; index++)
+                    {
+                        var value = Model[index];
+                        <tr>
+                            <td>@(index + 1)</td>
+                            <td>@value.Name</td>
+                            <td>
+                                @if (string.IsNullOrWhiteSpace(value.Aliases))
+                                {
+                                    <span class="text-muted">None</span>
+                                }
+                                else
+                                {
+                                    <span class="small">@value.Aliases</span>
+                                }
+                            </td>
+                            <td><span class="badge @(value.IsActive ? "bg-success" : "bg-secondary")">@(value.IsActive ? "Active" : "Inactive")</span></td>
+                            <td class="text-nowrap">
+                                <a asp-action="Edit" asp-route-id="@value.Id" asp-route-companyId="@companyId" class="btn btn-sm btn-outline-primary">Edit</a>
+                                <form asp-action="@(value.IsActive ? "Deactivate" : "Activate")" method="post" class="d-inline">
+                                    <input type="hidden" name="id" value="@value.Id" />
+                                    <input type="hidden" name="companyId" value="@companyId" />
+                                    <button class="btn btn-sm btn-outline-secondary">@(value.IsActive ? "Deactivate" : "Activate")</button>
+                                </form>
+                                <form asp-action="Delete" method="post" class="d-inline" onsubmit="return confirm('Delete this area? This is refused if it already has stock rows.');">
+                                    <input type="hidden" name="id" value="@value.Id" />
+                                    <input type="hidden" name="companyId" value="@companyId" />
+                                    <button class="btn btn-sm btn-outline-danger">Delete</button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

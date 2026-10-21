@@ -34,6 +34,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IStockRepository, StockRepository>();
         services.AddScoped<ICompanyRepository, CompanyRepository>();
         services.AddScoped<IBusinessUnitRepository, BusinessUnitRepository>();
+        services.AddScoped<IStockAreaRepository, StockAreaRepository>();
         services.AddScoped<IPowerBiReportMenuConnectionFactory, PowerBiReportMenuConnectionFactory>();
         services.AddScoped<IPowerBiReportMenuRepository, PowerBiReportMenuRepository>();
         services.AddScoped<IPowerBiReportRepository, PowerBiReportRepository>();

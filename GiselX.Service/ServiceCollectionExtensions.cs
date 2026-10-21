@@ -13,6 +13,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IStockService, StockService>();
         services.AddScoped<ICompanyService, CompanyService>();
         services.AddScoped<IBusinessUnitService, BusinessUnitService>();
+        services.AddScoped<IStockAreaService, StockAreaService>();
         services.AddScoped<IUploadCheckService, UploadCheckService>();
         services.AddScoped<IEmailSettingsProvider, EmailSettingsProvider>();
         services.AddScoped<IEmailSettingService, EmailSettingService>();
