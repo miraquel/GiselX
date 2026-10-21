@@ -69,6 +69,23 @@ public sealed class StockUploadRepository(IDbConnection connection, IDbTransacti
             SELECT @StockDate = StockDate FROM StockUploadBatch WITH (UPDLOCK, HOLDLOCK)
              WHERE Id=@BatchId AND CompanyId=@CompanyId AND Status=0;
 
+            -- Publishes for one company and snapshot date take turns. Per-area uploads on the same day
+            -- delete and insert overlapping key ranges and could otherwise deadlock (error 1205). The
+            -- lock belongs to the ambient transaction, so it is released by the service's commit.
+            IF @StockDate IS NOT NULL
+            BEGIN
+                DECLARE @LockResource nvarchar(255) =
+                    N'GiselX-StockPublish-' + CAST(@CompanyId AS nvarchar(20)) + N'-' + CONVERT(nvarchar(8), @StockDate, 112);
+                DECLARE @LockResult int;
+                EXEC @LockResult = sys.sp_getapplock
+                    @Resource = @LockResource,
+                    @LockMode = N'Exclusive',
+                    @LockOwner = N'Transaction',
+                    @LockTimeout = 30000;
+                IF @LockResult < 0
+                    THROW 51010, 'Could not acquire the Stock publish lock for this company and date.', 1;
+            END;
+
             -- Rows first, then the batches they belong to: deleting by status afterwards would also
             -- catch batches replaced by some earlier upload, whose rows are already gone.
             DELETE stock FROM Stock stock

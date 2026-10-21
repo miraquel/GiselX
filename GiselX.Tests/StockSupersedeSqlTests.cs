@@ -20,6 +20,23 @@ public sealed class StockSupersedeSqlTests
     }
 
     [Fact]
+    public void Publication_serialises_per_company_and_date_with_a_transaction_applock_before_deleting()
+    {
+        // Same-day uploads for different areas delete and insert overlapping key ranges; without a
+        // lock they can deadlock (error 1205) and fail an upload the user did nothing wrong in.
+        var sql = Regex.Replace(ReadRepository(), @"\s+", " ");
+
+        Assert.Contains("N'GiselX-StockPublish-' + CAST(@CompanyId AS nvarchar(20)) + N'-' + CONVERT(nvarchar(8), @StockDate, 112)", sql, StringComparison.Ordinal);
+        Assert.Contains("@LockMode = N'Exclusive'", sql, StringComparison.Ordinal);
+        Assert.Contains("@LockOwner = N'Transaction'", sql, StringComparison.Ordinal);
+        Assert.Contains("IF @LockResult < 0 THROW", sql, StringComparison.Ordinal);
+        Assert.True(
+            sql.IndexOf("sp_getapplock", StringComparison.Ordinal) > sql.IndexOf("SELECT @StockDate = StockDate", StringComparison.Ordinal)
+            && sql.IndexOf("sp_getapplock", StringComparison.Ordinal) < sql.IndexOf("DELETE stock FROM Stock stock", StringComparison.Ordinal),
+            "The lock must be taken after @StockDate is read and before any Stock row is deleted.");
+    }
+
+    [Fact]
     public void The_rows_go_before_the_batches_are_marked()
     {
         // Marking first would leave the delete matching status 4, which also catches batches
