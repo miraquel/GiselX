@@ -33,21 +33,30 @@ SET NOCOUNT ON;
 GO
 
 /* ------------------------------------------------------------------------------------------------
-   Live Stock: one row per product per company per snapshot date, from the most recently completed
-   batch for that date. Rows from the old direct-import path carry no batch and no StockDate; they
+   Live Stock: one row per product per company per snapshot date AND AREA, from the most recently
+   completed batch that holds that area on that date. AreaName is NULL for rows without an area;
+   Condition is 'Good' or 'Bad'. Rows from the old direct-import path carry no batch and no
+   StockDate; they
    cannot be de-duplicated or filtered by date and are excluded here. Read dbo.Stock directly if you
    need them.
 ------------------------------------------------------------------------------------------------ */
 CREATE OR ALTER VIEW [dbo].[vw_GiselStock_Live]
 AS
-    WITH LiveBatch AS
+    WITH LiveArea AS
     (
+        -- One row per (live batch, area) actually present in dbo.Stock. Publication replaces only the
+        -- areas an upload carries, so a company can have several live batches on one date (one per
+        -- area) and a batch that lost an area to a later upload still ranks the areas it keeps. A row
+        -- without an area counts as area 0, so a company without areas ranks one batch per date.
         -- Status 2 = Completed, 3 = CompletedWithWarnings, 4 = Replaced. These numbers are NOT the
         -- same as the Sellout enum, where 3 is Replaced and 4 is CompletedWithWarnings.
         SELECT  b.Id,
-                ROW_NUMBER() OVER (PARTITION BY b.CompanyId, b.StockDate
+                d.AreaKey,
+                ROW_NUMBER() OVER (PARTITION BY b.CompanyId, b.StockDate, COALESCE(d.StockAreaId,0)
                                    ORDER BY b.CompletedDate DESC, b.Id DESC) AS LiveRank
         FROM    dbo.StockUploadBatch b
+        JOIN    (SELECT DISTINCT s.StockUploadBatchId, s.StockAreaId, COALESCE(s.StockAreaId,0) AS AreaKey
+                 FROM   dbo.Stock s) d ON d.StockUploadBatchId = b.Id
         WHERE   b.Status IN (2, 3)
     )
     SELECT  stock.Id,
@@ -57,6 +66,9 @@ AS
             channel.Name                AS ChannelName,
             salesman.Name               AS SalesmanName,
             stock.StockDate,
+            stock.StockAreaId,
+            area.Name                   AS AreaName,
+            CASE stock.Condition WHEN 1 THEN 'Bad' ELSE 'Good' END AS Condition,
             stock.ProductId,
             stock.ProductName,
             stock.DistributorProductId,
@@ -79,9 +91,10 @@ AS
             batch.UploadedBy,
             batch.CompletedDate         AS UploadCompletedDate
     FROM    dbo.Stock stock
-    JOIN    LiveBatch live             ON live.Id = stock.StockUploadBatchId AND live.LiveRank = 1
+    JOIN    LiveArea live              ON live.Id = stock.StockUploadBatchId AND live.AreaKey = COALESCE(stock.StockAreaId,0) AND live.LiveRank = 1
     JOIN    dbo.StockUploadBatch batch ON batch.Id = stock.StockUploadBatchId
     JOIN    dbo.Company company        ON company.Id = stock.CompanyId
+    LEFT JOIN dbo.StockArea area         ON area.Id     = stock.StockAreaId
     LEFT JOIN dbo.BusinessUnit unit     ON unit.Id     = company.BusinessUnitId
     LEFT JOIN dbo.Channel      channel  ON channel.Id  = company.ChannelId
     LEFT JOIN dbo.Salesman     salesman ON salesman.Id = company.SalesmanId;
