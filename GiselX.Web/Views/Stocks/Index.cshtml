@@ -59,6 +59,8 @@
                 <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Saldo Awal</small><div class="fs-5 fw-semibold" id="stockSummaryAwal">—</div></div></div>
                 <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Masuk PO</small><div class="fs-5 fw-semibold" id="stockSummaryMasuk">—</div></div></div>
                 <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Saldo Akhir</small><div class="fs-5 fw-semibold" id="stockSummaryAkhir">—</div></div></div>
+                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Saldo Akhir Good</small><div class="fs-5 fw-semibold" id="stockSummaryAkhirGood">—</div></div></div>
+                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Saldo Akhir Bad</small><div class="fs-5 fw-semibold" id="stockSummaryAkhirBad">—</div></div></div>
                 <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Stock value</small><div class="fs-5 fw-semibold" id="stockSummaryValue">—</div></div></div>
             </div>
         </div>
@@ -66,17 +68,17 @@
     <div class="card-datatable text-nowrap">
         <table id="stock-table" class="table table-bordered" style="width:100%"><thead><tr>
             @if (User.IsInRole("Administrator")) { <th>Distributor</th> }
+            <th>Area</th><th>Condition</th>
             <th>Product ID</th><th>Product Name</th><th>Packaging</th><th>Pcs/Ctn</th><th>Netto</th><th>Unit</th>
             <th>Smallest Unit</th><th>Qty per Smallest Unit</th><th>Price Unit</th>
             <th>Saldo Awal</th><th>Saldo Masuk PO</th><th>Saldo Akhir</th><th>Batch No</th><th>Expired Date</th><th>Stock Date</th>
         </tr></thead>
-        @if (User.IsInRole("Administrator"))
-        {
-            <tfoot><tr>
-                <th><input id="stockDistributorFilter" class="form-control form-control-sm" placeholder="Filter distributor" /></th>
-                @for (var index = 0; index < 15; index++) { <th></th> }
-            </tr></tfoot>
-        }
+        <tfoot><tr>
+            @if (User.IsInRole("Administrator")) { <th><input id="stockDistributorFilter" class="form-control form-control-sm" placeholder="Filter distributor" /></th> }
+            <th><input id="stockAreaFilter" class="form-control form-control-sm" placeholder="Filter area" /></th>
+            <th><select id="stockConditionFilter" class="form-select form-select-sm"><option value="">All</option><option value="Good">Good</option><option value="Bad">Bad</option></select></th>
+            @for (var index = 0; index < 15; index++) { <th></th> }
+        </tr></tfoot>
         </table>
     </div>
 </div>
@@ -161,6 +163,8 @@ $(function () {
        $('#stockSummaryAwal').text(numberFormatter.format(data.saldoAwal || 0));
        $('#stockSummaryMasuk').text(numberFormatter.format(data.saldoMasukPO || 0));
        $('#stockSummaryAkhir').text(numberFormatter.format(data.saldoAkhir || 0));
+       $('#stockSummaryAkhirGood').text(numberFormatter.format(data.saldoAkhirGood || 0));
+       $('#stockSummaryAkhirBad').text(numberFormatter.format(data.saldoAkhirBad || 0));
        $('#stockSummaryValue').text(numberFormatter.format(data.stockValue || 0));
      } catch { $('#stockSelectionSummary .fw-semibold').text('Unavailable'); }
  }
@@ -197,6 +201,10 @@ $(function () {
        if(d.search?.value){q.SearchTerm=d.search.value;}
        const distributor=$('#stockDistributorFilter').val();
        if(distributor){q['Filters.CompanyName']=distributor;}
+       const area=$('#stockAreaFilter').val();
+       if(area){q['Filters.AreaName']=area;}
+       const condition=$('#stockConditionFilter').val();
+       if(condition){q['Filters.Condition']=condition;}
        if(d.order?.length){q.SortBy=d.columns[d.order[0].column].data;q.IsSortAscending=d.order[0].dir==='asc';}
        q['Filters.Year']=yearSelect.val();
        q['Filters.Month']=monthSelect.val();
@@ -207,6 +215,7 @@ $(function () {
    },
    columns:[
     @if (User.IsInRole("Administrator")) { <text>{data:'companyName'},</text> }
+    {data:'areaName',defaultContent:''},{data:'condition'},
     {data:'productId'},{data:'productName'},{data:'productPackaging'},{data:'productPcsInCtn'},
     {data:'productNetto'},{data:'productUnit'},{data:'smallestUnit'},{data:'smallestUnitQty'},
     {data:'priceUnit'},{data:'saldoAwal'},{data:'saldoMasukPO'},
@@ -235,6 +244,11 @@ $(function () {
    clearTimeout(distributorFilterTimer);
    distributorFilterTimer=setTimeout(()=>{ if (table) table.ajax.reload(); },300);
  });
+ $('#stockAreaFilter').on('input', function () {
+   clearTimeout(distributorFilterTimer);
+   distributorFilterTimer=setTimeout(()=>{ if (table) table.ajax.reload(); },300);
+ });
+ $('#stockConditionFilter').on('change', function () { if (table) table.ajax.reload(); });
  function render(preflight, message) {
    $('#summaryTotalRows').text(numberFormatter.format(preflight.totalRows || 0));
    $('#summaryValidRows').text(numberFormatter.format(preflight.validRows || 0));

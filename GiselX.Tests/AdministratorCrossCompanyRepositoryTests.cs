@@ -9,7 +9,7 @@ namespace GiselX.Tests;
 public sealed class AdministratorCrossCompanyRepositoryTests
 {
     [Fact]
-    public async Task Stock_select_uses_each_distributors_latest_batch_for_administrator_scope()
+    public async Task Stock_select_uses_each_distributors_latest_batch_per_area_for_administrator_scope()
     {
         var connection = new RecordingDbConnection();
         var repository = new StockRepository(connection, null!);
@@ -18,7 +18,7 @@ public sealed class AdministratorCrossCompanyRepositoryTests
             repository.SelectAsync(new PagedListRequest(), 0, false, CancellationToken.None));
 
         Assert.Equal(CommandType.Text, connection.LastCommandType);
-        Assert.Contains("PARTITION BY CompanyId", connection.LastCommandText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PARTITION BY b.CompanyId, COALESCE(d.StockAreaId,0)", connection.LastCommandText, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("JOIN Company", connection.LastCommandText, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("CompanyName", connection.LastCommandText, StringComparison.OrdinalIgnoreCase);
     }

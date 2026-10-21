@@ -39,6 +39,10 @@ public class StockDto
     public long? StockUploadBatchId { get; set; }
     [Display(Name = "Stock Date")]
     public DateTime? StockDate { get; set; }
+    [Display(Name = "Area")]
+    public string? AreaName { get; set; }
+    [Display(Name = "Condition")]
+    public string Condition { get; set; } = "Good";
     [Display(Name = "Distributor")]
     public string CompanyName { get; set; } = string.Empty;
 }

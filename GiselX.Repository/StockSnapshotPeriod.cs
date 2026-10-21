@@ -5,7 +5,7 @@ namespace GiselX.Repository;
 /// <summary>
 /// Chooses which Stock snapshot each distributor is represented by. A snapshot is a position at one
 /// moment, so several of them can never be added together: the grid, its count and the summary tiles
-/// all show exactly one published batch per distributor, and all three must agree on which.
+/// all show exactly one published batch per distributor and area, and all three must agree on which.
 /// </summary>
 public static class StockSnapshotPeriod
 {
@@ -27,25 +27,29 @@ public static class StockSnapshotPeriod
     }
 
     /// <summary>
-    /// The RankedBatches CTE; BatchRank 1 is the snapshot shown. With a month chosen it is the latest
-    /// snapshot dated inside that month — the month-end position — otherwise the most recently
-    /// published batch, which is what the page showed before it could be browsed by month.
+    /// The RankedBatches CTE; BatchRank 1 is the snapshot shown, per distributor and per area. A
+    /// distributor can hold several live batches on one date, one per area, and one batch can carry
+    /// several areas, so the unit ranked is the (batch, area) pair that still has Stock rows — a partly
+    /// replaced batch ranks only the areas it still holds. With a month chosen the winner is the latest
+    /// snapshot dated inside that month, otherwise the most recently published batch.
     /// </summary>
     public static string RankedBatches(bool hasPeriod) => hasPeriod
         ? """
           WITH RankedBatches AS (
-              SELECT Id, CompanyId,
-                     ROW_NUMBER() OVER (PARTITION BY CompanyId ORDER BY StockDate DESC, CompletedDate DESC, Id DESC) AS BatchRank
-              FROM StockUploadBatch
-              WHERE Status IN (2,3) AND StockDate >= @PeriodStart AND StockDate < @PeriodEnd
+              SELECT b.Id, b.CompanyId, COALESCE(d.StockAreaId,0) AS AreaKey,
+                     ROW_NUMBER() OVER (PARTITION BY b.CompanyId, COALESCE(d.StockAreaId,0) ORDER BY b.StockDate DESC, b.CompletedDate DESC, b.Id DESC) AS BatchRank
+              FROM (SELECT DISTINCT StockUploadBatchId, StockAreaId FROM Stock WHERE StockUploadBatchId IS NOT NULL) d
+              INNER JOIN StockUploadBatch b ON b.Id=d.StockUploadBatchId
+              WHERE b.Status IN (2,3) AND b.StockDate >= @PeriodStart AND b.StockDate < @PeriodEnd
           )
           """
         : """
           WITH RankedBatches AS (
-              SELECT Id, CompanyId,
-                     ROW_NUMBER() OVER (PARTITION BY CompanyId ORDER BY CompletedDate DESC, Id DESC) AS BatchRank
-              FROM StockUploadBatch
-              WHERE Status IN (2,3)
+              SELECT b.Id, b.CompanyId, COALESCE(d.StockAreaId,0) AS AreaKey,
+                     ROW_NUMBER() OVER (PARTITION BY b.CompanyId, COALESCE(d.StockAreaId,0) ORDER BY b.CompletedDate DESC, b.Id DESC) AS BatchRank
+              FROM (SELECT DISTINCT StockUploadBatchId, StockAreaId FROM Stock WHERE StockUploadBatchId IS NOT NULL) d
+              INNER JOIN StockUploadBatch b ON b.Id=d.StockUploadBatchId
+              WHERE b.Status IN (2,3)
           )
           """;
 

@@ -44,22 +44,32 @@ public sealed class StockSnapshotPeriodTests
     }
 
     [Fact]
-    public void A_chosen_month_ranks_each_distributors_snapshots_inside_it_latest_first()
+    public void A_chosen_month_ranks_each_area_of_each_distributor_latest_first()
     {
         var sql = Normalize(StockSnapshotPeriod.RankedBatches(hasPeriod: true));
 
-        Assert.Contains("StockDate >= @PeriodStart AND StockDate < @PeriodEnd", sql, StringComparison.Ordinal);
-        Assert.Contains("PARTITION BY CompanyId ORDER BY StockDate DESC, CompletedDate DESC, Id DESC", sql, StringComparison.Ordinal);
+        Assert.Contains("b.StockDate >= @PeriodStart AND b.StockDate < @PeriodEnd", sql, StringComparison.Ordinal);
+        Assert.Contains("PARTITION BY b.CompanyId, COALESCE(d.StockAreaId,0) ORDER BY b.StockDate DESC, b.CompletedDate DESC, b.Id DESC", sql, StringComparison.Ordinal);
         Assert.Contains("Status IN (2,3)", sql, StringComparison.Ordinal);
+        Assert.Contains("SELECT DISTINCT StockUploadBatchId, StockAreaId FROM Stock", sql, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Without_a_month_the_latest_published_batch_per_distributor_is_kept_as_before()
+    public void Without_a_month_the_latest_published_batch_per_area_is_kept()
     {
         var sql = Normalize(StockSnapshotPeriod.RankedBatches(hasPeriod: false));
 
-        Assert.Contains("PARTITION BY CompanyId ORDER BY CompletedDate DESC, Id DESC", sql, StringComparison.Ordinal);
+        Assert.Contains("PARTITION BY b.CompanyId, COALESCE(d.StockAreaId,0) ORDER BY b.CompletedDate DESC, b.Id DESC", sql, StringComparison.Ordinal);
         Assert.DoesNotContain("@PeriodStart", sql, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Grid_count_and_summary_join_on_the_area_key()
+    {
+        var source = File.ReadAllText(FindFromSolutionRoot("GiselX.Repository", "StockRepository.cs"));
+
+        Assert.Contains("rb.AreaKey=COALESCE(s.StockAreaId,0)", MethodBody(source, "SelectAsync"), StringComparison.Ordinal);
+        Assert.Contains("rb.AreaKey=COALESCE(s.StockAreaId,0)", MethodBody(source, "SummarizeAsync"), StringComparison.Ordinal);
     }
 
     [Fact]

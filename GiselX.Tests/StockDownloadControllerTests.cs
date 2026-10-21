@@ -21,14 +21,31 @@ public sealed class StockDownloadControllerTests
         using var workbook = new XLWorkbook(result.FileStream);
         var sheet = workbook.Worksheet(1);
 
-        Assert.Equal("Unit", sheet.Cell(1, 6).GetString());
-        Assert.Equal("Smallest Unit", sheet.Cell(1, 7).GetString());
-        Assert.Equal("PCS", sheet.Cell(2, 7).GetString());
-        Assert.Equal("Qty per Smallest Unit", sheet.Cell(1, 8).GetString());
-        Assert.Equal(24m, sheet.Cell(2, 8).GetValue<decimal>());
-        Assert.Equal("Price Unit", sheet.Cell(1, 9).GetString());
-        Assert.Equal(12.50m, sheet.Cell(2, 9).GetValue<decimal>());
-        Assert.Equal("Saldo Awal", sheet.Cell(1, 10).GetString());
+        Assert.Equal("Unit", sheet.Cell(1, 8).GetString());
+        Assert.Equal("Smallest Unit", sheet.Cell(1, 9).GetString());
+        Assert.Equal("PCS", sheet.Cell(2, 9).GetString());
+        Assert.Equal("Qty per Smallest Unit", sheet.Cell(1, 10).GetString());
+        Assert.Equal(24m, sheet.Cell(2, 10).GetValue<decimal>());
+        Assert.Equal("Price Unit", sheet.Cell(1, 11).GetString());
+        Assert.Equal(12.50m, sheet.Cell(2, 11).GetValue<decimal>());
+        Assert.Equal("Saldo Awal", sheet.Cell(1, 12).GetString());
+    }
+
+    [Fact]
+    public async Task DownloadBatch_writes_area_and_condition_after_product_name()
+    {
+        var controller = CreateController();
+
+        var result = Assert.IsType<FileStreamResult>(
+            await controller.DownloadBatch(9, CancellationToken.None));
+        using var workbook = new XLWorkbook(result.FileStream);
+        var sheet = workbook.Worksheet(1);
+
+        Assert.Equal("Product Name", sheet.Cell(1, 2).GetString());
+        Assert.Equal("Area", sheet.Cell(1, 3).GetString());
+        Assert.Equal("Condition", sheet.Cell(1, 4).GetString());
+        Assert.Equal("Good", sheet.Cell(2, 4).GetString());
+        Assert.Equal("Packaging", sheet.Cell(1, 5).GetString());
     }
 
     [Fact]
@@ -41,11 +58,11 @@ public sealed class StockDownloadControllerTests
         using var workbook = new XLWorkbook(result.FileStream);
         var sheet = workbook.Worksheet(1);
 
-        Assert.Equal("Batch No", sheet.Cell(1, 13).GetString());
-        Assert.Equal("Expired Date", sheet.Cell(1, 14).GetString());
-        Assert.Equal("2027-01-01", sheet.Cell(2, 14).GetString());
-        Assert.Equal("Stock Date", sheet.Cell(1, 15).GetString());
-        Assert.Equal("2026-08-09", sheet.Cell(2, 15).GetString());
+        Assert.Equal("Batch No", sheet.Cell(1, 15).GetString());
+        Assert.Equal("Expired Date", sheet.Cell(1, 16).GetString());
+        Assert.Equal("2027-01-01", sheet.Cell(2, 16).GetString());
+        Assert.Equal("Stock Date", sheet.Cell(1, 17).GetString());
+        Assert.Equal("2026-08-09", sheet.Cell(2, 17).GetString());
     }
 
     [Theory]

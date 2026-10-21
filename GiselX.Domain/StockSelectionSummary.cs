@@ -7,5 +7,7 @@ public sealed class StockSelectionSummary
     public decimal SaldoAwal { get; set; }
     public decimal SaldoMasukPO { get; set; }
     public decimal SaldoAkhir { get; set; }
+    public decimal SaldoAkhirGood { get; set; }
+    public decimal SaldoAkhirBad { get; set; }
     public decimal StockValue { get; set; }
 }

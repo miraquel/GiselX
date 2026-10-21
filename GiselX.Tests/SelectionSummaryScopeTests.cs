@@ -27,6 +27,16 @@ public sealed class SelectionSummaryScopeTests
     }
 
     [Fact]
+    public void Stock_summary_splits_saldo_akhir_by_condition()
+    {
+        var body = MethodBody(File.ReadAllText(FindFromSolutionRoot("GiselX.Repository", "StockRepository.cs")),
+            "SummarizeAsync");
+
+        Assert.Contains("CASE WHEN s.Condition=0", body, StringComparison.Ordinal);
+        Assert.Contains("CASE WHEN s.Condition=1", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Sellout_summary_for_a_distributor_is_limited_to_that_company()
     {
         var (sql, parameters) = SalesSelectionSummaryQuery.Build(Request(("Year", "2026"), ("Month", "10")), 7, true);

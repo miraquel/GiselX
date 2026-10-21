@@ -187,7 +187,8 @@ public class StockService : IStockService
             {
                 DistributorCount = summary.DistributorCount, RowCount = summary.RowCount,
                 SaldoAwal = summary.SaldoAwal, SaldoMasukPO = summary.SaldoMasukPO,
-                SaldoAkhir = summary.SaldoAkhir, StockValue = summary.StockValue
+                SaldoAkhir = summary.SaldoAkhir, SaldoAkhirGood = summary.SaldoAkhirGood,
+                SaldoAkhirBad = summary.SaldoAkhirBad, StockValue = summary.StockValue
             },
             Message = "Stock summary retrieved successfully."
         };

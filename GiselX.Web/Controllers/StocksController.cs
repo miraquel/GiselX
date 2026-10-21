@@ -104,7 +104,7 @@ public sealed class StocksController(
         {
             if (row.RowNumber() == 1)
             {
-                var headers = new[] { "Product ID", "Product Name", "Packaging", "Pcs/Ctn", "Netto", "Unit",
+                var headers = new[] { "Product ID", "Product Name", "Area", "Condition", "Packaging", "Pcs/Ctn", "Netto", "Unit",
                     "Smallest Unit", "Qty per Smallest Unit", "Price Unit", "Saldo Awal", "Saldo Masuk PO",
                     "Saldo Akhir", "Batch No", "Expired Date", "Stock Date" };
                 if (includeDistributor) row.Cell(1).Value = "Distributor";
@@ -115,14 +115,15 @@ public sealed class StocksController(
             {
                 if (includeDistributor) row.Cell(1).Value = dto.CompanyName;
                 row.Cell(1 + columnOffset).Value = dto.ProductId; row.Cell(2 + columnOffset).Value = dto.ProductName;
-                row.Cell(3 + columnOffset).Value = dto.ProductPackaging; row.Cell(4 + columnOffset).Value = dto.ProductPcsInCtn;
-                row.Cell(5 + columnOffset).Value = dto.ProductNetto; row.Cell(6 + columnOffset).Value = dto.ProductUnit;
-                row.Cell(7 + columnOffset).Value = dto.SmallestUnit; row.Cell(8 + columnOffset).Value = dto.SmallestUnitQty;
-                row.Cell(9 + columnOffset).Value = dto.PriceUnit; row.Cell(10 + columnOffset).Value = dto.SaldoAwal;
-                row.Cell(11 + columnOffset).Value = dto.SaldoMasukPO; row.Cell(12 + columnOffset).Value = dto.SaldoAkhir;
-                row.Cell(13 + columnOffset).Value = dto.BatchNumber;
-                row.Cell(14 + columnOffset).Value = dto.ExpiredDate == SqlDateTime.MinValue.Value ? null : dto.ExpiredDate.ToString("yyyy-MM-dd");
-                row.Cell(15 + columnOffset).Value = dto.StockDate?.ToString("yyyy-MM-dd");
+                row.Cell(3 + columnOffset).Value = dto.AreaName; row.Cell(4 + columnOffset).Value = dto.Condition;
+                row.Cell(5 + columnOffset).Value = dto.ProductPackaging; row.Cell(6 + columnOffset).Value = dto.ProductPcsInCtn;
+                row.Cell(7 + columnOffset).Value = dto.ProductNetto; row.Cell(8 + columnOffset).Value = dto.ProductUnit;
+                row.Cell(9 + columnOffset).Value = dto.SmallestUnit; row.Cell(10 + columnOffset).Value = dto.SmallestUnitQty;
+                row.Cell(11 + columnOffset).Value = dto.PriceUnit; row.Cell(12 + columnOffset).Value = dto.SaldoAwal;
+                row.Cell(13 + columnOffset).Value = dto.SaldoMasukPO; row.Cell(14 + columnOffset).Value = dto.SaldoAkhir;
+                row.Cell(15 + columnOffset).Value = dto.BatchNumber;
+                row.Cell(16 + columnOffset).Value = dto.ExpiredDate == SqlDateTime.MinValue.Value ? null : dto.ExpiredDate.ToString("yyyy-MM-dd");
+                row.Cell(17 + columnOffset).Value = dto.StockDate?.ToString("yyyy-MM-dd");
             }
         });
         return File(stream, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

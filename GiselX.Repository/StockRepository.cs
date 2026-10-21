@@ -147,11 +147,13 @@ public class StockRepository : IStockRepository
             nameof(Stock.SmallestUnit), nameof(Stock.SmallestUnitQty), nameof(Stock.PriceUnit),
             nameof(Stock.SaldoAwal), nameof(Stock.SaldoMasukPO), nameof(Stock.SaldoAkhir),
             nameof(Stock.BatchNumber), nameof(Stock.ExpiredDate), nameof(Stock.StockDate),
-            nameof(Stock.CompanyName)
+            nameof(Stock.CompanyName), nameof(Stock.AreaName), nameof(Stock.Condition)
         };
         foreach (var parameter in pagedListRequest.Filters.Where(parameter => allowed.Contains(parameter.Key)))
         {
             if (string.IsNullOrWhiteSpace(parameter.Value)) continue;
+            if (parameter.Key == nameof(Stock.Condition))
+            { AddConditionFilter(parameter.Value, clauses, parameters); continue; }
             var propertyInfo = typeof(Stock).GetProperty(parameter.Key);
             if (propertyInfo is null) continue;
             switch (propertyInfo.PropertyType)
@@ -202,16 +204,18 @@ public class StockRepository : IStockRepository
             {rankedBatches}
             SELECT {projection}
             FROM Stock s
-            INNER JOIN RankedBatches rb ON rb.Id=s.StockUploadBatchId AND rb.BatchRank=1
+            INNER JOIN RankedBatches rb ON rb.Id=s.StockUploadBatchId AND rb.AreaKey=COALESCE(s.StockAreaId,0) AND rb.BatchRank=1
             INNER JOIN Company c ON c.Id=s.CompanyId
+            LEFT JOIN StockArea a ON a.Id=s.StockAreaId
             WHERE (@CompanyId=0 OR s.CompanyId=@CompanyId) {where}
              ORDER BY {sortExpression} {direction}, s.Id ASC
              OFFSET (@PageNumber-1)*@PageSize ROWS FETCH NEXT @PageSize ROWS ONLY;
             {rankedBatches}
             SELECT COUNT(*)
             FROM Stock s
-            INNER JOIN RankedBatches rb ON rb.Id=s.StockUploadBatchId AND rb.BatchRank=1
+            INNER JOIN RankedBatches rb ON rb.Id=s.StockUploadBatchId AND rb.AreaKey=COALESCE(s.StockAreaId,0) AND rb.BatchRank=1
             INNER JOIN Company c ON c.Id=s.CompanyId
+            LEFT JOIN StockArea a ON a.Id=s.StockAreaId
             WHERE (@CompanyId=0 OR s.CompanyId=@CompanyId) {where};
             """;
         using var result = await _dbConnection.QueryMultipleAsync(new CommandDefinition(query, parameters,
@@ -235,11 +239,13 @@ public class StockRepository : IStockRepository
             nameof(Stock.SmallestUnit), nameof(Stock.SmallestUnitQty),
             nameof(Stock.PriceUnit), nameof(Stock.SaldoAwal), nameof(Stock.SaldoMasukPO),
             nameof(Stock.SaldoAkhir), nameof(Stock.BatchNumber), nameof(Stock.ExpiredDate),
-            nameof(Stock.StockDate), nameof(Stock.CompanyName)
+            nameof(Stock.StockDate), nameof(Stock.CompanyName), nameof(Stock.AreaName), nameof(Stock.Condition)
         };
         foreach (var filter in request.Filters.Where(filter => allowed.Contains(filter.Key)))
         {
             if (string.IsNullOrWhiteSpace(filter.Value)) continue;
+            if (filter.Key == nameof(Stock.Condition))
+            { AddConditionFilter(filter.Value, clauses, parameters); continue; }
             var property = typeof(Stock).GetProperty(filter.Key);
             if (property is null) continue;
             var expression = filter.Key == nameof(Stock.CompanyName)
@@ -282,10 +288,13 @@ public class StockRepository : IStockRepository
                    COALESCE(SUM(s.SaldoAwal),0) AS SaldoAwal,
                    COALESCE(SUM(s.SaldoMasukPO),0) AS SaldoMasukPO,
                    COALESCE(SUM(s.SaldoAkhir),0) AS SaldoAkhir,
+                   COALESCE(SUM(CASE WHEN s.Condition=0 THEN s.SaldoAkhir END),0) AS SaldoAkhirGood,
+                   COALESCE(SUM(CASE WHEN s.Condition=1 THEN s.SaldoAkhir END),0) AS SaldoAkhirBad,
                    COALESCE(SUM(COALESCE(s.SaldoAkhir,0) * COALESCE(s.PriceUnit,0)),0) AS StockValue
             FROM Stock s
-            INNER JOIN RankedBatches rb ON rb.Id=s.StockUploadBatchId AND rb.BatchRank=1
+            INNER JOIN RankedBatches rb ON rb.Id=s.StockUploadBatchId AND rb.AreaKey=COALESCE(s.StockAreaId,0) AND rb.BatchRank=1
             INNER JOIN Company c ON c.Id=s.CompanyId
+            LEFT JOIN StockArea a ON a.Id=s.StockAreaId
             WHERE (@CompanyId=0 OR s.CompanyId=@CompanyId) {filters};
             """, parameters, _dbTransaction, cancellationToken: cancellationToken));
     }
@@ -322,6 +331,7 @@ public class StockRepository : IStockRepository
             SELECT {projection} FROM Stock s
             INNER JOIN StockUploadBatch b ON b.Id=s.StockUploadBatchId
             INNER JOIN Company c ON c.Id=b.CompanyId
+            LEFT JOIN StockArea a ON a.Id=s.StockAreaId
             WHERE b.Id=@BatchId AND (@CompanyId=0 OR b.CompanyId=@CompanyId) AND b.Status IN (2,3)
             ORDER BY {productId}, s.Id
             """, new { BatchId = batchId, CompanyId = companyId }, _dbTransaction,
@@ -332,8 +342,26 @@ public class StockRepository : IStockRepository
     {
         nameof(Stock.ProductId) when useDistributorIdentity => "COALESCE(NULLIF(s.DistributorProductId, ''), s.ProductId)",
         nameof(Stock.ProductName) when useDistributorIdentity => "COALESCE(NULLIF(s.DistributorProductName, ''), s.ProductName)",
+        nameof(Stock.AreaName) => "a.Name",
         _ => $"s.[{field}]"
     };
+
+    /// <summary>
+    /// The grid's Condition select sends Good or Bad; the column holds 0 or 1. Anything else is ignored,
+    /// and the grid, its count and the summary tiles all build the clause here so they cannot disagree.
+    /// </summary>
+    private static void AddConditionFilter(string value, List<string> clauses, DynamicParameters parameters)
+    {
+        var condition = value.Trim().ToLowerInvariant() switch
+        {
+            "good" => (int?)StockCondition.Good,
+            "bad" => (int?)StockCondition.Bad,
+            _ => null
+        };
+        if (condition is null) return;
+        clauses.Add("s.Condition = @Condition");
+        parameters.Add("Condition", condition.Value);
+    }
 
     private static string GetProjection(bool useDistributorIdentity)
     {
@@ -362,6 +390,9 @@ public class StockRepository : IStockRepository
             s.CreatedDate,
             s.StockUploadBatchId,
             s.StockDate,
+            s.StockAreaId,
+            a.Name AS AreaName,
+            s.Condition,
             c.Name AS CompanyName
             """;
     }
