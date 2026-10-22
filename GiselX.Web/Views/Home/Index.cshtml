@@ -1,4 +1,6 @@
 ﻿@using GiselX.Common.Constants
+@using GiselX.Service
+@model GiselX.Web.Models.HomeIndexViewModel
 @{
     ViewData["Title"] = "Home Page";
 
@@ -7,6 +9,8 @@
     var canServiceLevel = User.HasClaim(c => c is { Type: "permission", Value: PermissionConstants.ServiceLevels.Index });
     var canSellout = User.HasClaim(c => c is { Type: "permission", Value: PermissionConstants.SalesTransactions.Index });
     var canStock = User.HasClaim(c => c is { Type: "permission", Value: PermissionConstants.Stocks.Index });
+    var status = Model?.DeadlineStatus;
+    var culture = UploadNotificationMessage.Culture;
 }
 
 <div class="container py-5">
@@ -21,6 +25,34 @@
             </p>
         </div>
     </div>
+
+    @if (status is not null)
+    {
+        <div class="row justify-content-center mb-4">
+            <div class="col-lg-9">
+                <div class="card border @(status.Missing.Count == 0 ? "border-success" : status.DaysLeft <= 1 ? "border-danger" : "border-warning")">
+                    <div class="card-body">
+                        <h5 class="mb-1">Batas upload berikutnya: @status.Deadline.ToString("dddd, dd MMMM yyyy", culture)</h5>
+                        <p class="text-muted mb-3">
+                            @(status.DaysLeft == 0 ? "Hari ini." : status.DaysLeft == 1 ? "Besok." : $"{status.DaysLeft} hari lagi.")
+                            Data yang dihitung untuk batas ini: upload sejak @status.From.ToString("dd MMMM yyyy", culture).
+                        </p>
+                        @if (status.Missing.Count == 0)
+                        {
+                            <p class="text-success mb-0"><i class="ri ri-checkbox-circle-line me-1"></i>Semua data untuk batas ini sudah kami terima. Terima kasih!</p>
+                        }
+                        else
+                        {
+                            <p class="mb-1">Data yang belum kami terima:</p>
+                            <ul class="mb-0">
+                                @foreach (var item in status.Missing) { <li>@item</li> }
+                            </ul>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
 
     <div class="row g-4 justify-content-center">
         @if (canSellout)

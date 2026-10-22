@@ -15,6 +15,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IBusinessUnitService, BusinessUnitService>();
         services.AddScoped<IStockAreaService, StockAreaService>();
         services.AddScoped<IUploadCheckService, UploadCheckService>();
+        services.AddScoped<IUploadDeadlineStatusService, UploadDeadlineStatusService>();
         services.AddScoped<IEmailSettingsProvider, EmailSettingsProvider>();
         services.AddScoped<IEmailSettingService, EmailSettingService>();
         services.AddScoped<IEmailService, EmailService>();

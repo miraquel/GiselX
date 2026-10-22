@@ -22,6 +22,29 @@ public static class ReminderCycle
     public static DateTime MonthlyDeadline(int deadlineDayOfMonth, int year, int month) =>
         new(year, month, Math.Min(deadlineDayOfMonth, DateTime.DaysInMonth(year, month)));
 
+    /// <summary>The first deadline on or after <paramref name="today"/>, or null for a company without a schedule.</summary>
+    public static DateTime? NextDeadline(Company company, DateTime today)
+    {
+        var day = today.Date;
+        if (company.DeadlineDayOfMonth is { } dayOfMonth)
+        {
+            var thisMonth = MonthlyDeadline(dayOfMonth, day.Year, day.Month);
+            var nextMonth = day.AddMonths(1);
+            return thisMonth >= day ? thisMonth : MonthlyDeadline(dayOfMonth, nextMonth.Year, nextMonth.Month);
+        }
+
+        if (company.DeadlineDaysOfWeek is { } days and not WeekDays.None)
+        {
+            for (var ahead = 0; ahead < 7; ahead++)
+            {
+                var candidate = day.AddDays(ahead);
+                if (days.HasFlag((WeekDays)(1 << (int)candidate.DayOfWeek))) return candidate;
+            }
+        }
+
+        return null;
+    }
+
     private static DateTime PreviousDeadline(Company company, DateTime deadline)
     {
         if (company.DeadlineDayOfMonth is { } dayOfMonth)

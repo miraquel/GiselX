@@ -163,6 +163,53 @@ public sealed class ReminderScheduleTests
         Assert.Equal(["Stock"], missing);
     }
 
+    [Theory]
+    [InlineData(5, "2026-10-22", "2026-11-05")]
+    [InlineData(5, "2026-10-05", "2026-10-05")]
+    [InlineData(31, "2026-02-10", "2026-02-28")]
+    public void Next_monthly_deadline_is_today_or_the_first_one_after(int day, string today, string expected) =>
+        Assert.Equal(DateTime.Parse(expected),
+            ReminderCycle.NextDeadline(new Company { DeadlineDayOfMonth = day }, DateTime.Parse(today)));
+
+    [Theory]
+    [InlineData("2026-10-21", "2026-10-22")]
+    [InlineData("2026-10-22", "2026-10-22")]
+    [InlineData("2026-10-23", "2026-10-26")]
+    public void Next_weekly_deadline_is_today_or_the_first_scheduled_day_after(string today, string expected) =>
+        Assert.Equal(DateTime.Parse(expected), ReminderCycle.NextDeadline(
+            new Company { DeadlineDaysOfWeek = WeekDays.Monday | WeekDays.Thursday }, DateTime.Parse(today)));
+
+    [Fact]
+    public void A_company_without_a_schedule_has_no_next_deadline() =>
+        Assert.Null(ReminderCycle.NextDeadline(new Company(), new DateTime(2026, 10, 22)));
+
+    [Fact]
+    public async Task Home_status_names_the_next_deadline_its_cycle_and_what_is_still_missing()
+    {
+        var check = new RecordingCheck(["Stock"]);
+        var service = new UploadDeadlineStatusService(
+            new Companies(new Company { Id = 4, Name = "A", DeadlineDaysOfWeek = WeekDays.Monday }), check,
+            new FixedClock(new DateTime(2026, 10, 24)));
+
+        var status = await service.GetAsync(4, CancellationToken.None);
+
+        Assert.NotNull(status);
+        Assert.Equal(new DateTime(2026, 10, 26), status.Deadline);
+        Assert.Equal(new DateTime(2026, 10, 20), status.From);
+        Assert.Equal(2, status.DaysLeft);
+        Assert.Equal(["Stock"], status.Missing);
+        Assert.Equal((new DateTime(2026, 10, 20), new DateTime(2026, 10, 27)), Assert.Single(check.Windows));
+    }
+
+    [Fact]
+    public async Task Home_status_is_absent_for_a_company_without_a_schedule()
+    {
+        var service = new UploadDeadlineStatusService(new Companies(new Company { Id = 4, Name = "GMK" }),
+            new RecordingCheck([]), new FixedClock(new DateTime(2026, 10, 24)));
+
+        Assert.Null(await service.GetAsync(4, CancellationToken.None));
+    }
+
     [Fact]
     public void The_reminder_body_lists_only_the_missing_items()
     {
@@ -241,7 +288,8 @@ public sealed class ReminderScheduleTests
         public Task<IEnumerable<Company>> GetAllWithContactEmailAsync(CancellationToken cancellationToken) =>
             Task.FromResult<IEnumerable<Company>>(companies);
         public Task<Company> CreateCompanyAsync(Company value, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<Company?> GetCompanyByIdAsync(int id, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<Company?> GetCompanyByIdAsync(int id, CancellationToken cancellationToken) =>
+            Task.FromResult(companies.FirstOrDefault(company => company.Id == id));
         public Task<PagedList<Company>> GetCompaniesAsync(PagedListRequest request, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
         public Task<Company> UpdateCompanyAsync(Company value, CancellationToken cancellationToken) => throw new NotSupportedException();
