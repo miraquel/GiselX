@@ -46,7 +46,7 @@ public sealed class SelloutWorkbookParserTests
 
         var error = Assert.Single(result.Errors.Where(error => error.Field == SelloutCanonicalField.InvoiceNo));
         Assert.Equal(7, error.SourceRowNumber);
-        Assert.Equal("A value is required.", error.Reason);
+        Assert.Equal("Wajib diisi.", error.Reason);
     }
 
     [Fact]

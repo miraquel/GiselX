@@ -55,7 +55,7 @@ public sealed class StockWorkbookParser
                 if (!StockCellValueConverter.TryConvert(raw, column.CanonicalField, out var value))
                 {
                     errors.Add(Error(source.Key, column.CanonicalField, raw,
-                        $"Value is not a valid {StockCanonicalFieldCatalog.GetValueType(column.CanonicalField).Name}."));
+                        UploadMessages.NotAValid(StockCanonicalFieldCatalog.GetValueType(column.CanonicalField))));
                     continue;
                 }
 
@@ -78,7 +78,7 @@ public sealed class StockWorkbookParser
         return new StockParseResult(
             staged,
             allErrors,
-            staged.Count == 0 ? "The workbook contains no data rows." : null,
+            staged.Count == 0 ? UploadMessages.NoDataRows : null,
             ignoredSummaryRows.OrderBy(row => row).ToList());
     }
 
@@ -163,37 +163,37 @@ public sealed class StockWorkbookParser
                 continue;
             }
 
-            errors.Add(Error(row.SourceRowNumber, field, null, "A value is required."));
+            errors.Add(Error(row.SourceRowNumber, field, null, UploadMessages.ValueRequired));
         }
 
         if (row.SaldoAkhir < 0)
         {
             errors.Add(Error(row.SourceRowNumber, StockCanonicalField.SaldoAkhir,
-                row.SaldoAkhir.Value.ToString(), "SaldoAkhir must not be negative."));
+                row.SaldoAkhir.Value.ToString(), UploadMessages.MustNotBeNegative));
         }
 
         if (row.QtyCarton < 0)
         {
             errors.Add(Error(row.SourceRowNumber, StockCanonicalField.QtyCarton,
-                row.QtyCarton.Value.ToString(), "QtyCarton must not be negative."));
+                row.QtyCarton.Value.ToString(), UploadMessages.MustNotBeNegative));
         }
 
         if (row.QtyPcs < 0)
         {
             errors.Add(Error(row.SourceRowNumber, StockCanonicalField.QtyPcs,
-                row.QtyPcs.Value.ToString(), "QtyPcs must not be negative."));
+                row.QtyPcs.Value.ToString(), UploadMessages.MustNotBeNegative));
         }
 
         if (row.PriceUnit < 0)
         {
             errors.Add(Error(row.SourceRowNumber, StockCanonicalField.PriceUnit,
-                row.PriceUnit.Value.ToString(), "PriceUnit must not be negative."));
+                row.PriceUnit.Value.ToString(), UploadMessages.MustNotBeNegative));
         }
 
         if (row.SmallestUnitQty < 0)
         {
             errors.Add(Error(row.SourceRowNumber, StockCanonicalField.SmallestUnitQty,
-                row.SmallestUnitQty.Value.ToString(), "SmallestUnitQty must not be negative."));
+                row.SmallestUnitQty.Value.ToString(), UploadMessages.MustNotBeNegative));
         }
 
         foreach (var field in Enum.GetValues<StockCanonicalField>())
@@ -202,7 +202,7 @@ public sealed class StockWorkbookParser
             if (limit.HasValue && GetValue(row, field) is string text && text.Length > limit.Value)
             {
                 errors.Add(Error(row.SourceRowNumber, field, text,
-                    $"Value exceeds the maximum length of {limit.Value}."));
+                    UploadMessages.TooLong(limit.Value)));
             }
         }
     }

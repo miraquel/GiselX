@@ -137,7 +137,7 @@ public sealed class ClosedXmlSelloutWorkbookInspectorTests
 
         Assert.False(result.IsMatch);
         Assert.Null(result.Mapping);
-        Assert.Contains(result.Errors, error => error.Contains("No active", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(result.Errors, error => error.Contains("tidak cocok dengan template Sellout aktif", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -155,7 +155,7 @@ public sealed class ClosedXmlSelloutWorkbookInspectorTests
         Assert.False(result.IsMatch);
         Assert.Null(result.Mapping);
         Assert.Equal(["First", "Second"], result.CandidateMappingNames);
-        Assert.Contains(result.Errors, error => error.Contains("multiple", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(result.Errors, error => error.Contains("Lebih dari satu template", StringComparison.Ordinal));
     }
 
     [Theory]
@@ -198,7 +198,7 @@ public sealed class ClosedXmlSelloutWorkbookInspectorTests
 
         var result = await new XlsxSelloutWorkbookInspector().InspectAsync(workbook, "DATA", 1, 2);
 
-        Assert.Contains(result.Errors, error => error.Contains("more than one", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(result.Errors, error => error.Contains("lebih dari satu sheet", StringComparison.Ordinal));
         Assert.Empty(result.Headers);
     }
 

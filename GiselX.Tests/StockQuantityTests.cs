@@ -122,7 +122,7 @@ public sealed class StockQuantityTests
             StockCanonicalField.QtyCarton).Rows);
 
         Assert.False(row.IsValid);
-        Assert.Contains("QtyCarton must not be negative.", row.ValidationErrorsJson);
+        Assert.Contains("Tidak boleh negatif.", row.ValidationErrorsJson);
     }
 
     private static StockParseResult Parse((int Row, int Column, string Value)[] cells,

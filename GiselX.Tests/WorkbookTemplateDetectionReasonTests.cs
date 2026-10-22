@@ -18,7 +18,7 @@ public sealed class WorkbookTemplateDetectionReasonTests
         var result = await new XlsxSelloutWorkbookInspector().DetectAsync(workbook, []);
 
         var error = Assert.Single(result.Errors);
-        Assert.Contains("no active distributor mapping is configured", error, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Belum ada template Sellout aktif", error, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -32,7 +32,7 @@ public sealed class WorkbookTemplateDetectionReasonTests
         Assert.False(result.IsMatch);
         Assert.Contains(result.Errors, error => error.Contains("psb mapping", StringComparison.Ordinal)
             && error.Contains("Lap Penjualan", StringComparison.Ordinal)
-            && error.Contains("was not found", StringComparison.OrdinalIgnoreCase));
+            && error.Contains("tidak ditemukan", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -46,7 +46,7 @@ public sealed class WorkbookTemplateDetectionReasonTests
 
         Assert.False(result.IsMatch);
         Assert.Contains(result.Errors, error => error.Contains("csu mapping", StringComparison.Ordinal)
-            && error.Contains("column 2", StringComparison.OrdinalIgnoreCase)
+            && error.Contains("kolom 2", StringComparison.Ordinal)
             && error.Contains("CUSTOMER CODE", StringComparison.Ordinal)
             && error.Contains("CUSTOMER ID", StringComparison.Ordinal));
     }
@@ -60,8 +60,8 @@ public sealed class WorkbookTemplateDetectionReasonTests
         var result = await new XlsxSelloutWorkbookInspector().DetectAsync(workbook, [mapping]);
 
         Assert.Contains(result.Errors, error => error.Contains("wide mapping", StringComparison.Ordinal)
-            && error.Contains("1 column(s)", StringComparison.Ordinal)
-            && error.Contains("expects 3", StringComparison.Ordinal));
+            && error.Contains("1 kolom", StringComparison.Ordinal)
+            && error.Contains("mengharapkan 3", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -76,7 +76,7 @@ public sealed class WorkbookTemplateDetectionReasonTests
         var error = Assert.Single(result.Errors);
         Assert.Contains("First", error, StringComparison.Ordinal);
         Assert.Contains("Second", error, StringComparison.Ordinal);
-        Assert.Contains("Deactivate", error, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("menonaktifkan", error, StringComparison.Ordinal);
     }
 
     [Fact]

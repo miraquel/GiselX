@@ -1,7 +1,8 @@
 @model GiselX.Service.Dto.SelloutUploadGroupDto
 @using GiselX.Domain
+@using GiselX.Web
 @{
-    ViewBag.Title = "Sellout Upload Result";
+    ViewBag.Title = "Hasil Upload Sellout";
     // A group that completed with warnings published its weeks: it is a success that excluded some rows,
     // not a failure, and is shown as a warning rather than in the danger colour.
     var published = Model.Status is SelloutUploadGroupStatus.Completed
@@ -10,37 +11,37 @@
     var alertClass = published ? withWarnings ? "alert-warning" : "alert-success" : "alert-danger";
 }
 <div class="card">
-    <div class="card-header"><h4>Sellout Upload Result</h4></div>
+    <div class="card-header"><h4>Hasil Upload Sellout</h4></div>
     <div class="card-body">
         <div class="alert @alertClass">
             @(string.IsNullOrWhiteSpace(Model.Message)
-                ? published ? "Upload completed." : "Upload failed. No reporting week was replaced."
+                ? published ? "Upload selesai." : "Upload gagal. Tidak ada data yang diganti."
                 : Model.Message)
         </div>
         <dl class="row">
-            <dt class="col-sm-3">Status</dt><dd class="col-sm-9">@Model.Status</dd>
+            <dt class="col-sm-3">Status</dt><dd class="col-sm-9">@UploadStatusLabels.For(Model.Status)</dd>
             <dt class="col-sm-3">File</dt><dd class="col-sm-9">@Model.OriginalFileName</dd>
-            <dt class="col-sm-3">Rows</dt><dd class="col-sm-9">@Model.TotalRows total, @Model.ValidRows valid, @Model.InvalidRows invalid</dd>
-            <dt class="col-sm-3">Uploaded by</dt><dd class="col-sm-9">@Model.UploadedBy</dd>
+            <dt class="col-sm-3">Baris</dt><dd class="col-sm-9">@Model.TotalRows.ToString("N0") total, @Model.ValidRows.ToString("N0") valid, @Model.InvalidRows.ToString("N0") tidak valid</dd>
+            <dt class="col-sm-3">Diupload</dt><dd class="col-sm-9">@UploadStatusLabels.LocalTime(Model.UploadedDate) oleh @Model.UploadedBy</dd>
             @if (Model.IgnoredSummaryRowNumbers.Count > 0)
             {
-                <dt class="col-sm-3">Ignored summary rows</dt><dd class="col-sm-9">@string.Join(", ", Model.IgnoredSummaryRowNumbers)</dd>
+                <dt class="col-sm-3">Baris total/ringkasan diabaikan</dt><dd class="col-sm-9">@string.Join(", ", Model.IgnoredSummaryRowNumbers)</dd>
             }
         </dl>
 
         @if (Model.Batches.Count > 0)
         {
-            <h5>Affected reporting weeks</h5>
+            <h5>Minggu laporan yang terdampak</h5>
             <div class="table-responsive mb-4">
                 <table class="table table-bordered">
-                    <thead><tr><th>Week (Monday–Sunday)</th><th>Status</th><th class="text-end">Rows</th></tr></thead>
+                    <thead><tr><th>Minggu (Senin–Minggu)</th><th>Status</th><th class="text-end">Baris</th></tr></thead>
                     <tbody>
                     @foreach (var batch in Model.Batches)
                     {
                         <tr>
-                            <td>@batch.ReportingWeekStart.ToString("yyyy-MM-dd") – @batch.ReportingWeekStart.AddDays(6).ToString("yyyy-MM-dd")</td>
-                            <td>@batch.Status</td>
-                            <td class="text-end">@batch.TotalRows</td>
+                            <td>@batch.ReportingWeekStart.ToString("dd MMM yyyy") – @batch.ReportingWeekStart.AddDays(6).ToString("dd MMM yyyy")</td>
+                            <td>@UploadStatusLabels.For(batch.Status)</td>
+                            <td class="text-end">@batch.TotalRows.ToString("N0")</td>
                         </tr>
                     }
                     </tbody>
@@ -50,10 +51,11 @@
 
         @if (Model.Errors.Count > 0)
         {
-            <h5>Validation errors</h5>
+            <h5>Baris tidak valid</h5>
+            <p class="small text-muted">@(published ? "Baris berikut tidak disimpan. Perbaiki di file lalu upload ulang bila baris ini perlu masuk." : "Perbaiki baris berikut di file lalu upload ulang.")</p>
             <div class="table-responsive">
                 <table class="table table-bordered">
-                    <thead><tr><th>Row</th><th>Field</th><th>Value</th><th>Reason</th></tr></thead>
+                    <thead><tr><th>Baris</th><th>Kolom</th><th>Isi sel</th><th>Alasan</th></tr></thead>
                     <tbody>
                     @foreach (var error in Model.Errors)
                     {
@@ -63,6 +65,6 @@
                 </table>
             </div>
         }
-        <a asp-action="Index" class="btn btn-secondary">Back</a>
+        <a asp-action="Index" class="btn btn-secondary">Kembali</a>
     </div>
 </div>

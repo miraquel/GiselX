@@ -338,7 +338,7 @@ public sealed class StockUploadServiceTests
             true, "user", otherWorkbook, CancellationToken.None);
 
         Assert.False(response.IsSuccess);
-        Assert.Contains("not the workbook that was uploaded", response.Message, StringComparison.Ordinal);
+        Assert.Contains("berbeda dengan file yang diupload", response.Message, StringComparison.Ordinal);
         Assert.Empty(repository.Batches);
         Assert.Equal(0, transaction.CommitCount);
     }
@@ -431,10 +431,42 @@ public sealed class StockUploadServiceTests
             CancellationToken.None);
 
         var area = Assert.Single(response.Data!.Areas);
-        Assert.Equal("(no area)", area.AreaName);
+        Assert.Equal("(tanpa area)", area.AreaName);
         Assert.Equal(2, area.ValidRows);
         Assert.Same(earlier, Assert.Single(area.Replaces));
         Assert.Empty(response.Data.UntouchedAreaNames);
+    }
+
+    [Fact]
+    public async Task Preflight_names_active_areas_that_will_still_have_no_stock_for_the_date()
+    {
+        // Medan is uploaded, Binjai was published earlier; only Tebing still has nothing for the date,
+        // and the inactive area is not one anybody is waiting for.
+        var analysis = Analysis(0, 0);
+        analysis.Rows = [AreaRow(1, StockCondition.Good, 10m)];
+        var (service, _, _) = CreateService(analysis, published: [Published(2, "Binjai", 25)], areas:
+        [
+            new StockArea { Id = 1, Name = "Medan" }, new StockArea { Id = 2, Name = "Binjai" },
+            new StockArea { Id = 3, Name = "Tebing" }, new StockArea { Id = 4, Name = "Lama", IsActive = false }
+        ]);
+
+        var response = await service.PreflightAsync(File(), "stock.xlsx", new DateTime(2026, 8, 10), 7,
+            CancellationToken.None);
+
+        Assert.Equal(["Tebing"], response.Data!.MissingAreaNames);
+    }
+
+    [Fact]
+    public async Task Preflight_says_when_a_sheet_counts_every_row_as_good_for_want_of_a_condition_column()
+    {
+        var analysis = MultiSheetAnalysis();
+        analysis.Sheets[1].MapsCondition = true;
+        var (service, _, _) = CreateService(analysis);
+
+        var response = await service.PreflightAsync(File(), "stock.xlsx", new DateTime(2026, 8, 10), 7,
+            CancellationToken.None);
+
+        Assert.Equal(["Stok Gudang"], response.Data!.WorksheetsWithoutCondition);
     }
 
     [Fact]

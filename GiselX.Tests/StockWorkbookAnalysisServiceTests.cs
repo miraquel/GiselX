@@ -215,7 +215,8 @@ public sealed class StockWorkbookAnalysisServiceTests
 
         var result = await service.AnalyzeAsync(workbook, 7, CancellationToken.None);
 
-        Assert.Equal("Template 'Daily Stock' does not map an Area column, but Acme has Stock areas registered.",
+        Assert.Equal("Template 'Daily Stock' belum memetakan kolom Area, padahal Acme punya Stock area terdaftar. "
+            + "Hubungi admin PT. GMK.",
             Assert.Single(result.Errors));
         Assert.Empty(result.Rows);
     }
@@ -229,7 +230,8 @@ public sealed class StockWorkbookAnalysisServiceTests
 
         var result = await service.AnalyzeAsync(workbook, 7, CancellationToken.None);
 
-        Assert.Equal("Template 'Daily Stock' does not map an Area column, but Acme has Stock areas registered.",
+        Assert.Equal("Template 'Daily Stock' belum memetakan kolom Area, padahal Acme punya Stock area terdaftar. "
+            + "Hubungi admin PT. GMK.",
             Assert.Single(result.Errors));
         Assert.Empty(result.Rows);
     }

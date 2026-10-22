@@ -32,7 +32,7 @@ public sealed class StocksController(
         if (fileInput is null || fileInput.Length == 0)
             return BadRequest(new ServiceResponse<StockUploadPreflightDto>
             {
-                Errors = ["Please select a file to upload."], Message = "Please select a file to upload.",
+                Errors = ["Pilih file yang akan diupload."], Message = "Pilih file yang akan diupload.",
                 StatusCode = StatusCodes.Status400BadRequest
             });
         var user = await userManager.GetUserAsync(User);
@@ -48,7 +48,7 @@ public sealed class StocksController(
     public async Task<IActionResult> Upload([FromForm(Name = "file")] IFormFile? fileInput,
         DateTime stockDate, bool confirmed, string? confirmedSha256, CancellationToken cancellationToken)
     {
-        if (fileInput is null || fileInput.Length == 0) return BadRequest("Please select a file to upload.");
+        if (fileInput is null || fileInput.Length == 0) return BadRequest("Pilih file yang akan diupload.");
         var user = await userManager.GetUserAsync(User);
         if (user is null) return Challenge();
         await using var stream = fileInput.OpenReadStream();

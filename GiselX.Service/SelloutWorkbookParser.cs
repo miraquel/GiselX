@@ -54,7 +54,7 @@ public sealed class SelloutWorkbookParser
                 var raw = source.Value.GetValueOrDefault(column.SourceColumnNumber);
                 if (!SelloutCellValueConverter.TryConvert(raw, column.CanonicalField, out var value))
                 {
-                    errors.Add(Error(source.Key, column.CanonicalField, raw, $"Value is not a valid {SelloutCanonicalFieldCatalog.GetValueType(column.CanonicalField).Name}."));
+                    errors.Add(Error(source.Key, column.CanonicalField, raw, UploadMessages.NotAValid(SelloutCanonicalFieldCatalog.GetValueType(column.CanonicalField))));
                     continue;
                 }
                 Assign(row, column.CanonicalField, value);
@@ -83,7 +83,7 @@ public sealed class SelloutWorkbookParser
         return new SelloutParseResult(
             staged,
             allErrors,
-            staged.Count == 0 ? "The workbook contains no data rows." : null,
+            staged.Count == 0 ? UploadMessages.NoDataRows : null,
             weekSummaries,
             ignoredSummaryRows.OrderBy(row => row).ToList());
     }
@@ -176,19 +176,19 @@ public sealed class SelloutWorkbookParser
         {
             if (GetValue(row, field) is null or "")
             {
-                errors.Add(Error(row.SourceRowNumber, field, null, "A value is required."));
+                errors.Add(Error(row.SourceRowNumber, field, null, UploadMessages.ValueRequired));
             }
         }
         if (row.InvoiceQty == 0)
         {
-            errors.Add(Error(row.SourceRowNumber, SelloutCanonicalField.InvoiceQty, row.InvoiceQty?.ToString(), "Invoice quantity must not be zero."));
+            errors.Add(Error(row.SourceRowNumber, SelloutCanonicalField.InvoiceQty, row.InvoiceQty?.ToString(), "Invoice Qty tidak boleh nol."));
         }
         foreach (var field in Enum.GetValues<SelloutCanonicalField>())
         {
             var limit = SelloutCanonicalFieldCatalog.GetMaxLength(field);
             if (limit.HasValue && GetValue(row, field) is string text && text.Length > limit.Value)
             {
-                errors.Add(Error(row.SourceRowNumber, field, text, $"Value exceeds the maximum length of {limit.Value}."));
+                errors.Add(Error(row.SourceRowNumber, field, text, UploadMessages.TooLong(limit.Value)));
             }
         }
     }

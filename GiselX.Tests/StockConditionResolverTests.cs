@@ -20,7 +20,8 @@ public sealed class StockConditionResolverTests
     {
         var result = Resolve("ED");
         Assert.Null(result.Condition);
-        Assert.Equal("Condition 'ED' is neither a Good nor a Bad value of template Primatrans Stock.", result.Error);
+        Assert.Equal("Nilai Condition 'ED' tidak dikenali template Primatrans Stock. Gunakan nilai Good/Bad yang biasa, "
+            + "atau minta admin PT. GMK menambahkannya ke template.", result.Error);
     }
 
     [Fact]
@@ -28,7 +29,7 @@ public sealed class StockConditionResolverTests
     {
         var result = Resolve("");
         Assert.Null(result.Condition);
-        Assert.Equal("Condition is empty.", result.Error);
+        Assert.Equal("Kolom Condition kosong. Isi kondisi stok (Good/Bad) di file lalu upload ulang.", result.Error);
     }
 
     [Fact]
@@ -36,6 +37,6 @@ public sealed class StockConditionResolverTests
     {
         var result = StockConditionResolver.Resolve("X", "X", "x", "T");
         Assert.Null(result.Condition);
-        Assert.Contains("both", result.Error);
+        Assert.Contains("Good sekaligus Bad", result.Error);
     }
 }

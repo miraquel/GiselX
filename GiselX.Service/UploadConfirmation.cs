@@ -9,11 +9,11 @@ namespace GiselX.Service;
 internal static class UploadConfirmation
 {
     internal const string NotConfirmed =
-        "Review the workbook in the preview and confirm it before uploading.";
+        "Periksa file di preview dan konfirmasi sebelum upload.";
 
     internal const string DifferentWorkbook =
-        "The workbook that was confirmed is not the workbook that was uploaded. "
-        + "Review the new file in the preview before uploading it.";
+        "File yang dikonfirmasi berbeda dengan file yang diupload. "
+        + "Periksa file baru di preview sebelum mengupload.";
 
     /// <summary>Why this upload may not proceed, or null when the confirmed workbook is the one sent.</summary>
     internal static string? DescribeMismatch(string? confirmedSha256, string uploadedSha256) =>

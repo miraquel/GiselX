@@ -75,7 +75,7 @@ public class SalesTransactionsController : Controller
 
         if (user == null)
         {
-            TempData["ErrorMessage"] = "Current User not found. aborting download.";
+            TempData["ErrorMessage"] = "Sesi login tidak ditemukan. Silakan login ulang.";
             return RedirectToAction(nameof(Index));
         }
 
@@ -134,7 +134,7 @@ public class SalesTransactionsController : Controller
             return File(stream, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
         }
 
-        TempData["ErrorMessage"] = response.Message ?? "Failed to download sales transactions.";
+        TempData["ErrorMessage"] = response.Message ?? "Gagal mengunduh data sales.";
         return RedirectToAction(nameof(Index));
     }
 
@@ -149,8 +149,8 @@ public class SalesTransactionsController : Controller
         {
             return BadRequest(new ServiceResponse<SelloutUploadPreflightDto>
             {
-                Errors = ["Please select a file to upload."],
-                Message = "Please select a file to upload.",
+                Errors = ["Pilih file yang akan diupload."],
+                Message = "Pilih file yang akan diupload.",
                 StatusCode = StatusCodes.Status400BadRequest
             });
         }
@@ -172,14 +172,14 @@ public class SalesTransactionsController : Controller
     {
         if (fileInput.Length == 0)
         {
-            TempData["ErrorMessage"] = "Please select a file to upload.";
+            TempData["ErrorMessage"] = "Pilih file yang akan diupload.";
             return RedirectToAction(nameof(Index));
         }
 
         var user = await _userManager.GetUserAsync(User);
         if (user == null)
         {
-            TempData["ErrorMessage"] = "Current User not found. aborting upload.";
+            TempData["ErrorMessage"] = "Sesi login tidak ditemukan. Silakan login ulang.";
             return RedirectToAction(nameof(Index));
         }
 
@@ -187,7 +187,7 @@ public class SalesTransactionsController : Controller
         var response = await _selloutUploadService.UploadAsync(stream, fileInput.FileName, user.CompanyId,
             multiWeekConfirmed, user.UserName ?? "unknown", confirmedSha256, cancellationToken);
         if (response.Data?.GroupId > 0) return RedirectToAction(nameof(UploadResult), new { groupId = response.Data.GroupId });
-        TempData["ErrorMessage"] = response.Message ?? "Failed to upload sellout data.";
+        TempData["ErrorMessage"] = response.Message ?? "Gagal mengupload data Sellout.";
         return RedirectToAction(nameof(Index));
     }
 

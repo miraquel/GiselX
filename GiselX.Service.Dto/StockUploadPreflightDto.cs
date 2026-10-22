@@ -34,6 +34,12 @@ public sealed class StockUploadPreflightDto
     /// <summary>Areas published for this date that this upload does not contain, so leaves alone.</summary>
     public IReadOnlyList<string> UntouchedAreaNames { get; set; } = [];
 
+    /// <summary>Active areas with nothing for this date, neither in this upload nor published earlier.</summary>
+    public IReadOnlyList<string> MissingAreaNames { get; set; } = [];
+
+    /// <summary>Mapped worksheets whose template has no Condition column, so every row counts as Good.</summary>
+    public IReadOnlyList<string> WorksheetsWithoutCondition { get; set; } = [];
+
     public IReadOnlyList<int> IgnoredSummaryRowNumbers { get; set; } = [];
     public IReadOnlyList<StockStagingErrorDto> RowErrors { get; set; } = [];
     public IReadOnlyList<string> Errors { get; set; } = [];

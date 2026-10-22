@@ -56,7 +56,7 @@ public sealed class ItemMappingResolver(
             {
                 DistributorItemId = id,
                 DistributorItemName = name,
-                ErrorReason = $"Distributor Item ID \"{id}\" has no active GMK item mapping."
+                ErrorReason = $"Item ID distributor \"{id}\" belum punya item mapping GMK yang aktif. Minta admin PT. GMK menambahkan mapping item ini."
             };
         }
 

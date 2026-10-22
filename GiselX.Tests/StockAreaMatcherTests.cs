@@ -34,7 +34,8 @@ public sealed class StockAreaMatcherTests
     {
         var result = Matcher(Default()).Resolve("Tebing");
         Assert.Null(result.AreaId);
-        Assert.Equal("Area 'Tebing' is not registered for PT Primatrans.", result.Error);
+        Assert.Equal("Area 'Tebing' belum terdaftar untuk PT Primatrans. Perbaiki isi kolom Area di file, "
+            + "atau minta admin PT. GMK mendaftarkan area ini.", result.Error);
     }
 
     [Fact]
@@ -42,7 +43,7 @@ public sealed class StockAreaMatcherTests
     {
         var result = Matcher(Default()).Resolve("  ");
         Assert.Null(result.AreaId);
-        Assert.Equal("Area is empty.", result.Error);
+        Assert.Equal("Kolom Area kosong. Isi area di file lalu upload ulang.", result.Error);
     }
 
     [Fact]
@@ -52,7 +53,7 @@ public sealed class StockAreaMatcherTests
             new StockArea { Id = 1, Name = "Medan", Aliases = "Sumut" },
             new StockArea { Id = 2, Name = "Binjai", Aliases = "sumut" }).Resolve("SUMUT");
         Assert.Null(result.AreaId);
-        Assert.Contains("more than one area", result.Error);
+        Assert.Contains("lebih dari satu area", result.Error);
     }
 
     [Fact]
@@ -60,7 +61,7 @@ public sealed class StockAreaMatcherTests
     {
         var result = Matcher(new StockArea { Id = 1, Name = "Medan", IsActive = false }).Resolve("Medan");
         Assert.Null(result.AreaId);
-        Assert.Contains("not registered", result.Error);
+        Assert.Contains("belum terdaftar", result.Error);
     }
 
     [Fact]

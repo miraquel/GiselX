@@ -61,7 +61,7 @@ public sealed class SelloutUploadServiceTests
             Stream(), "sales.xlsx", 9, multiWeekConfirmed: false, "uploader", ConfirmedSha(), CancellationToken.None);
 
         Assert.False(response.IsSuccess);
-        Assert.Contains("multiple reporting weeks", response.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("beberapa minggu laporan", response.Message, StringComparison.Ordinal);
         Assert.Empty(repository.Groups);
         Assert.False(transaction.CommitCalled);
     }
@@ -204,7 +204,7 @@ public sealed class SelloutUploadServiceTests
 
         Assert.False(response.IsSuccess);
         Assert.Contains("20%", response.Message, StringComparison.Ordinal);
-        Assert.Contains("5% limit", response.Message, StringComparison.Ordinal);
+        Assert.Contains("batas 5%", response.Message, StringComparison.Ordinal);
         Assert.Empty(repository.StagingRows);
         Assert.Null(repository.PromotedGroupId);
     }
@@ -389,7 +389,7 @@ public sealed class SelloutUploadServiceTests
             "uploader", otherWorkbook, CancellationToken.None);
 
         Assert.False(response.IsSuccess);
-        Assert.Contains("not the workbook that was uploaded", response.Message, StringComparison.Ordinal);
+        Assert.Contains("berbeda dengan file yang diupload", response.Message, StringComparison.Ordinal);
         Assert.Empty(repository.Groups);
         Assert.False(transaction.CommitCalled);
     }
@@ -437,7 +437,9 @@ public sealed class SelloutUploadServiceTests
         var replacement = response.Data!.Replacement!;
         Assert.Equal(new DateTime(2026, 10, 1), replacement.From);
         Assert.Equal(new DateTime(2026, 10, 7), replacement.To);
-        Assert.Equal("Confirming replaces your published sales from 01 Oct 2026 to 07 Oct 2026.", replacement.Summary);
+        Assert.Equal(string.Create(UploadNotificationMessage.Culture,
+            $"Konfirmasi akan mengganti data sales yang sudah tersimpan dari {new DateTime(2026, 10, 1):dd MMM yyyy} "
+            + $"sampai {new DateTime(2026, 10, 7):dd MMM yyyy}."), replacement.Summary);
         Assert.Equal((9, new DateTime(2026, 10, 1), new DateTime(2026, 10, 7)), Assert.Single(repository.RangeReads));
     }
 
@@ -479,7 +481,7 @@ public sealed class SelloutUploadServiceTests
         var response = await service.PreflightAsync(Stream(), "sales.xlsx", 9, CancellationToken.None);
 
         Assert.False(response.IsSuccess);
-        Assert.Contains(response.Errors, error => error.Contains("5% limit", StringComparison.Ordinal));
+        Assert.Contains(response.Errors, error => error.Contains("batas 5%", StringComparison.Ordinal));
         Assert.Null(response.Data!.Replacement);
         Assert.Empty(repository.RangeReads);
     }
@@ -532,8 +534,8 @@ public sealed class SelloutUploadServiceTests
 
         Assert.False(response.IsSuccess);
         Assert.Contains(
-            "The invoice dates in this workbook run from 06 Jan 2025 to 14 Oct 2026 (647 days), more than the "
-            + "45 days one upload may replace. Check the file for a mistyped invoice date.",
+            string.Create(UploadNotificationMessage.Culture,
+                $"Tanggal invoice di file ini dari {new DateTime(2025, 1, 6):dd MMM yyyy} sampai {new DateTime(2026, 10, 14):dd MMM yyyy} (647 hari), lebih dari 45 hari yang boleh diganti satu upload. Periksa apakah ada tanggal invoice yang salah ketik."),
             response.Errors);
         Assert.Empty(repository.RangeReads);
     }
@@ -549,7 +551,7 @@ public sealed class SelloutUploadServiceTests
             "budi", ConfirmedSha(), CancellationToken.None);
 
         Assert.False(response.IsSuccess);
-        Assert.Contains("647 days", response.Message);
+        Assert.Contains("647 hari", response.Message);
         Assert.Empty(repository.Batches);
         Assert.Empty(repository.StagingRows);
         Assert.Null(repository.PromotedGroupId);
