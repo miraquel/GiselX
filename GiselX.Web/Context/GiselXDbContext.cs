@@ -551,7 +551,7 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
             entity.Property(e => e.CreatedDate).HasColumnType("datetime");
             entity.Property(e => e.ReportingWeekStart).HasColumnType("date");
 
-            // GiselSales_* SPs filter by CompanyId and pick the latest CreatedDate batch
+            // GiselSales_* SPs filter by CompanyId and show every published row of the chosen month
             entity.HasIndex(e => new { e.CompanyId, e.CreatedDate });
             entity.HasIndex(e => new { e.CompanyId, e.ReportingWeekStart });
             // Serves the publish path: the range delete and the touched-batch lookup filter on both.

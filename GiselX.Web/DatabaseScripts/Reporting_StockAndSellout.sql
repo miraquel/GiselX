@@ -19,7 +19,7 @@
     Why the views exist at all
     -------------------------
     Stock and Sellout used to behave differently when a period was uploaded twice. Sellout has
-    always superseded: promoting a group deletes the previous week's rows before inserting. Stock
+    always superseded: promoting a group deletes the published rows of the dates it contains before inserting. Stock
     only inserted, so re-uploading a snapshot date left BOTH sets of rows and every total was
     silently doubled.
 
@@ -101,9 +101,11 @@ AS
 GO
 
 /* ------------------------------------------------------------------------------------------------
-   Live Sellout. SalesTransaction already holds one version per reporting week, because re-uploading
-   a week deletes the previous rows first. The batch join filters to live batches and carries the
-   upload details through; it is a safeguard and a label, not a de-duplication.
+   Live Sellout. A Sellout upload replaces the published rows of the invoice-date range it contains
+   (earliest to latest valid invoice date), deleting the earlier rows in that range first, so
+   SalesTransaction holds each date once however the uploads were cut into weeks. The batch join
+   filters to live batches and carries the upload details through; it is a safeguard and a label,
+   not a de-duplication.
 
    Status 2 = Completed, 4 = CompletedWithWarnings, 3 = Replaced — again, not the Stock numbering.
 ------------------------------------------------------------------------------------------------ */

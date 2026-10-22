@@ -1,4 +1,4 @@
-﻿SET NOCOUNT ON;
+SET NOCOUNT ON;
 SET XACT_ABORT ON;
 
 -- Makes the Sellout month view show every published row of the month, and lets one week have more than
