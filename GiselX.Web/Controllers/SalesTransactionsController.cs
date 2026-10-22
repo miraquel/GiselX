@@ -80,7 +80,7 @@ public class SalesTransactionsController : Controller
         }
 
         var response = await _salesTransactionService.SelectByCustPeriodAsync(user.CompanyId, year, month,
-            User.IsInRole("Distributor"), cancellationToken);
+            User.SeesDistributorItemIdentity(), cancellationToken);
         if (response is { IsSuccess: true, Data: not null })
         {
             var includeDistributor = User.IsInRole("Administrator");

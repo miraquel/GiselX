@@ -178,5 +178,11 @@ public class CreateModel : PageModel
                 Description = role.Description ?? string.Empty
             })
             .ToListAsync();
+
+        // Only an Administrator may create another Administrator (RoleAssignmentPolicy). Removing it from
+        // the offered roles is enough: OnPostAsync assigns only roles that appear in AvailableRoles.
+        var assignable = RoleAssignmentPolicy.Assignable(AvailableRoles.Select(role => role.Name),
+            User.IsInRole(RoleAssignmentPolicy.AdministratorRole));
+        AvailableRoles = AvailableRoles.Where(role => assignable.Contains(role.Name)).ToList();
     }
 }

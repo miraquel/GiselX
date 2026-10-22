@@ -118,7 +118,7 @@ public sealed class SelectionSummaryScopeTests
     {
         var source = File.ReadAllText(FindFromSolutionRoot("GiselX.Web", "Controllers", "Api", file));
 
-        Assert.Contains($"{service}.SelectSummaryAsync(listRequest, User.IsInRole(\"Distributor\"),", source,
+        Assert.Contains($"{service}.SelectSummaryAsync(listRequest, User.SeesDistributorItemIdentity(),", source,
             StringComparison.Ordinal);
     }
 

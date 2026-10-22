@@ -47,10 +47,14 @@ public class UserRolesModel : PageModel
         if (UserEntity == null)
             return NotFound();
 
-        var roles = _roleManager.Roles.ToList();
+        // Only an Administrator may see or change the Administrator role; see RoleAssignmentPolicy.
+        var callerIsAdministrator = User.IsInRole(RoleAssignmentPolicy.AdministratorRole);
+        var roles = _roleManager.Roles.ToList()
+            .Where(r => callerIsAdministrator || r.Name != RoleAssignmentPolicy.AdministratorRole)
+            .ToList();
 
         var userRoles = await _userManager.GetRolesAsync(UserEntity);
-            
+
         Roles = roles.Select(r => new RoleViewModel
         {
             Id = r.Id,
@@ -73,10 +77,23 @@ public class UserRolesModel : PageModel
         if (UserEntity == null)
             return NotFound();
 
-        var userRoles = await _userManager.GetRolesAsync(UserEntity);
+        // Changing one's own roles here is how a user with Users.UserRoles would promote themselves, and
+        // how an Administrator could lock themselves out; another administrator has to do it.
+        if (UserEntity.Id == _userManager.GetUserId(User))
+        {
+            TempData["ErrorMessage"] = "Peran akun Anda sendiri tidak bisa diubah di sini. Minta administrator lain untuk mengubahnya.";
+            return RedirectToPage("./Index");
+        }
 
-        var rolesToAdd = SelectedRoles.Except(userRoles).ToList();
-        var rolesToRemove = userRoles.Except(SelectedRoles).ToList();
+        var userRoles = await _userManager.GetRolesAsync(UserEntity);
+        var existingRoles = _roleManager.Roles.Select(r => r.Name!).ToList();
+
+        var (rolesToAdd, rolesToRemove) = RoleAssignmentPolicy.Plan(userRoles,
+            SelectedRoles.Where(existingRoles.Contains),
+            User.IsInRole(RoleAssignmentPolicy.AdministratorRole));
+        // A non-Administrator never sees the Administrator box, so an absent tick is not a removal.
+        if (!User.IsInRole(RoleAssignmentPolicy.AdministratorRole))
+            rolesToRemove.RemoveAll(role => role == RoleAssignmentPolicy.AdministratorRole);
 
         if (rolesToAdd.Count != 0)
             await _userManager.AddToRolesAsync(UserEntity, rolesToAdd);
