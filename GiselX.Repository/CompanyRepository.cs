@@ -27,6 +27,7 @@ public class CompanyRepository : ICompanyRepository
         parameters.Add("@ChannelId", company.ChannelId);
         parameters.Add("@SalesmanId", company.SalesmanId);
         parameters.Add("@Address", company.Address);
+        parameters.Add("@Location", company.Location);
         parameters.Add("@ContactEmail", company.ContactEmail);
         parameters.Add("@DeadlineDayOfMonth", company.DeadlineDayOfMonth);
         parameters.Add("@DeadlineDaysOfWeek", company.DeadlineDaysOfWeek.HasValue ? (int)company.DeadlineDaysOfWeek.Value : (int?)null);
@@ -157,6 +158,7 @@ public class CompanyRepository : ICompanyRepository
         parameters.Add("@ChannelId", company.ChannelId);
         parameters.Add("@SalesmanId", company.SalesmanId);
         parameters.Add("@Address", company.Address);
+        parameters.Add("@Location", company.Location);
         parameters.Add("@ContactEmail", company.ContactEmail);
         parameters.Add("@DeadlineDayOfMonth", company.DeadlineDayOfMonth);
         parameters.Add("@DeadlineDaysOfWeek", company.DeadlineDaysOfWeek.HasValue ? (int)company.DeadlineDaysOfWeek.Value : (int?)null);

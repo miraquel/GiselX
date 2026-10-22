@@ -70,13 +70,8 @@ public static class SalesSelectionSummaryQuery
                 : $"({productId} LIKE @Search OR {productName} LIKE @Search OR c.Name LIKE @Search)");
         }
 
-        var filters = clauses.Count == 0 ? string.Empty : " AND " + string.Join(" AND ", clauses);
-        var periodFilter = " WHERE " + string.Join(" AND ", periodClauses);
+        var where = "WHERE " + string.Join(" AND ", periodClauses.Concat(clauses));
         return ($"""
-            WITH LatestUploads AS (
-                SELECT st.*, MAX(st.CreatedDate) OVER (PARTITION BY CompanyId) AS LatestCreatedDate
-                FROM SalesTransaction st {periodFilter}
-            )
             SELECT COUNT(DISTINCT st.CompanyId) AS DistributorCount,
                    COUNT(*) AS [RowCount],
                    COALESCE(SUM(st.InvoiceQty),0) AS InvoiceQty,
@@ -84,8 +79,8 @@ public static class SalesSelectionSummaryQuery
                    COALESCE(SUM(st.DiscountValue),0) AS DiscountValue,
                    COALESCE(SUM(COALESCE(st.NetValue,
                        COALESCE(st.GrossValue, st.InvoiceQty * st.UnitPrice) - COALESCE(st.DiscountValue,0))),0) AS NetValue
-            FROM LatestUploads st INNER JOIN Company c ON c.Id=st.CompanyId
-            WHERE st.CreatedDate=st.LatestCreatedDate {filters};
+            FROM SalesTransaction st INNER JOIN Company c ON c.Id=st.CompanyId
+            {where};
             """, parameters);
     }
 }

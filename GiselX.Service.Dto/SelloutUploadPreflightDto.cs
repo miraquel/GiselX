@@ -22,9 +22,6 @@ public sealed class SelloutUploadPreflightDto
     public IReadOnlyList<string> Errors { get; set; } = [];
     public bool IsMultiWeek => Weeks.Count > 1;
 
-    /// <summary>
-    /// Non-blocking cautions shown alongside the summary. Unlike <see cref="Errors"/> these do not hide
-    /// the confirm button; they tell the user what confirming will destroy.
-    /// </summary>
-    public IReadOnlyList<string> Warnings { get; set; } = [];
+    /// <summary>The date range confirming will replace and what is published there; null when the analysis has errors.</summary>
+    public SelloutReplacementDto? Replacement { get; set; }
 }

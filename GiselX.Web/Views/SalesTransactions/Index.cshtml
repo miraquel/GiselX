@@ -170,9 +170,10 @@
                         <tbody id="previewWeeks"></tbody>
                     </table>
                 </div>
-                <div id="previewWarningsContainer" class="d-none">
-                    <h6 class="text-warning">Before you confirm</h6>
-                    <ul id="previewWarnings" class="mb-3"></ul>
+                <div id="previewReplacementContainer" class="d-none">
+                    <h6 class="text-warning">What this replaces</h6>
+                    <p id="previewReplacementSummary" class="mb-2"></p>
+                    <ul id="previewReplaces" class="mb-3"></ul>
                 </div>
                 <div id="previewErrorsContainer" class="d-none">
                     <h6 class="text-danger">Validation errors</h6>
@@ -274,22 +275,34 @@
                 if (!(data.weeks || []).length) addTextRow(weeksBody, ['No reporting week detected', '0']);
 
                 const message = document.getElementById('uploadPreviewMessage');
-                message.textContent = data.isMultiWeek
-                    ? 'This workbook affects multiple reporting weeks. Confirming will replace every week listed below as one all-or-nothing upload.'
-                    : 'Confirm the reporting week derived from the workbook invoice dates.';
+                message.textContent = errors.length
+                    ? 'This workbook cannot be uploaded. Fix the problems listed below and preview it again.'
+                    : data.isMultiWeek
+                        ? 'This workbook spans several reporting weeks. Confirming replaces your published sales for the dates shown under What this replaces.'
+                        : 'Confirm the reporting week derived from the workbook invoice dates.';
                 message.className = `alert ${errors.length ? 'alert-danger' : data.isMultiWeek ? 'alert-warning' : 'alert-info'}`;
 
-                // Warnings describe what confirming will destroy; unlike errors they must not hide Confirm.
-                const warnings = data.warnings || data.Warnings || [];
-                const warningList = document.getElementById('previewWarnings');
-                warningList.replaceChildren();
-                warnings.forEach(warning => {
-                    const item = document.createElement('li');
-                    item.className = 'text-warning-emphasis';
-                    item.textContent = warning;
-                    warningList.appendChild(item);
-                });
-                document.getElementById('previewWarningsContainer').classList.toggle('d-none', warnings.length === 0);
+                // Replacement states which published sales confirming overwrites; unlike errors it must not hide Confirm.
+                // Everything here comes from the server and is rendered as text, never as HTML.
+                const replacement = data.replacement || data.Replacement || null;
+                const replaceList = document.getElementById('previewReplaces');
+                replaceList.replaceChildren();
+                if (replacement) {
+                    document.getElementById('previewReplacementSummary').textContent = replacement.summary;
+                    const replaces = replacement.replaces || [];
+                    replaces.forEach(batch => {
+                        const item = document.createElement('li');
+                        item.textContent = `Week starting ${dateOnly(batch.reportingWeekStart)}, ${numberFormatter.format(batch.rowCount)} rows, `
+                            + `uploaded ${dateOnly(batch.uploadedDate)} by ${batch.uploadedBy} (${batch.originalFileName})`;
+                        replaceList.appendChild(item);
+                    });
+                    if (!replaces.length) {
+                        const item = document.createElement('li');
+                        item.textContent = 'Nothing is published for these dates yet.';
+                        replaceList.appendChild(item);
+                    }
+                }
+                document.getElementById('previewReplacementContainer').classList.toggle('d-none', !replacement);
 
                 const errorContainer = document.getElementById('previewErrorsContainer');
                 const errorList = document.getElementById('previewErrors');

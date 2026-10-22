@@ -259,6 +259,10 @@ namespace GiselX.Web.Context.Migrations
                         .HasColumnType("bit")
                         .HasDefaultValue(false);
 
+                    b.Property<string>("Location")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -696,6 +700,10 @@ namespace GiselX.Web.Context.Migrations
 
                     b.HasIndex("CompanyId", "CreatedDate");
 
+                    b.HasIndex("CompanyId", "InvoiceDate");
+
+                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("CompanyId", "InvoiceDate"), new[] { "SelloutUploadBatchId" });
+
                     b.HasIndex("CompanyId", "ReportingWeekStart");
 
                     b.ToTable("SalesTransaction");
@@ -928,9 +936,7 @@ namespace GiselX.Web.Context.Migrations
 
                     b.HasIndex("SelloutUploadGroupId");
 
-                    b.HasIndex("CompanyId", "ReportingWeekStart")
-                        .IsUnique()
-                        .HasFilter("[Status] = 2");
+                    b.HasIndex("CompanyId", "ReportingWeekStart");
 
                     b.ToTable("SelloutUploadBatch", t =>
                         {

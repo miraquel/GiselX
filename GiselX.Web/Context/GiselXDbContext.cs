@@ -83,6 +83,7 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
             entity.HasIndex(e => e.Name).IsUnique();
 
             entity.Property(e => e.Address).HasMaxLength(255);
+            entity.Property(e => e.Location).HasMaxLength(100);
             entity.Property(e => e.Name).HasMaxLength(100);
 
             // New reminder fields
@@ -330,9 +331,9 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
 
         modelBuilder.Entity<SelloutUploadBatch>(entity =>
         {
-            entity.HasIndex(e => new { e.CompanyId, e.ReportingWeekStart })
-                .IsUnique()
-                .HasFilter("[Status] = 2");
+            // Not unique: a date-range upload re-publishes the weeks it touches, and the superseded
+            // batch of the same week stays as audit history, so a week can have several batches.
+            entity.HasIndex(e => new { e.CompanyId, e.ReportingWeekStart });
             entity.Property(e => e.ReportingWeekStart).HasColumnType("date");
             entity.Property(e => e.OriginalFileName).HasMaxLength(260);
             entity.Property(e => e.FileSha256).HasMaxLength(64).IsFixedLength();
@@ -551,9 +552,11 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
             entity.Property(e => e.CreatedDate).HasColumnType("datetime");
             entity.Property(e => e.ReportingWeekStart).HasColumnType("date");
 
-            // GiselSales_* SPs filter by CompanyId and pick the latest CreatedDate batch
+            // GiselSales_* SPs filter by CompanyId and show every published row of the chosen month
             entity.HasIndex(e => new { e.CompanyId, e.CreatedDate });
             entity.HasIndex(e => new { e.CompanyId, e.ReportingWeekStart });
+            // Serves the publish path: the range delete and the touched-batch lookup filter on both.
+            entity.HasIndex(e => new { e.CompanyId, e.InvoiceDate }).IncludeProperties(e => e.SelloutUploadBatchId);
 
             entity.HasOne(d => d.Company).WithMany(p => p.SalesTransaction)
                 .HasForeignKey(d => d.CompanyId)

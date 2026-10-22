@@ -23,6 +23,11 @@ public class CompanyDto
     public string? SalesmanName { get; set; }
 
     public string? Address { get; set; }
+
+    [Display(Name = "Lokasi/Area")]
+    [StringLength(100)]
+    public string? Location { get; set; }
+
     public string? ContactEmail { get; set; }
     public int? DeadlineDayOfMonth { get; set; }
     public int? DeadlineDaysOfWeek { get; set; }

@@ -23,6 +23,12 @@ public partial class Company
 
     public string? Address { get; set; }
 
+    /// <summary>
+    /// Free-text location of this distributor company. A distributor with several locations is registered
+    /// as one company per location, and this names which one.
+    /// </summary>
+    public string? Location { get; set; }
+
     public string? ContactEmail { get; set; }
 
     public int? DeadlineDayOfMonth { get; set; }

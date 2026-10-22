@@ -1,6 +1,9 @@
 using GiselX.Domain;
 using GiselX.Web.Context;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace GiselX.Tests;
 
@@ -28,6 +31,36 @@ public class SelloutPersistenceModelTests
         Assert.Contains(sales.GetIndexes(), index =>
             index.Properties.Select(property => property.Name)
                 .SequenceEqual([nameof(SalesTransaction.CompanyId), nameof(SalesTransaction.ReportingWeekStart)]));
+    }
+
+    [Fact]
+    public void Sales_are_indexed_by_company_and_invoice_date_covering_the_batch()
+    {
+        using var db = CreateContext();
+        // Include columns are stored only in the design-time model.
+        var model = ((IInfrastructure<IServiceProvider>)db).Instance.GetRequiredService<IDesignTimeModel>().Model;
+        var sales = model.FindEntityType(typeof(SalesTransaction))!;
+
+        var index = Assert.Single(sales.GetIndexes(), candidate =>
+            candidate.Properties.Select(property => property.Name)
+                .SequenceEqual([nameof(SalesTransaction.CompanyId), nameof(SalesTransaction.InvoiceDate)]));
+
+        Assert.False(index.IsUnique);
+        Assert.Equal([nameof(SalesTransaction.SelloutUploadBatchId)], index.GetIncludeProperties());
+    }
+
+    [Fact]
+    public void Batches_of_one_week_are_indexed_but_not_unique()
+    {
+        using var db = CreateContext();
+        var batches = db.Model.FindEntityType(typeof(SelloutUploadBatch))!;
+
+        var index = Assert.Single(batches.GetIndexes(), candidate =>
+            candidate.Properties.Select(property => property.Name)
+                .SequenceEqual([nameof(SelloutUploadBatch.CompanyId), nameof(SelloutUploadBatch.ReportingWeekStart)]));
+
+        Assert.False(index.IsUnique);
+        Assert.Null(index.GetFilter());
     }
 
     [Fact]
@@ -60,19 +93,6 @@ public class SelloutPersistenceModelTests
 
         Assert.False(sourceIndex.IsUnique);
         Assert.True(canonicalIndex.IsUnique);
-    }
-
-    [Fact]
-    public void CompletedBatchIndex_IsUniqueAndFiltered()
-    {
-        using var db = CreateContext();
-        var batch = db.Model.FindEntityType(typeof(SelloutUploadBatch))!;
-        var index = Assert.Single(batch.GetIndexes(), candidate => candidate.IsUnique);
-
-        Assert.Equal("[Status] = 2", index.GetFilter());
-        Assert.Equal(
-            [nameof(SelloutUploadBatch.CompanyId), nameof(SelloutUploadBatch.ReportingWeekStart)],
-            index.Properties.Select(property => property.Name));
     }
 
     [Fact]

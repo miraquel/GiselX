@@ -13,4 +13,12 @@ public sealed class SelloutUploadOptions
     /// all-or-nothing behaviour.
     /// </summary>
     public decimal MaxInvalidRowPercentage { get; set; } = 5m;
+
+    /// <summary>
+    /// The most days, counted inclusively from the earliest to the latest invoice date of the valid rows, one
+    /// upload may replace. Publication deletes every published row in that range, so a single mistyped year
+    /// would otherwise wipe months of sales; a workbook beyond the limit is refused with the two dates named.
+    /// Zero or less disables the check.
+    /// </summary>
+    public int MaxReplacementDays { get; set; } = 45;
 }

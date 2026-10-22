@@ -40,12 +40,5 @@ BEGIN
     WHERE [CompanyId] = @CompanyId
       AND YEAR([InvoiceDate]) = @Year
       AND MONTH([InvoiceDate]) = @Month
-      AND [CreatedDate] = (
-          SELECT MAX([CreatedDate])
-          FROM [dbo].[SalesTransaction]
-          WHERE [CompanyId] = @CompanyId
-            AND YEAR([InvoiceDate]) = @Year
-            AND MONTH([InvoiceDate]) = @Month
-      )
     ORDER BY [InvoiceDate], [InvoiceNo], [Id];
 END

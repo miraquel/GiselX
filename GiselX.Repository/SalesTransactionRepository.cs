@@ -351,8 +351,8 @@ public class SalesTransactionRepository : ISalesTransactionRepository
                         $"{GetAdministratorColumnExpression(nameof(SalesTransaction.ProductName), useDistributorIdentity)} LIKE @Search OR c.Name LIKE @Search)");
         }
 
-        var filters = clauses.Count == 0 ? string.Empty : " AND " + string.Join(" AND ", clauses);
-        var periodFilter = periodClauses.Count == 0 ? string.Empty : " WHERE " + string.Join(" AND ", periodClauses);
+        var allClauses = periodClauses.Concat(clauses).ToList();
+        var where = allClauses.Count == 0 ? string.Empty : "WHERE " + string.Join(" AND ", allClauses);
         var sort = typeof(SalesTransaction).GetProperties()
             .FirstOrDefault(property => SelectableFields.Contains(property.Name) &&
                                         string.Equals(property.Name, request.SortBy,
@@ -362,24 +362,14 @@ public class SalesTransactionRepository : ISalesTransactionRepository
         var direction = request.IsSortAscending ? "ASC" : "DESC";
         var projection = GetAdministratorProjection(useDistributorIdentity);
         var query = $"""
-            WITH LatestUploads AS (
-                SELECT st.*, MAX(st.CreatedDate) OVER (PARTITION BY CompanyId) AS LatestCreatedDate
-                FROM SalesTransaction st
-                {periodFilter}
-            )
             SELECT {projection}
-            FROM LatestUploads st INNER JOIN Company c ON c.Id=st.CompanyId
-            WHERE st.CreatedDate=st.LatestCreatedDate {filters}
+            FROM SalesTransaction st INNER JOIN Company c ON c.Id=st.CompanyId
+            {where}
             ORDER BY {sortExpression} {direction}, st.Id
             OFFSET (@PageNumber-1)*@PageSize ROWS FETCH NEXT @PageSize ROWS ONLY;
-            WITH LatestUploads AS (
-                SELECT st.*, MAX(st.CreatedDate) OVER (PARTITION BY CompanyId) AS LatestCreatedDate
-                FROM SalesTransaction st
-                {periodFilter}
-            )
             SELECT COUNT(*)
-            FROM LatestUploads st INNER JOIN Company c ON c.Id=st.CompanyId
-            WHERE st.CreatedDate=st.LatestCreatedDate {filters};
+            FROM SalesTransaction st INNER JOIN Company c ON c.Id=st.CompanyId
+            {where};
             """;
         using var result = await _dbConnection.QueryMultipleAsync(new CommandDefinition(query, parameters,
             _dbTransaction, cancellationToken: cancellationToken));
@@ -394,14 +384,9 @@ public class SalesTransactionRepository : ISalesTransactionRepository
     {
         var projection = GetAdministratorProjection(useDistributorIdentity);
         return _dbConnection.QueryAsync<SalesTransaction>(new CommandDefinition($"""
-            WITH LatestUploads AS (
-                SELECT st.*, MAX(st.CreatedDate) OVER (PARTITION BY CompanyId) AS LatestCreatedDate
-                FROM SalesTransaction st
-                WHERE YEAR(st.InvoiceDate)=@Year AND MONTH(st.InvoiceDate)=@Month
-            )
             SELECT {projection}
-            FROM LatestUploads st INNER JOIN Company c ON c.Id=st.CompanyId
-            WHERE st.CreatedDate=st.LatestCreatedDate
+            FROM SalesTransaction st INNER JOIN Company c ON c.Id=st.CompanyId
+            WHERE YEAR(st.InvoiceDate)=@Year AND MONTH(st.InvoiceDate)=@Month
             ORDER BY c.Name, st.InvoiceDate, st.InvoiceNo, st.Id;
             """, new { Year = year, Month = month }, _dbTransaction, cancellationToken: cancellationToken));
     }
