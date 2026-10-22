@@ -414,6 +414,61 @@ public sealed class SelloutUploadServiceTests
         Assert.Equal(ConfirmedSha(), response.Data!.FileSha256);
     }
 
+    [Fact]
+    public async Task Preflight_states_the_range_of_the_valid_rows()
+    {
+        var analysis = ValidAnalysis(multiWeek: false);
+        analysis.Rows =
+        [
+            new SelloutStaging { SourceRowNumber = 3, InvoiceDate = new DateTime(2026, 10, 7), IsValid = true },
+            new SelloutStaging { SourceRowNumber = 4, InvoiceDate = new DateTime(2026, 10, 1, 13, 0, 0), IsValid = true },
+            new SelloutStaging { SourceRowNumber = 5, InvoiceDate = new DateTime(2026, 10, 20), IsValid = false }
+        ];
+        var (service, repository, _) = CreateService(analysis);
+
+        var response = await service.PreflightAsync(Stream(), "sales.xlsx", 9, CancellationToken.None);
+
+        var replacement = response.Data!.Replacement!;
+        Assert.Equal(new DateTime(2026, 10, 1), replacement.From);
+        Assert.Equal(new DateTime(2026, 10, 7), replacement.To);
+        Assert.Equal("Confirming replaces your published sales from 01 Oct 2026 to 07 Oct 2026.", replacement.Summary);
+        Assert.Equal((9, new DateTime(2026, 10, 1), new DateTime(2026, 10, 7)), Assert.Single(repository.RangeReads));
+    }
+
+    [Fact]
+    public async Task Preflight_lists_what_is_published_in_the_range()
+    {
+        var (service, repository, _) = CreateService(ValidAnalysis(multiWeek: false));
+        repository.Published =
+        [
+            new PublishedSelloutBatch { BatchId = 7, ReportingWeekStart = new DateTime(2026, 9, 28), RowCount = 3,
+                UploadedDate = new DateTime(2026, 10, 2), UploadedBy = "a", OriginalFileName = "sep.xlsx" },
+            new PublishedSelloutBatch { BatchId = 8, ReportingWeekStart = new DateTime(2026, 10, 5), RowCount = 9,
+                UploadedDate = new DateTime(2026, 10, 9), UploadedBy = "b", OriginalFileName = "oct.xlsx" }
+        ];
+
+        var response = await service.PreflightAsync(Stream(), "sales.xlsx", 9, CancellationToken.None);
+
+        Assert.Equal(repository.Published, response.Data!.Replacement!.Replaces);
+    }
+
+    [Fact]
+    public async Task Preflight_with_errors_neither_reads_published_ranges_nor_writes()
+    {
+        var analysis = ValidAnalysis(multiWeek: false);
+        analysis.Errors = ["Header mismatch."];
+        var (service, repository, transaction) = CreateService(analysis);
+
+        var response = await service.PreflightAsync(Stream(), "sales.xlsx", 9, CancellationToken.None);
+
+        Assert.Null(response.Data!.Replacement);
+        Assert.Empty(repository.RangeReads);
+        Assert.Empty(repository.Groups);
+        Assert.Empty(repository.Batches);
+        Assert.Empty(repository.StagingRows);
+        Assert.False(transaction.CommitCalled);
+    }
+
     private static MemoryStream Stream() => new([1, 2, 3, 4]);
 
     /// <summary>The SHA-256 preflight reports for the bytes Stream() supplies, quoted back on upload.</summary>
@@ -487,6 +542,16 @@ public sealed class SelloutUploadServiceTests
             if (ThrowOnPromote) throw new InvalidOperationException("Promotion failed.");
             PromotedGroupId = groupId;
             return Task.CompletedTask;
+        }
+
+        public List<(int CompanyId, DateTime From, DateTime To)> RangeReads { get; } = [];
+        public IReadOnlyList<PublishedSelloutBatch> Published { get; set; } = [];
+
+        public Task<IReadOnlyList<PublishedSelloutBatch>> GetPublishedInRangeAsync(int companyId, DateTime from,
+            DateTime to, CancellationToken cancellationToken)
+        {
+            RangeReads.Add((companyId, from, to));
+            return Task.FromResult(Published);
         }
 
         public string? ArchivedFilePath { get; private set; }

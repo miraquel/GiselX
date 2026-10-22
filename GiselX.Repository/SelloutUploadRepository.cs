@@ -18,6 +18,24 @@ public sealed class SelloutUploadRepository(IDbConnection connection, IDbTransac
                 @UploadedBy, @UploadedDate, NULL)
             """, group, transaction, cancellationToken: cancellationToken));
 
+    public async Task<IReadOnlyList<PublishedSelloutBatch>> GetPublishedInRangeAsync(int companyId, DateTime from,
+        DateTime to, CancellationToken cancellationToken) =>
+        (await connection.QueryAsync<PublishedSelloutBatch>(new CommandDefinition("""
+            SELECT b.Id AS BatchId, b.ReportingWeekStart, r.[RowCount], b.UploadedDate, b.UploadedBy, b.OriginalFileName
+            FROM (
+                SELECT SelloutUploadBatchId, COUNT(*) AS [RowCount]
+                FROM SalesTransaction
+                WHERE CompanyId = @CompanyId
+                  AND InvoiceDate >= @From AND InvoiceDate < DATEADD(day, 1, @To)
+                  AND SelloutUploadBatchId IS NOT NULL
+                GROUP BY SelloutUploadBatchId
+            ) r
+            JOIN SelloutUploadBatch b ON b.Id = r.SelloutUploadBatchId
+            WHERE b.CompanyId = @CompanyId AND b.Status IN (2, 4)
+            ORDER BY b.ReportingWeekStart, b.UploadedDate
+            """, new { CompanyId = companyId, From = from.Date, To = to.Date }, transaction,
+            cancellationToken: cancellationToken))).ToList();
+
     public Task SetArchivedFilePathAsync(long groupId, string archivedFilePath,
         CancellationToken cancellationToken) => connection.ExecuteAsync(new CommandDefinition(
             "UPDATE SelloutUploadGroup SET ArchivedFilePath = @Path WHERE Id = @GroupId;",

@@ -11,6 +11,13 @@ public interface ISelloutUploadRepository
         string validationErrorsJson, CancellationToken cancellationToken);
     Task PromoteGroupAsync(long groupId, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// The company's live batches (status 2 or 4) with the number of their published rows whose invoice date
+    /// falls on <c>from</c> through <c>to</c> inclusive - the same range <see cref="PromoteGroupAsync"/> replaces.
+    /// </summary>
+    Task<IReadOnlyList<PublishedSelloutBatch>> GetPublishedInRangeAsync(int companyId, DateTime from, DateTime to,
+        CancellationToken cancellationToken);
+
     /// <summary>Records where the uploaded workbook was archived, once the group id is known.</summary>
     Task SetArchivedFilePathAsync(long groupId, string archivedFilePath, CancellationToken cancellationToken);
 

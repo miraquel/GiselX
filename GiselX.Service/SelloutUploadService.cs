@@ -1,4 +1,5 @@
 using System.Data;
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text.Json;
 using GiselX.Domain;
@@ -42,6 +43,7 @@ public sealed class SelloutUploadService(
         var analysis = await analysisService.AnalyzeAsync(contentResponse.Content!, companyId, cancellationToken);
         var data = ToPreflight(analysis, contentResponse.SourceSha256!);
         var errors = CollectErrors(analysis);
+        if (errors.Count == 0) data.Replacement = await DescribeReplacementAsync(analysis, companyId, cancellationToken);
         return new ServiceResponse<SelloutUploadPreflightDto>
         {
             Data = data,
@@ -386,6 +388,29 @@ public sealed class SelloutUploadService(
         Errors = [message], Message = message, StatusCode = StatusCodes.Status400BadRequest
     };
 
+    /// <summary>
+    /// The range publication will replace: min to max invoice date (date part) of the valid rows, exactly as
+    /// the repository derives it from staging. Invalid rows never widen it.
+    /// </summary>
+    private async Task<SelloutReplacementDto?> DescribeReplacementAsync(SelloutWorkbookAnalysisDto analysis,
+        int companyId, CancellationToken cancellationToken)
+    {
+        var dates = analysis.Rows.Where(row => row.IsValid && row.InvoiceDate.HasValue)
+            .Select(row => row.InvoiceDate!.Value.Date).ToList();
+        if (dates.Count == 0) return null;
+
+        var from = dates.Min();
+        var to = dates.Max();
+        return new SelloutReplacementDto
+        {
+            From = from,
+            To = to,
+            Summary = string.Create(CultureInfo.InvariantCulture,
+                $"Confirming replaces your published sales from {from:dd MMM yyyy} to {to:dd MMM yyyy}."),
+            Replaces = await uploadRepository.GetPublishedInRangeAsync(companyId, from, to, cancellationToken)
+        };
+    }
+
     private static SelloutUploadPreflightDto ToPreflight(SelloutWorkbookAnalysisDto analysis, string fileSha256) => new()
     {
         FileSha256 = fileSha256,
@@ -403,43 +428,8 @@ public sealed class SelloutUploadService(
         Weeks = analysis.WeekSummaries,
         IgnoredSummaryRowNumbers = analysis.IgnoredSummaryRowNumbers,
         RowErrors = analysis.RowErrors,
-        Errors = analysis.Errors,
-        Warnings = PartialWeekWarnings(analysis.WeekSummaries)
+        Errors = analysis.Errors
     };
-
-    /// <summary>
-    /// Publishing replaces whole Monday-Sunday weeks. Inside the range a workbook covers, that is correct -
-    /// a day with no rows genuinely had no sales. The danger is only at the two ends, where a week reaches
-    /// past the file's first or last invoice date into a neighbouring period the file says nothing about,
-    /// and replacing the whole week deletes rows a previous upload published there.
-    /// </summary>
-    private static List<string> PartialWeekWarnings(IReadOnlyList<SelloutWeekSummaryDto> weeks)
-    {
-        if (weeks.Count == 0) return [];
-
-        var firstCoveredDay = weeks.Min(week => week.CoveredFrom);
-        var lastCoveredDay = weeks.Max(week => week.CoveredTo);
-        var warnings = new List<string>();
-        foreach (var week in weeks)
-        {
-            if (week.ReportingWeekStart < firstCoveredDay)
-            {
-                warnings.Add(Describe(week, week.ReportingWeekStart, firstCoveredDay.AddDays(-1)));
-            }
-
-            if (week.ReportingWeekEnd > lastCoveredDay)
-            {
-                warnings.Add(Describe(week, lastCoveredDay.AddDays(1), week.ReportingWeekEnd));
-            }
-        }
-
-        return warnings;
-    }
-
-    private static string Describe(SelloutWeekSummaryDto week, DateTime uncoveredFrom, DateTime uncoveredTo) =>
-        $"This workbook carries no rows for {uncoveredFrom:yyyy-MM-dd} to {uncoveredTo:yyyy-MM-dd}, but they fall in "
-        + $"the reporting week {week.ReportingWeekStart:yyyy-MM-dd} to {week.ReportingWeekEnd:yyyy-MM-dd} that "
-        + "confirming replaces in full. Any rows a previous upload published on those days will be deleted.";
 
     private static List<string> CollectErrors(SelloutWorkbookAnalysisDto analysis) =>
         analysis.Errors
