@@ -23,8 +23,8 @@
                class="btn btn-outline-secondary">Add Stock Mapping</a>
             <a asp-controller="ItemMappings" asp-action="Index" asp-route-companyId="@Model.Id"
                class="btn btn-outline-primary">Manage Item Mappings</a>
-            <a asp-controller="StockAreas" asp-action="Index" asp-route-companyId="@Model.Id"
-               class="btn btn-outline-primary">Stock areas</a>
+            @* Stock areas are hidden: a distributor with several locations is registered as one company per
+               location instead. The StockAreas screens still exist and can be linked here again. *@
         </div>
         @if (ViewBag.StatusMessage != null)
         {

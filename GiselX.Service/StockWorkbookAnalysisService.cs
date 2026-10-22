@@ -64,7 +64,10 @@ public sealed class StockWorkbookAnalysisService(
             cancellationToken.ThrowIfCancellationRequested();
             var parsed = parser.Parse(content, match.Mapping, match.WorksheetName);
             foreach (var error in parsed.Errors) error.WorksheetName = match.WorksheetName;
-            var mapsArea = match.Mapping.Columns.Any(column => column.CanonicalField == StockCanonicalField.Area);
+            // A company without any area has nothing to resolve the column against - the area master is
+            // not offered on the Companies screen - so the cell text is kept but no row fails over it.
+            var mapsArea = allAreas.Count > 0
+                && match.Mapping.Columns.Any(column => column.CanonicalField == StockCanonicalField.Area);
             var mapsCondition = match.Mapping.Columns.Any(column => column.CanonicalField == StockCanonicalField.Condition);
             foreach (var row in parsed.Rows)
             {
