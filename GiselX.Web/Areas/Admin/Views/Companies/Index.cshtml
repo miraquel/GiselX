@@ -59,6 +59,7 @@
                 <tr>
                     <th>Name</th>
                     <th>Business Unit</th>
+                    <th>Lokasi/Area</th>
                     <th>Address</th>
                     <th>Actions</th>
                 </tr>
@@ -67,6 +68,7 @@
                 <tr>
                     <th>Name</th>
                     <th>Business Unit</th>
+                    <th>Lokasi/Area</th>
                     <th>Address</th>
                     <th>Actions</th>
                 </tr>
@@ -187,6 +189,7 @@
                 columns: [
                     { data: 'name', name: 'Name' },
                     { data: 'businessUnitName', name: 'BusinessUnitName' },
+                    { data: 'location', name: 'Location' },
                     { data: 'address', name: 'Address' },
                     {
                         data: null,
@@ -208,8 +211,8 @@
                 // Address is the widest column and the first one Responsive collapses.
                 columnDefs: [
                     { targets: 0, className: 'text-center', responsivePriority: 1 },
-                    { targets: 1, className: 'text-center' },
-                    { targets: 2, className: 'text-center company-address', responsivePriority: 10000 },
+                    { targets: [1, 2], className: 'text-center' },
+                    { targets: 3, className: 'text-center company-address', responsivePriority: 10000 },
                     { targets: -1, className: 'text-center company-actions', responsivePriority: 2 }
                 ],
                 initComplete: function () {

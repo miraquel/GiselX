@@ -5,7 +5,7 @@ BEGIN
     SELECT company.Id, company.Name, company.BusinessUnitId, unit.Name AS BusinessUnitName,
            company.ChannelId, channel.Name AS ChannelName,
            company.SalesmanId, salesman.Name AS SalesmanName,
-           company.Address, company.ContactEmail, company.DeadlineDayOfMonth, company.DeadlineDaysOfWeek,
+           company.Address, company.Location, company.ContactEmail, company.DeadlineDayOfMonth, company.DeadlineDaysOfWeek,
            company.ReminderLeadDays, company.ItemMappingEnabled
     FROM [dbo].[Company] company
     LEFT JOIN [dbo].[BusinessUnit] unit ON unit.Id = company.BusinessUnitId

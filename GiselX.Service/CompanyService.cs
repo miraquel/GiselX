@@ -31,6 +31,7 @@ public class CompanyService : ICompanyService
     public async Task<ServiceResponse<CompanyDto>> CreateCompanyAsync(CompanyDto companyDto, CancellationToken cancellationToken)
     {
         if (ValidateContactEmail(companyDto) is { } contactEmailError) return contactEmailError;
+        if (NormalizeLocation(companyDto) is { } locationError) return locationError;
 
         if (!await IsSelectableBusinessUnitAsync(companyDto.BusinessUnitId, cancellationToken))
             return InvalidBusinessUnitResponse();
@@ -97,6 +98,26 @@ public class CompanyService : ICompanyService
         return null;
     }
 
+    /// <summary>
+    /// Location is free text shown on the Companies screens and in the Power BI views, so it is stored
+    /// trimmed, with a blank entry stored as no location rather than as spaces.
+    /// </summary>
+    private static ServiceResponse<CompanyDto>? NormalizeLocation(CompanyDto companyDto)
+    {
+        var location = string.IsNullOrWhiteSpace(companyDto.Location) ? null : companyDto.Location.Trim();
+        if (location is { Length: > 100 })
+        {
+            return new ServiceResponse<CompanyDto>
+            {
+                Errors = ["Location must not exceed 100 characters."],
+                StatusCode = StatusCodes.Status400BadRequest
+            };
+        }
+
+        companyDto.Location = location;
+        return null;
+    }
+
     public async Task<ServiceResponse<CompanyDto?>> GetCompanyByIdAsync(int id, CancellationToken cancellationToken)
     {
         var company = await _companyRepository.GetCompanyByIdAsync(id, cancellationToken);
@@ -124,6 +145,7 @@ public class CompanyService : ICompanyService
     public async Task<ServiceResponse<CompanyDto>> UpdateCompanyAsync(CompanyDto companyDto, CancellationToken cancellationToken)
     {
         if (ValidateContactEmail(companyDto) is { } contactEmailError) return contactEmailError;
+        if (NormalizeLocation(companyDto) is { } locationError) return locationError;
 
         var existing = await _companyRepository.GetCompanyByIdAsync(companyDto.Id, cancellationToken);
         if (existing is null)

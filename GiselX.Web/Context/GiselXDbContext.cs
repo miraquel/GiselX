@@ -83,6 +83,7 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
             entity.HasIndex(e => e.Name).IsUnique();
 
             entity.Property(e => e.Address).HasMaxLength(255);
+            entity.Property(e => e.Location).HasMaxLength(100);
             entity.Property(e => e.Name).HasMaxLength(100);
 
             // New reminder fields
