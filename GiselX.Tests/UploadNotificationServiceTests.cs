@@ -198,7 +198,8 @@ public sealed class UploadNotificationServiceTests
         public IReadOnlyCollection<string>? InternalRecipients { get; private set; }
 
         public Task SendReminderAsync(IReadOnlyCollection<string> recipients, string companyName,
-            DateTime deadline, bool isFinalReminder) => Task.CompletedTask;
+            DateTime deadline, bool isFinalReminder,
+            IReadOnlyList<string>? missingItems = null) => Task.CompletedTask;
 
         public Task SendUploadCompletedAsync(UploadNotificationDto notification, string companyName,
             IReadOnlyCollection<string> distributorRecipients, IReadOnlyCollection<string> internalRecipients,

@@ -9,11 +9,15 @@ namespace GiselX.Service;
 public class EmailService(IEmailSettingsProvider settingsProvider) : IEmailService
 {
     public async Task SendReminderAsync(IReadOnlyCollection<string> recipients, string companyName,
-        DateTime deadline, bool isFinalReminder)
+        DateTime deadline, bool isFinalReminder, IReadOnlyList<string>? missingItems = null)
     {
         if (recipients.Count == 0) return;
 
         var settings = await settingsProvider.GetAsync(CancellationToken.None);
+
+        // An environment nobody has configured has no SMTP host. Connecting to "" throws, and the daily
+        // job would fail for every company, every day; the upload notification already returns here.
+        if (string.IsNullOrWhiteSpace(settings.SmtpHost)) return;
 
         var subject = ReminderMessage.BuildSubject(companyName, deadline, isFinalReminder);
 
@@ -28,7 +32,7 @@ public class EmailService(IEmailSettingsProvider settingsProvider) : IEmailServi
         message.Subject = subject;
         message.Body = new TextPart("plain")
         {
-            Text = ReminderMessage.BuildBody(companyName, deadline, isFinalReminder, settings)
+            Text = ReminderMessage.BuildBody(companyName, deadline, isFinalReminder, settings, missingItems)
         };
 
         using var client = new SmtpClient();

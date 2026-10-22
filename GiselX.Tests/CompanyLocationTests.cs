@@ -114,8 +114,8 @@ public sealed class CompanyLocationTests
     [Fact]
     public async Task Creating_a_company_trims_its_location_and_stores_blank_as_none()
     {
-        var repository = new RecordingCompanyRepository();
-        var service = new CompanyService(repository, new NoItemMappings(), new RecordingTransaction(), new UserClaimDto());
+        var repository = new CompanyServiceFakes.RecordingCompanyRepository();
+        var service = new CompanyService(repository, new CompanyServiceFakes.NoItemMappings(), new CompanyServiceFakes.RecordingTransaction(), new UserClaimDto());
 
         await service.CreateCompanyAsync(new CompanyDto { Name = "PT Primatrans Medan", Location = "  Medan  " }, default);
         await service.CreateCompanyAsync(new CompanyDto { Name = "PT Primatrans Binjai", Location = "   " }, default);
@@ -127,8 +127,8 @@ public sealed class CompanyLocationTests
     [Fact]
     public async Task Updating_a_company_trims_its_location()
     {
-        var repository = new RecordingCompanyRepository();
-        var service = new CompanyService(repository, new NoItemMappings(), new RecordingTransaction(), new UserClaimDto());
+        var repository = new CompanyServiceFakes.RecordingCompanyRepository();
+        var service = new CompanyService(repository, new CompanyServiceFakes.NoItemMappings(), new CompanyServiceFakes.RecordingTransaction(), new UserClaimDto());
 
         await service.UpdateCompanyAsync(new CompanyDto { Id = 7, Name = "PT Primatrans Binjai", Location = " Binjai " }, default);
 
@@ -138,9 +138,9 @@ public sealed class CompanyLocationTests
     [Fact]
     public async Task A_location_longer_than_100_characters_is_refused()
     {
-        var repository = new RecordingCompanyRepository();
-        var transaction = new RecordingTransaction();
-        var service = new CompanyService(repository, new NoItemMappings(), transaction, new UserClaimDto());
+        var repository = new CompanyServiceFakes.RecordingCompanyRepository();
+        var transaction = new CompanyServiceFakes.RecordingTransaction();
+        var service = new CompanyService(repository, new CompanyServiceFakes.NoItemMappings(), transaction, new UserClaimDto());
 
         var response = await service.CreateCompanyAsync(
             new CompanyDto { Name = "PT Primatrans", Location = new string('x', 101) }, default);
@@ -169,52 +169,5 @@ public sealed class CompanyLocationTests
             directory = directory.Parent;
 
         return directory?.FullName ?? Directory.GetCurrentDirectory();
-    }
-
-    private sealed class RecordingCompanyRepository : ICompanyRepository
-    {
-        public List<Company> Saved { get; } = [];
-
-        public Task<Company> CreateCompanyAsync(Company company, CancellationToken cancellationToken)
-        { Saved.Add(company); return Task.FromResult(company); }
-        public Task<Company?> GetCompanyByIdAsync(int id, CancellationToken cancellationToken) =>
-            Task.FromResult<Company?>(new Company { Id = id, Name = "Existing" });
-        public Task<PagedList<Company>> GetCompaniesAsync(PagedListRequest pagedListRequest, CancellationToken cancellationToken) =>
-            Task.FromResult(new PagedList<Company>([], 1, 10, 0));
-        public Task<Company> UpdateCompanyAsync(Company company, CancellationToken cancellationToken)
-        { Saved.Add(company); return Task.FromResult(company); }
-        public Task<IReadOnlyList<Company>> GetAllAsync(CancellationToken cancellationToken) =>
-            Task.FromResult<IReadOnlyList<Company>>([]);
-        public Task<IEnumerable<Company>> GetAllWithContactEmailAsync(CancellationToken cancellationToken) =>
-            Task.FromResult<IEnumerable<Company>>([]);
-    }
-
-    private sealed class NoItemMappings : IItemMappingRepository
-    {
-        public Task<IReadOnlyList<ItemMapping>> GetByCompanyAsync(int companyId, CancellationToken cancellationToken) =>
-            Task.FromResult<IReadOnlyList<ItemMapping>>([]);
-        public Task<IReadOnlyList<ItemMapping>> GetActiveByCompanyAsync(int companyId, CancellationToken cancellationToken) =>
-            Task.FromResult<IReadOnlyList<ItemMapping>>([]);
-        public Task<ItemMapping?> GetByIdAsync(int id, int companyId, CancellationToken cancellationToken) =>
-            Task.FromResult<ItemMapping?>(null);
-        public Task<int> InsertAsync(ItemMapping mapping, CancellationToken cancellationToken) => Task.FromResult(0);
-        public Task UpdateAsync(ItemMapping mapping, CancellationToken cancellationToken) => Task.CompletedTask;
-        public Task SetActiveAsync(int id, int companyId, bool isActive, string modifiedBy, DateTime modifiedDate,
-            CancellationToken cancellationToken) => Task.CompletedTask;
-        public Task<ItemMappingDeleteResult> DeleteAsync(int id, int companyId, CancellationToken cancellationToken) =>
-            Task.FromResult(ItemMappingDeleteResult.NotFound);
-        public Task UpsertAsync(IReadOnlyList<ItemMapping> values, CancellationToken cancellationToken) => Task.CompletedTask;
-        public Task<IReadOnlyList<UnmappedDistributorItem>> GetUnmappedDistributorItemsAsync(int companyId,
-            CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<UnmappedDistributorItem>>([]);
-    }
-
-    private sealed class RecordingTransaction : IDbTransaction
-    {
-        public bool CommitCalled { get; private set; }
-        public IDbConnection? Connection => null;
-        public IsolationLevel IsolationLevel => IsolationLevel.ReadCommitted;
-        public void Commit() => CommitCalled = true;
-        public void Rollback() { }
-        public void Dispose() { }
     }
 }

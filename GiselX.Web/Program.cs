@@ -133,10 +133,18 @@ app.MapHangfireDashboard("/hangfire", new DashboardOptions
 
 // Register daily reminder recurring job
 var dailyJobHour = app.Configuration.GetValue<int>("Hangfire:DailyJobHour", 8);
+// Hangfire evaluates cron in UTC unless told otherwise, so DailyJobHour=8 used to fire at 15:00 WIB.
+// The job decides "today" from the server's local clock, so the schedule follows the same clock;
+// Hangfire:TimeZone (a Windows or IANA id) overrides it for a server not set to the distributors' zone.
+var reminderTimeZoneId = app.Configuration.GetValue<string>("Hangfire:TimeZone");
+var reminderTimeZone = string.IsNullOrWhiteSpace(reminderTimeZoneId)
+    ? TimeZoneInfo.Local
+    : TimeZoneInfo.FindSystemTimeZoneById(reminderTimeZoneId);
 Hangfire.RecurringJob.AddOrUpdate<ReminderJob>(
     "daily-reminder",
     job => job.ExecuteAsync(),
-    $"0 {dailyJobHour} * * *");
+    $"0 {dailyJobHour} * * *",
+    new Hangfire.RecurringJobOptions { TimeZone = reminderTimeZone });
 
 app.Run();
 

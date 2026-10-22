@@ -24,7 +24,7 @@ public static class ReminderMessage
     }
 
     public static string BuildBody(string companyName, DateTime deadline, bool isFinalReminder,
-        EmailSettings settings)
+        EmailSettings settings, IReadOnlyList<string>? missingItems = null)
     {
         var culture = UploadNotificationMessage.Culture;
         var daysUntil = (deadline.Date - DateTime.Today).Days;
@@ -50,10 +50,11 @@ public static class ReminderMessage
             : "⏰ Belum diterima");
         body.Append(Rule).Append("\r\n");
 
-        body.Append("\r\nData yang perlu diunggah:\r\n");
-        body.Append("  - Sellout (Sales Transaction)\r\n");
-        body.Append("  - Stock\r\n");
-        body.Append("  - Service Level\r\n");
+        // Only what is still missing for this deadline: listing everything told a distributor who had
+        // already sent Sellout to send it again.
+        body.Append("\r\nData yang belum kami terima:\r\n");
+        foreach (var item in missingItems is { Count: > 0 } ? missingItems : ["Sellout (Sales Transaction)", "Stock"])
+            body.Append("  - ").Append(item).Append("\r\n");
 
         if (!string.IsNullOrWhiteSpace(settings.DashboardBaseUrl))
         {

@@ -15,29 +15,32 @@ public class UploadCheckRepository : IUploadCheckRepository
         _dbTransaction = dbTransaction;
     }
 
-    public async Task<bool> HasDataForPeriodAsync(int companyId, DateTime fromLocal, DateTime toLocal,
-        DateTime fromUtc, DateTime toUtc)
+    public async Task<UploadPresence> GetUploadPresenceAsync(int companyId, DateTime fromUtc, DateTime toUtc,
+        CancellationToken cancellationToken)
     {
         const string sql = """
             SELECT
-                (SELECT COUNT(1) FROM [dbo].[SalesTransaction] WHERE CompanyId = @CompanyId AND CreatedDate >= @FromUtc AND CreatedDate < @ToUtc),
-                (SELECT COUNT(1) FROM [dbo].[Stock]            WHERE CompanyId = @CompanyId AND CreatedDate >= @FromUtc AND CreatedDate < @ToUtc),
-                (SELECT COUNT(1) FROM [dbo].[TransDist]        WHERE CompanyId = @CompanyId AND CreatedDate >= @FromLocal AND CreatedDate < @ToLocal)
+                CASE WHEN EXISTS (SELECT 1 FROM [dbo].[SalesTransaction]
+                                  WHERE CompanyId = @CompanyId AND CreatedDate >= @FromUtc AND CreatedDate < @ToUtc)
+                     THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS HasSellout,
+                CASE WHEN EXISTS (SELECT 1 FROM [dbo].[Stock]
+                                  WHERE CompanyId = @CompanyId AND CreatedDate >= @FromUtc AND CreatedDate < @ToUtc)
+                     THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS HasStock;
+
+            SELECT area.Name
+            FROM [dbo].[StockArea] area
+            WHERE area.CompanyId = @CompanyId AND area.IsActive = 1
+              AND NOT EXISTS (SELECT 1 FROM [dbo].[Stock] stock
+                              WHERE stock.CompanyId = @CompanyId AND stock.StockAreaId = area.Id
+                                AND stock.CreatedDate >= @FromUtc AND stock.CreatedDate < @ToUtc)
+            ORDER BY area.Name;
             """;
 
-        await _dbConnection.ExecuteAsync("SET ARITHABORT ON", transaction: _dbTransaction);
-        var result = await _dbConnection.QuerySingleAsync<(int Sales, int Stock, int TransDist)>(
-            sql,
-            new
-            {
-                CompanyId = companyId,
-                FromLocal = fromLocal,
-                ToLocal = toLocal,
-                FromUtc = fromUtc,
-                ToUtc = toUtc
-            },
-            _dbTransaction);
-
-        return result.Sales > 0 && result.Stock > 0 && result.TransDist > 0;
+        using var result = await _dbConnection.QueryMultipleAsync(new CommandDefinition(sql,
+            new { CompanyId = companyId, FromUtc = fromUtc, ToUtc = toUtc }, _dbTransaction,
+            cancellationToken: cancellationToken));
+        var (hasSellout, hasStock) = await result.ReadSingleAsync<(bool, bool)>();
+        var missingAreas = (await result.ReadAsync<string>()).ToList();
+        return new UploadPresence(hasSellout, hasStock, missingAreas);
     }
 }

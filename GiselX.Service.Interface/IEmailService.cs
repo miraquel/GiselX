@@ -10,8 +10,10 @@ public interface IEmailService
     /// <c>NotificationRecipients.Parse</c> so that parsing lives in one place. An empty list sends
     /// nothing and opens no connection.
     /// </summary>
+    /// <param name="missingItems">What is still to be uploaded for the deadline, one line each; the body
+    /// lists these instead of every upload type. Null lists the default set (Sellout and Stock).</param>
     Task SendReminderAsync(IReadOnlyCollection<string> recipients, string companyName, DateTime deadline,
-        bool isFinalReminder);
+        bool isFinalReminder, IReadOnlyList<string>? missingItems = null);
 
     /// <summary>
     /// Announces a completed upload to both audiences over a single SMTP connection. The two lists

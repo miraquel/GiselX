@@ -1,14 +1,16 @@
-using System.Data;
-
 namespace GiselX.Repository.Interface;
+
+/// <summary>
+/// What a company uploaded inside a window. <see cref="MissingStockAreas"/> names the company's active
+/// Stock areas with no Stock row in the window; it is empty for a company without areas.
+/// </summary>
+public sealed record UploadPresence(bool HasSellout, bool HasStock, IReadOnlyList<string> MissingStockAreas);
 
 public interface IUploadCheckRepository
 {
     /// <summary>
-    /// The period is passed twice because the tables disagree on the clock: the staging pipelines stamp
-    /// SalesTransaction and Stock with SYSUTCDATETIME(), while the legacy Service Level upload stamps
-    /// TransDist with server-local DateTime.Now.
+    /// The window is in UTC because SalesTransaction and Stock are stamped with SYSUTCDATETIME().
     /// </summary>
-    Task<bool> HasDataForPeriodAsync(int companyId, DateTime fromLocal, DateTime toLocal,
-        DateTime fromUtc, DateTime toUtc);
+    Task<UploadPresence> GetUploadPresenceAsync(int companyId, DateTime fromUtc, DateTime toUtc,
+        CancellationToken cancellationToken);
 }
