@@ -145,6 +145,9 @@ public sealed class StockTemplateMappingService(
         errors.AddRange(StockCanonicalFieldCatalog.RequiredFields
             .Where(field => !mapped.Contains(field)).OrderBy(field => field)
             .Select(field => $"Required canonical field {field} must be mapped."));
+        // The quantity comes as one column or as two (cartons and pieces), so at least one must be mapped.
+        if (!StockCanonicalFieldCatalog.QuantityFields.Any(mapped.Contains))
+            errors.Add("Map at least one stock quantity column: QtyCarton or QtyPcs.");
         ValidateConditionValues(dto, errors);
         if (existingMappings.Any(mapping => mapping.Id != dto.Id &&
             string.Equals(mapping.Name.Trim(), dto.Name.Trim(), StringComparison.OrdinalIgnoreCase)))

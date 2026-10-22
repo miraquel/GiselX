@@ -13,9 +13,10 @@ public sealed class StockUploadPreflightDto
     public int TotalRows { get; set; }
     public int ValidRows { get; set; }
     public int InvalidRows { get; set; }
-    public decimal TotalSaldoAwal { get; set; }
-    public decimal TotalSaldoMasukPo { get; set; }
-    public decimal TotalSaldoAkhir { get; set; }
+    /// <summary>Cartons across the valid rows; zero when the template maps no carton column.</summary>
+    public decimal TotalQtyCarton { get; set; }
+    /// <summary>Pieces across the valid rows; zero when the template maps no piece column.</summary>
+    public decimal TotalQtyPcs { get; set; }
 
     /// <summary>
     /// One entry per mapped worksheet the workbook contributes to this snapshot.

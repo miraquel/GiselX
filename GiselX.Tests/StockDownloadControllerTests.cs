@@ -28,7 +28,10 @@ public sealed class StockDownloadControllerTests
         Assert.Equal(24m, sheet.Cell(2, 10).GetValue<decimal>());
         Assert.Equal("Price Unit", sheet.Cell(1, 11).GetString());
         Assert.Equal(12.50m, sheet.Cell(2, 11).GetValue<decimal>());
-        Assert.Equal("Saldo Awal", sheet.Cell(1, 12).GetString());
+        Assert.Equal("Qty Karton", sheet.Cell(1, 12).GetString());
+        Assert.Equal(3m, sheet.Cell(2, 12).GetValue<decimal>());
+        Assert.Equal("Qty Pcs", sheet.Cell(1, 13).GetString());
+        Assert.Equal(6m, sheet.Cell(2, 13).GetValue<decimal>());
     }
 
     [Fact]
@@ -58,11 +61,11 @@ public sealed class StockDownloadControllerTests
         using var workbook = new XLWorkbook(result.FileStream);
         var sheet = workbook.Worksheet(1);
 
-        Assert.Equal("Batch No", sheet.Cell(1, 15).GetString());
-        Assert.Equal("Expired Date", sheet.Cell(1, 16).GetString());
-        Assert.Equal("2027-01-01", sheet.Cell(2, 16).GetString());
-        Assert.Equal("Stock Date", sheet.Cell(1, 17).GetString());
-        Assert.Equal("2026-08-09", sheet.Cell(2, 17).GetString());
+        Assert.Equal("Batch No", sheet.Cell(1, 14).GetString());
+        Assert.Equal("Expired Date", sheet.Cell(1, 15).GetString());
+        Assert.Equal("2027-01-01", sheet.Cell(2, 15).GetString());
+        Assert.Equal("Stock Date", sheet.Cell(1, 16).GetString());
+        Assert.Equal("2026-08-09", sheet.Cell(2, 16).GetString());
     }
 
     [Theory]
@@ -128,7 +131,7 @@ public sealed class StockDownloadControllerTests
                         ProductPackaging = "Box",
                         ProductPcsInCtn = 12, ProductNetto = 1.5m, ProductUnit = "CTN",
                         SmallestUnit = "PCS", SmallestUnitQty = 24m,
-                        PriceUnit = 12.50m, SaldoAwal = 2, SaldoMasukPO = 3, SaldoAkhir = 5,
+                        PriceUnit = 12.50m, QtyCarton = 3, QtyPcs = 6,
                         BatchNumber = "B-1", ExpiredDate = new DateTime(2027, 1, 1),
                         CompanyId = 7, CreatedDate = new DateTime(2026, 8, 10),
                         StockUploadBatchId = 9, StockDate = new DateTime(2026, 8, 9),

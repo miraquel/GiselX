@@ -24,26 +24,22 @@ public sealed class StockUploadServiceTests
     }
 
     [Fact]
-    public async Task Preflight_summarizes_stock_values_from_valid_rows_only()
+    public async Task Preflight_summarizes_cartons_and_pieces_from_valid_rows_only()
     {
         var analysis = Analysis(2, 1);
-        analysis.Rows[0].SaldoAwal = 10m;
-        analysis.Rows[0].SaldoMasukPO = 2m;
-        analysis.Rows[0].SaldoAkhir = 12m;
-        analysis.Rows[1].SaldoAwal = 20m;
-        analysis.Rows[1].SaldoMasukPO = 3m;
-        analysis.Rows[1].SaldoAkhir = 23m;
-        analysis.Rows[2].SaldoAwal = 999m;
-        analysis.Rows[2].SaldoMasukPO = 999m;
-        analysis.Rows[2].SaldoAkhir = 999m;
+        analysis.Rows[0].QtyCarton = 10m;
+        analysis.Rows[0].QtyPcs = 2m;
+        analysis.Rows[1].QtyCarton = 20m;
+        analysis.Rows[1].QtyPcs = 3m;
+        analysis.Rows[2].QtyCarton = 999m;
+        analysis.Rows[2].QtyPcs = 999m;
         var (service, _, _) = CreateService(analysis);
 
         var response = await service.PreflightAsync(
             File(), "stock.xlsx", new DateTime(2026, 8, 10), 7, CancellationToken.None);
 
-        Assert.Equal(30m, response.Data!.TotalSaldoAwal);
-        Assert.Equal(5m, response.Data.TotalSaldoMasukPo);
-        Assert.Equal(35m, response.Data.TotalSaldoAkhir);
+        Assert.Equal(30m, response.Data!.TotalQtyCarton);
+        Assert.Equal(5m, response.Data.TotalQtyPcs);
     }
 
     [Fact]
@@ -370,10 +366,10 @@ public sealed class StockUploadServiceTests
         Assert.Equal(ConfirmedSha(), response.Data!.FileSha256);
     }
 
-    private static StockStagingRowDto AreaRow(int? areaId, StockCondition condition, decimal saldoAkhir,
+    private static StockStagingRowDto AreaRow(int? areaId, StockCondition condition, decimal qtyPcs,
         bool valid = true) => new()
     {
-        SourceRowNumber = 3, ProductId = "P", ProductName = "Row", SaldoAkhir = saldoAkhir, IsValid = valid,
+        SourceRowNumber = 3, ProductId = "P", ProductName = "Row", QtyPcs = qtyPcs, IsValid = valid,
         StockAreaId = areaId, Condition = condition
     };
 
@@ -403,8 +399,8 @@ public sealed class StockUploadServiceTests
 
         var areas = response.Data!.Areas;
         Assert.Equal(["Binjai", "Medan"], areas.Select(area => area.AreaName));
-        Assert.Equal((1, 7m, 0m), (areas[0].ValidRows, areas[0].SaldoAkhirGood, areas[0].SaldoAkhirBad));
-        Assert.Equal((3, 15m, 2m), (areas[1].ValidRows, areas[1].SaldoAkhirGood, areas[1].SaldoAkhirBad));
+        Assert.Equal((1, 7m, 0m), (areas[0].ValidRows, areas[0].QtyPcsGood, areas[0].QtyPcsBad));
+        Assert.Equal((3, 15m, 2m), (areas[1].ValidRows, areas[1].QtyPcsGood, areas[1].QtyPcsBad));
     }
 
     [Fact]

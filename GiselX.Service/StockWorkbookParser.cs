@@ -59,6 +59,12 @@ public sealed class StockWorkbookParser
                     continue;
                 }
 
+                // A distributor leaves a quantity cell blank when the product carries no stock. Read that as
+                // zero so the product still reaches the snapshot - but only for a column the template maps,
+                // so an unmapped carton column stays "not given" rather than becoming a claimed zero.
+                if (value is null && StockCanonicalFieldCatalog.ZeroWhenBlankFields.Contains(column.CanonicalField))
+                    value = 0m;
+
                 Assign(row, column.CanonicalField, value);
             }
 
@@ -166,6 +172,18 @@ public sealed class StockWorkbookParser
                 row.SaldoAkhir.Value.ToString(), "SaldoAkhir must not be negative."));
         }
 
+        if (row.QtyCarton < 0)
+        {
+            errors.Add(Error(row.SourceRowNumber, StockCanonicalField.QtyCarton,
+                row.QtyCarton.Value.ToString(), "QtyCarton must not be negative."));
+        }
+
+        if (row.QtyPcs < 0)
+        {
+            errors.Add(Error(row.SourceRowNumber, StockCanonicalField.QtyPcs,
+                row.QtyPcs.Value.ToString(), "QtyPcs must not be negative."));
+        }
+
         if (row.PriceUnit < 0)
         {
             errors.Add(Error(row.SourceRowNumber, StockCanonicalField.PriceUnit,
@@ -207,6 +225,8 @@ public sealed class StockWorkbookParser
         StockCanonicalField.ExpiredDate => row.ExpiredDate,
         StockCanonicalField.Area => row.SourceAreaText,
         StockCanonicalField.Condition => row.SourceConditionText,
+        StockCanonicalField.QtyCarton => row.QtyCarton,
+        StockCanonicalField.QtyPcs => row.QtyPcs,
         _ => throw new ArgumentOutOfRangeException(nameof(field))
     };
 
@@ -230,6 +250,8 @@ public sealed class StockWorkbookParser
             case StockCanonicalField.ExpiredDate: row.ExpiredDate = (DateTime?)value; break;
             case StockCanonicalField.Area: row.SourceAreaText = (string?)value; break;
             case StockCanonicalField.Condition: row.SourceConditionText = (string?)value; break;
+            case StockCanonicalField.QtyCarton: row.QtyCarton = (decimal?)value; break;
+            case StockCanonicalField.QtyPcs: row.QtyPcs = (decimal?)value; break;
             default: throw new ArgumentOutOfRangeException(nameof(field));
         }
     }

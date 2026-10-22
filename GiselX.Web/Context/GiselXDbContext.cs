@@ -313,6 +313,8 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
             entity.Property(e => e.SaldoAwal).HasColumnType("decimal(18, 4)");
             entity.Property(e => e.SaldoMasukPO).HasColumnType("decimal(18, 4)");
             entity.Property(e => e.SaldoAkhir).HasColumnType("decimal(18, 4)");
+            entity.Property(e => e.QtyCarton).HasColumnType("decimal(18, 4)");
+            entity.Property(e => e.QtyPcs).HasColumnType("decimal(18, 4)");
             entity.Property(e => e.ExpiredDate).HasColumnType("datetime");
             entity.Property(e => e.SourceAreaText).HasMaxLength(200);
             entity.Property(e => e.SourceConditionText).HasMaxLength(200);
@@ -492,6 +494,8 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
             entity.Property(e => e.SaldoAwal).HasColumnType("decimal(18, 4)");
             entity.Property(e => e.SaldoMasukPO).HasColumnType("decimal(18, 4)");
             entity.Property(e => e.SaldoAkhir).HasColumnType("decimal(18, 4)");
+            entity.Property(e => e.QtyCarton).HasColumnType("decimal(18, 4)");
+            entity.Property(e => e.QtyPcs).HasColumnType("decimal(18, 4)");
             entity.Property(e => e.ExpiredDate).HasColumnType("datetime");
             entity.Property(e => e.CreatedDate).HasColumnType("datetime");
             entity.Property(e => e.StockDate).HasColumnType("date");

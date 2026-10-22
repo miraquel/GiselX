@@ -53,7 +53,7 @@ public sealed class AdministratorServiceScopeTests
 
         Assert.Equal(200, response.StatusCode);
         Assert.Equal(expectedCompanyId, repository.SummaryCompanyId);
-        Assert.Equal((2, 5, 90m), (response.Data!.DistributorCount, response.Data.RowCount, response.Data.SaldoAkhir));
+        Assert.Equal((2, 5, 90m), (response.Data!.DistributorCount, response.Data.RowCount, response.Data.QtyPcs));
     }
 
     [Theory]
@@ -172,7 +172,7 @@ public sealed class AdministratorServiceScopeTests
         public Task<StockSelectionSummary> SummarizeAsync(PagedListRequest request, int companyId, bool identity, CancellationToken token)
         {
             SummaryCompanyId = companyId;
-            return Task.FromResult(new StockSelectionSummary { DistributorCount = 2, RowCount = 5, SaldoAkhir = 90m });
+            return Task.FromResult(new StockSelectionSummary { DistributorCount = 2, RowCount = 5, QtyPcs = 90m });
         }
         public Task UploadAsync(IEnumerable<Stock> values, CancellationToken token) => throw new NotSupportedException();
         public Task<IEnumerable<Stock>> SelectByCustAsync(int id, CancellationToken token) => throw new NotSupportedException();

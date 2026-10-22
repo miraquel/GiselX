@@ -27,13 +27,15 @@ public sealed class SelectionSummaryScopeTests
     }
 
     [Fact]
-    public void Stock_summary_splits_saldo_akhir_by_condition()
+    public void Stock_summary_totals_cartons_and_pieces_and_their_bad_share()
     {
         var body = MethodBody(File.ReadAllText(FindFromSolutionRoot("GiselX.Repository", "StockRepository.cs")),
             "SummarizeAsync");
 
-        Assert.Contains("CASE WHEN s.Condition=0", body, StringComparison.Ordinal);
-        Assert.Contains("CASE WHEN s.Condition=1", body, StringComparison.Ordinal);
+        Assert.Contains("COALESCE(SUM(s.QtyCarton),0) AS QtyCarton", body, StringComparison.Ordinal);
+        Assert.Contains("COALESCE(SUM(s.QtyPcs),0) AS QtyPcs", body, StringComparison.Ordinal);
+        Assert.Contains("CASE WHEN s.Condition=1 THEN s.QtyCarton END", body, StringComparison.Ordinal);
+        Assert.Contains("CASE WHEN s.Condition=1 THEN s.QtyPcs END", body, StringComparison.Ordinal);
     }
 
     [Fact]

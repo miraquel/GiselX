@@ -56,12 +56,10 @@
                     <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Distributors</small><div class="fs-5 fw-semibold" id="stockSummaryDistributors">—</div></div></div>
                 }
                 <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Rows</small><div class="fs-5 fw-semibold" id="stockSummaryRows">—</div></div></div>
-                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Saldo Awal</small><div class="fs-5 fw-semibold" id="stockSummaryAwal">—</div></div></div>
-                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Masuk PO</small><div class="fs-5 fw-semibold" id="stockSummaryMasuk">—</div></div></div>
-                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Saldo Akhir</small><div class="fs-5 fw-semibold" id="stockSummaryAkhir">—</div></div></div>
-                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Saldo Akhir Good</small><div class="fs-5 fw-semibold" id="stockSummaryAkhirGood">—</div></div></div>
-                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Saldo Akhir Bad</small><div class="fs-5 fw-semibold" id="stockSummaryAkhirBad">—</div></div></div>
-                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Stock value</small><div class="fs-5 fw-semibold" id="stockSummaryValue">—</div></div></div>
+                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Qty Karton</small><div class="fs-5 fw-semibold" id="stockSummaryCarton">—</div></div></div>
+                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Qty Pcs</small><div class="fs-5 fw-semibold" id="stockSummaryPcs">—</div></div></div>
+                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Karton Bad</small><div class="fs-5 fw-semibold" id="stockSummaryCartonBad">—</div></div></div>
+                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Pcs Bad</small><div class="fs-5 fw-semibold" id="stockSummaryPcsBad">—</div></div></div>
             </div>
         </div>
     </div>
@@ -71,13 +69,13 @@
             <th>Area</th><th>Condition</th>
             <th>Product ID</th><th>Product Name</th><th>Packaging</th><th>Pcs/Ctn</th><th>Netto</th><th>Unit</th>
             <th>Smallest Unit</th><th>Qty per Smallest Unit</th><th>Price Unit</th>
-            <th>Saldo Awal</th><th>Saldo Masuk PO</th><th>Saldo Akhir</th><th>Batch No</th><th>Expired Date</th><th>Stock Date</th>
+            <th>Qty Karton</th><th>Qty Pcs</th><th>Batch No</th><th>Expired Date</th><th>Stock Date</th>
         </tr></thead>
         <tfoot><tr>
             @if (User.IsInRole("Administrator")) { <th><input id="stockDistributorFilter" class="form-control form-control-sm" placeholder="Filter distributor" /></th> }
             <th><input id="stockAreaFilter" class="form-control form-control-sm" placeholder="Filter area" /></th>
             <th><select id="stockConditionFilter" class="form-select form-select-sm"><option value="">All</option><option value="Good">Good</option><option value="Bad">Bad</option></select></th>
-            @for (var index = 0; index < 15; index++) { <th></th> }
+            @for (var index = 0; index < 14; index++) { <th></th> }
         </tr></tfoot>
         </table>
     </div>
@@ -107,9 +105,8 @@
             <div class="col-lg-6">
                 <h6 class="mb-3">Stock totals from valid rows</h6>
                 <div class="table-responsive"><table class="table table-sm table-bordered mb-0"><tbody>
-                    <tr><th>Saldo Awal</th><td class="text-end fw-semibold" id="totalSaldoAwal">0</td></tr>
-                    <tr><th>Saldo Masuk PO</th><td class="text-end fw-semibold" id="totalSaldoMasukPo">0</td></tr>
-                    <tr><th>Saldo Akhir</th><td class="text-end fw-semibold" id="totalSaldoAkhir">0</td></tr>
+                    <tr><th>Qty Karton</th><td class="text-end fw-semibold" id="totalQtyCarton">0</td></tr>
+                    <tr><th>Qty Pcs</th><td class="text-end fw-semibold" id="totalQtyPcs">0</td></tr>
                 </tbody></table></div>
                 <div class="form-text mt-2">Totals include only rows that will be published.</div>
             </div>
@@ -117,7 +114,7 @@
         <hr class="my-4" />
         <h6>Areas</h6>
         <div class="table-responsive mb-2"><table class="table table-sm table-bordered mb-0">
-            <thead><tr><th>Area</th><th class="text-end">Valid rows</th><th class="text-end">Good Saldo Akhir</th><th class="text-end">Bad Saldo Akhir</th><th>Replaces</th></tr></thead>
+            <thead><tr><th>Area</th><th class="text-end">Valid rows</th><th class="text-end">Good (Karton / Pcs)</th><th class="text-end">Bad (Karton / Pcs)</th><th>Replaces</th></tr></thead>
             <tbody id="areaBreakdown"></tbody>
         </table></div>
         <div class="small text-muted mb-4" id="untouchedAreas"></div>
@@ -160,12 +157,10 @@ $(function () {
        if (!response.ok || !data) throw new Error(payload.message || 'Summary unavailable');
        $('#stockSummaryDistributors').text(numberFormatter.format(data.distributorCount || 0));
        $('#stockSummaryRows').text(numberFormatter.format(data.rowCount || 0));
-       $('#stockSummaryAwal').text(numberFormatter.format(data.saldoAwal || 0));
-       $('#stockSummaryMasuk').text(numberFormatter.format(data.saldoMasukPO || 0));
-       $('#stockSummaryAkhir').text(numberFormatter.format(data.saldoAkhir || 0));
-       $('#stockSummaryAkhirGood').text(numberFormatter.format(data.saldoAkhirGood || 0));
-       $('#stockSummaryAkhirBad').text(numberFormatter.format(data.saldoAkhirBad || 0));
-       $('#stockSummaryValue').text(numberFormatter.format(data.stockValue || 0));
+       $('#stockSummaryCarton').text(numberFormatter.format(data.qtyCarton || 0));
+       $('#stockSummaryPcs').text(numberFormatter.format(data.qtyPcs || 0));
+       $('#stockSummaryCartonBad').text(numberFormatter.format(data.qtyCartonBad || 0));
+       $('#stockSummaryPcsBad').text(numberFormatter.format(data.qtyPcsBad || 0));
      } catch { $('#stockSelectionSummary .fw-semibold').text('Unavailable'); }
  }
  // Browsed by month like Sellout: the table stays hidden and unloaded until a year and a month are
@@ -218,8 +213,10 @@ $(function () {
     {data:'areaName',defaultContent:''},{data:'condition'},
     {data:'productId'},{data:'productName'},{data:'productPackaging'},{data:'productPcsInCtn'},
     {data:'productNetto'},{data:'productUnit'},{data:'smallestUnit'},{data:'smallestUnitQty'},
-    {data:'priceUnit'},{data:'saldoAwal'},{data:'saldoMasukPO'},
-    {data:'saldoAkhir'},{data:'batchNumber'},
+    {data:'priceUnit'},
+    {data:'qtyCarton',render:d=>d==null?'':numberFormatter.format(d)},
+    {data:'qtyPcs',render:d=>d==null?'':numberFormatter.format(d)},
+    {data:'batchNumber'},
     {data:'expiredDate',render:d=>d&&d.substring(0,10)!=='1753-01-01'?moment(d).format('DD MMM YYYY'):''},
     {data:'stockDate',render:d=>d?moment(d).format('DD MMM YYYY'):''}
    ]
@@ -275,15 +272,14 @@ $(function () {
      areaRows.append($('<tr>')
        .append($('<td>').text(a.areaName||''))
        .append($('<td class="text-end">').text(numberFormatter.format(a.validRows||0)))
-       .append($('<td class="text-end">').text(numberFormatter.format(a.saldoAkhirGood||0)))
-       .append($('<td class="text-end">').text(numberFormatter.format(a.saldoAkhirBad||0)))
+       .append($('<td class="text-end">').text(`${numberFormatter.format(a.qtyCartonGood||0)} / ${numberFormatter.format(a.qtyPcsGood||0)}`))
+       .append($('<td class="text-end">').text(`${numberFormatter.format(a.qtyCartonBad||0)} / ${numberFormatter.format(a.qtyPcsBad||0)}`))
        .append(replaces));
    });
    if(!areaRows.children().length) areaRows.append($('<tr>').append($('<td colspan="5" class="text-muted">').text('No area information is available.')));
    $('#untouchedAreas').text((preflight.untouchedAreaNames||[]).length?`Not affected: ${preflight.untouchedAreaNames.join(', ')}`:'');
-   $('#totalSaldoAwal').text(numberFormatter.format(preflight.totalSaldoAwal || 0));
-   $('#totalSaldoMasukPo').text(numberFormatter.format(preflight.totalSaldoMasukPo || 0));
-   $('#totalSaldoAkhir').text(numberFormatter.format(preflight.totalSaldoAkhir || 0));
+   $('#totalQtyCarton').text(numberFormatter.format(preflight.totalQtyCarton || 0));
+   $('#totalQtyPcs').text(numberFormatter.format(preflight.totalQtyPcs || 0));
    const details=$('#validationDetails').empty(); (preflight.errors||[]).forEach(e=>details.append($('<li>').text(e)));
    (preflight.rowErrors||[]).forEach(e=>details.append($('<li>').text(`${e.worksheetName?e.worksheetName+' — ':''}Row ${e.sourceRowNumber}${e.field!==null&&e.field!==undefined?' — '+e.field:''}: ${e.reason}${e.rejectedValue?` (cell value: "${e.rejectedValue}")`:''}`)));
    if(!details.children().length) details.append($('<li>').text('All rows are valid.'));

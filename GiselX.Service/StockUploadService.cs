@@ -248,7 +248,7 @@ public sealed class StockUploadService(
         ProductPcsInCtn = row.ProductPcsInCtn, ProductNetto = row.ProductNetto, ProductUnit = row.ProductUnit,
         SmallestUnit = row.SmallestUnit, SmallestUnitQty = row.SmallestUnitQty,
         PriceUnit = row.PriceUnit, SaldoAwal = row.SaldoAwal, SaldoMasukPO = row.SaldoMasukPO,
-        SaldoAkhir = row.SaldoAkhir,
+        SaldoAkhir = row.SaldoAkhir, QtyCarton = row.QtyCarton, QtyPcs = row.QtyPcs,
         BatchNumber = row.BatchNumber, ExpiredDate = row.ExpiredDate, IsValid = row.IsValid,
         ValidationErrorsJson = row.ValidationErrorsJson
     };
@@ -273,8 +273,10 @@ public sealed class StockUploadService(
             {
                 AreaName = NameOf(group.Key),
                 ValidRows = group.Count(),
-                SaldoAkhirGood = group.Where(row => row.Condition == StockCondition.Good).Sum(row => row.SaldoAkhir ?? 0m),
-                SaldoAkhirBad = group.Where(row => row.Condition == StockCondition.Bad).Sum(row => row.SaldoAkhir ?? 0m),
+                QtyCartonGood = group.Where(row => row.Condition == StockCondition.Good).Sum(row => row.QtyCarton ?? 0m),
+                QtyPcsGood = group.Where(row => row.Condition == StockCondition.Good).Sum(row => row.QtyPcs ?? 0m),
+                QtyCartonBad = group.Where(row => row.Condition == StockCondition.Bad).Sum(row => row.QtyCarton ?? 0m),
+                QtyPcsBad = group.Where(row => row.Condition == StockCondition.Bad).Sum(row => row.QtyPcs ?? 0m),
                 Replaces = published.Where(entry => entry.StockAreaId == group.Key).ToList()
             })
             // "(no area)" sorts first, the rest alphabetically.
@@ -293,9 +295,8 @@ public sealed class StockUploadService(
         FileSha256 = fileSha256,
         MappingName = DescribeMappings(analysis), StockDate = stockDate, TotalRows = analysis.Rows.Count,
         ValidRows = analysis.ValidRows, InvalidRows = analysis.InvalidRows,
-        TotalSaldoAwal = analysis.Rows.Where(row => row.IsValid).Sum(row => row.SaldoAwal ?? 0m),
-        TotalSaldoMasukPo = analysis.Rows.Where(row => row.IsValid).Sum(row => row.SaldoMasukPO ?? 0m),
-        TotalSaldoAkhir = analysis.Rows.Where(row => row.IsValid).Sum(row => row.SaldoAkhir ?? 0m),
+        TotalQtyCarton = analysis.Rows.Where(row => row.IsValid).Sum(row => row.QtyCarton ?? 0m),
+        TotalQtyPcs = analysis.Rows.Where(row => row.IsValid).Sum(row => row.QtyPcs ?? 0m),
         Sheets = analysis.Sheets, IgnoredWorksheetNames = analysis.IgnoredWorksheetNames,
         IgnoredSummaryRowNumbers = analysis.IgnoredSummaryRowNumbers,
         RowErrors = analysis.RowErrors, Errors = analysis.Errors

@@ -53,6 +53,11 @@ Script terbaru untuk go-live November 2026:
 1. `20261021142701_AddStockAreaAndCondition.sql`
 2. `20261022020222_SelloutDateRangeReplacement.sql`
 3. `20261022062547_AddCompanyLocation.sql`
+4. `20261022071507_AddStockQuantity.sql`
+
+Setelah script 4, setiap template Stock yang hanya memetakan Saldo Akhir harus dibuka di Admin →
+Stock Template Mappings dan dipetakan ulang ke **QtyCarton** dan/atau **QtyPcs**. Template tanpa
+kolom qty tidak bisa disimpan lagi.
 
 ## 4. Setelah setiap perubahan skema
 

@@ -8,8 +8,35 @@ public static class StockCanonicalFieldCatalog
         new HashSet<StockCanonicalField>
         {
             StockCanonicalField.ProductId,
-            StockCanonicalField.ProductName,
-            StockCanonicalField.SaldoAkhir
+            StockCanonicalField.ProductName
+        };
+
+    /// <summary>
+    /// The stock quantity: cartons, pieces, or both. Distributors' files carry it as one column or as
+    /// two, so a template must map at least one of these rather than each of them.
+    /// </summary>
+    public static IReadOnlySet<StockCanonicalField> QuantityFields { get; } =
+        new HashSet<StockCanonicalField> { StockCanonicalField.QtyCarton, StockCanonicalField.QtyPcs };
+
+    /// <summary>
+    /// Opening balance, incoming PO and closing balance. Still read and stored for templates that map
+    /// them, but no longer offered: PT. GMK reads the quantity in cartons and pieces instead.
+    /// </summary>
+    public static IReadOnlySet<StockCanonicalField> LegacyFields { get; } =
+        new HashSet<StockCanonicalField>
+        {
+            StockCanonicalField.SaldoAwal, StockCanonicalField.SaldoMasukPO, StockCanonicalField.SaldoAkhir
+        };
+
+    /// <summary>The fields the template editor offers, in enum order.</summary>
+    public static IReadOnlyList<StockCanonicalField> OfferedFields { get; } =
+        Enum.GetValues<StockCanonicalField>().Where(field => !LegacyFields.Contains(field)).ToList();
+
+    /// <summary>Quantity cells read as zero when blank: a distributor leaves the cell empty for no stock.</summary>
+    public static IReadOnlySet<StockCanonicalField> ZeroWhenBlankFields { get; } =
+        new HashSet<StockCanonicalField>
+        {
+            StockCanonicalField.QtyCarton, StockCanonicalField.QtyPcs, StockCanonicalField.SaldoAkhir
         };
 
     public static Type GetValueType(StockCanonicalField field) => field switch
@@ -21,7 +48,9 @@ public static class StockCanonicalFieldCatalog
         StockCanonicalField.SmallestUnitQty or
         StockCanonicalField.SaldoAwal or
         StockCanonicalField.SaldoMasukPO or
-        StockCanonicalField.SaldoAkhir => typeof(decimal),
+        StockCanonicalField.SaldoAkhir or
+        StockCanonicalField.QtyCarton or
+        StockCanonicalField.QtyPcs => typeof(decimal),
         _ => typeof(string)
     };
 

@@ -10,16 +10,16 @@ namespace GiselX.Tests;
 public sealed class StockTemplateMappingServiceTests
 {
     [Fact]
-    public async Task SaveAsync_rejects_missing_saldo_akhir_mapping()
+    public async Task SaveAsync_rejects_a_mapping_without_any_quantity_column()
     {
         var dto = ValidMapping();
-        dto.Columns.RemoveAll(column => column.CanonicalField == StockCanonicalField.SaldoAkhir);
+        dto.Columns.RemoveAll(column => column.CanonicalField == StockCanonicalField.QtyPcs);
         var (service, repository, transaction) = CreateService();
 
         var response = await service.SaveAsync(dto, "admin", CancellationToken.None);
 
         Assert.False(response.IsSuccess);
-        Assert.Contains(response.Errors, error => error.Contains(nameof(StockCanonicalField.SaldoAkhir)));
+        Assert.Contains("Map at least one stock quantity column: QtyCarton or QtyPcs.", response.Errors);
         Assert.Empty(repository.Inserted);
         Assert.False(transaction.CommitCalled);
     }
@@ -207,7 +207,7 @@ public sealed class StockTemplateMappingServiceTests
         [
             Column(1, StockCanonicalField.ProductId),
             Column(2, StockCanonicalField.ProductName),
-            Column(3, StockCanonicalField.SaldoAkhir)
+            Column(3, StockCanonicalField.QtyPcs)
         ]
     };
 

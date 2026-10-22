@@ -146,6 +146,7 @@ public class StockRepository : IStockRepository
             nameof(Stock.ProductPcsInCtn), nameof(Stock.ProductNetto), nameof(Stock.ProductUnit),
             nameof(Stock.SmallestUnit), nameof(Stock.SmallestUnitQty), nameof(Stock.PriceUnit),
             nameof(Stock.SaldoAwal), nameof(Stock.SaldoMasukPO), nameof(Stock.SaldoAkhir),
+            nameof(Stock.QtyCarton), nameof(Stock.QtyPcs),
             nameof(Stock.BatchNumber), nameof(Stock.ExpiredDate), nameof(Stock.StockDate),
             nameof(Stock.CompanyName), nameof(Stock.AreaName), nameof(Stock.Condition)
         };
@@ -238,7 +239,8 @@ public class StockRepository : IStockRepository
             nameof(Stock.ProductPcsInCtn), nameof(Stock.ProductNetto), nameof(Stock.ProductUnit),
             nameof(Stock.SmallestUnit), nameof(Stock.SmallestUnitQty),
             nameof(Stock.PriceUnit), nameof(Stock.SaldoAwal), nameof(Stock.SaldoMasukPO),
-            nameof(Stock.SaldoAkhir), nameof(Stock.BatchNumber), nameof(Stock.ExpiredDate),
+            nameof(Stock.SaldoAkhir), nameof(Stock.QtyCarton), nameof(Stock.QtyPcs),
+            nameof(Stock.BatchNumber), nameof(Stock.ExpiredDate),
             nameof(Stock.StockDate), nameof(Stock.CompanyName), nameof(Stock.AreaName), nameof(Stock.Condition)
         };
         foreach (var filter in request.Filters.Where(filter => allowed.Contains(filter.Key)))
@@ -285,12 +287,10 @@ public class StockRepository : IStockRepository
             {rankedBatches}
             SELECT COUNT(DISTINCT s.CompanyId) AS DistributorCount,
                    COUNT(*) AS [RowCount],
-                   COALESCE(SUM(s.SaldoAwal),0) AS SaldoAwal,
-                   COALESCE(SUM(s.SaldoMasukPO),0) AS SaldoMasukPO,
-                   COALESCE(SUM(s.SaldoAkhir),0) AS SaldoAkhir,
-                   COALESCE(SUM(CASE WHEN s.Condition=0 THEN s.SaldoAkhir END),0) AS SaldoAkhirGood,
-                   COALESCE(SUM(CASE WHEN s.Condition=1 THEN s.SaldoAkhir END),0) AS SaldoAkhirBad,
-                   COALESCE(SUM(COALESCE(s.SaldoAkhir,0) * COALESCE(s.PriceUnit,0)),0) AS StockValue
+                   COALESCE(SUM(s.QtyCarton),0) AS QtyCarton,
+                   COALESCE(SUM(s.QtyPcs),0) AS QtyPcs,
+                   COALESCE(SUM(CASE WHEN s.Condition=1 THEN s.QtyCarton END),0) AS QtyCartonBad,
+                   COALESCE(SUM(CASE WHEN s.Condition=1 THEN s.QtyPcs END),0) AS QtyPcsBad
             FROM Stock s
             INNER JOIN RankedBatches rb ON rb.Id=s.StockUploadBatchId AND rb.AreaKey=COALESCE(s.StockAreaId,0) AND rb.BatchRank=1
             INNER JOIN Company c ON c.Id=s.CompanyId
@@ -384,6 +384,8 @@ public class StockRepository : IStockRepository
             s.SaldoAwal,
             s.SaldoMasukPO,
             s.SaldoAkhir,
+            s.QtyCarton,
+            s.QtyPcs,
             s.BatchNumber,
             s.ExpiredDate,
             s.CompanyId,

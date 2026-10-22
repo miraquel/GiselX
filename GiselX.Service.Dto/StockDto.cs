@@ -29,6 +29,10 @@ public class StockDto
     public decimal SaldoMasukPO { get; set; }
     [Display(Name = "Saldo Akhir")]
     public decimal SaldoAkhir { get; set; }
+    [Display(Name = "Qty Karton")]
+    public decimal? QtyCarton { get; set; }
+    [Display(Name = "Qty Pcs")]
+    public decimal? QtyPcs { get; set; }
     [Display(Name = "Batch No")]
     public string BatchNumber { get; set; } = string.Empty;
     [Display(Name = "Expired Date")]
