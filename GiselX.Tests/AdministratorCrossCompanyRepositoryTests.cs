@@ -24,7 +24,7 @@ public sealed class AdministratorCrossCompanyRepositoryTests
     }
 
     [Fact]
-    public async Task Sellout_select_uses_each_distributors_latest_upload_for_administrator_scope()
+    public async Task Sellout_select_reads_every_distributors_rows_for_administrator_scope()
     {
         var connection = new RecordingDbConnection();
         var repository = new SalesTransactionRepository(connection, null!);
@@ -33,7 +33,7 @@ public sealed class AdministratorCrossCompanyRepositoryTests
             repository.SelectAsync(new PagedListRequest(), 0, false, CancellationToken.None));
 
         Assert.Equal(CommandType.Text, connection.LastCommandType);
-        Assert.Contains("PARTITION BY CompanyId", connection.LastCommandText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("PARTITION BY", connection.LastCommandText, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("JOIN Company", connection.LastCommandText, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("CompanyName", connection.LastCommandText, StringComparison.OrdinalIgnoreCase);
     }

@@ -91,12 +91,11 @@ public sealed class SelectionSummaryScopeTests
     }
 
     [Fact]
-    public void Sellout_summary_keeps_only_each_companys_latest_upload_in_the_period_like_the_grid()
+    public void Sellout_summary_keeps_every_row_of_the_period_like_the_grid()
     {
         var sql = Normalize(SalesSelectionSummaryQuery.Build(Request(("Year", "2026"), ("Month", "10")), 7, true).Sql);
 
-        Assert.Contains("MAX(st.CreatedDate) OVER (PARTITION BY CompanyId) AS LatestCreatedDate", sql, StringComparison.Ordinal);
-        Assert.Contains("WHERE st.CreatedDate=st.LatestCreatedDate", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("LatestCreatedDate", sql, StringComparison.Ordinal);
         Assert.Contains("YEAR(st.InvoiceDate)=@Year AND MONTH(st.InvoiceDate)=@Month", sql, StringComparison.Ordinal);
     }
 

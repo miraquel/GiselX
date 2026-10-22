@@ -31,6 +31,20 @@ public class SelloutPersistenceModelTests
     }
 
     [Fact]
+    public void Batches_of_one_week_are_indexed_but_not_unique()
+    {
+        using var db = CreateContext();
+        var batches = db.Model.FindEntityType(typeof(SelloutUploadBatch))!;
+
+        var index = Assert.Single(batches.GetIndexes(), candidate =>
+            candidate.Properties.Select(property => property.Name)
+                .SequenceEqual([nameof(SelloutUploadBatch.CompanyId), nameof(SelloutUploadBatch.ReportingWeekStart)]));
+
+        Assert.False(index.IsUnique);
+        Assert.Null(index.GetFilter());
+    }
+
+    [Fact]
     public void MappingColumns_AllowSourceReuseButRemainUniqueByCanonicalField()
     {
         using var db = CreateContext();
@@ -60,19 +74,6 @@ public class SelloutPersistenceModelTests
 
         Assert.False(sourceIndex.IsUnique);
         Assert.True(canonicalIndex.IsUnique);
-    }
-
-    [Fact]
-    public void CompletedBatchIndex_IsUniqueAndFiltered()
-    {
-        using var db = CreateContext();
-        var batch = db.Model.FindEntityType(typeof(SelloutUploadBatch))!;
-        var index = Assert.Single(batch.GetIndexes(), candidate => candidate.IsUnique);
-
-        Assert.Equal("[Status] = 2", index.GetFilter());
-        Assert.Equal(
-            [nameof(SelloutUploadBatch.CompanyId), nameof(SelloutUploadBatch.ReportingWeekStart)],
-            index.Properties.Select(property => property.Name));
     }
 
     [Fact]

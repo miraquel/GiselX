@@ -330,9 +330,9 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
 
         modelBuilder.Entity<SelloutUploadBatch>(entity =>
         {
-            entity.HasIndex(e => new { e.CompanyId, e.ReportingWeekStart })
-                .IsUnique()
-                .HasFilter("[Status] = 2");
+            // Not unique: a date-range upload re-publishes the weeks it touches, and the superseded
+            // batch of the same week stays as audit history, so a week can have several batches.
+            entity.HasIndex(e => new { e.CompanyId, e.ReportingWeekStart });
             entity.Property(e => e.ReportingWeekStart).HasColumnType("date");
             entity.Property(e => e.OriginalFileName).HasMaxLength(260);
             entity.Property(e => e.FileSha256).HasMaxLength(64).IsFixedLength();

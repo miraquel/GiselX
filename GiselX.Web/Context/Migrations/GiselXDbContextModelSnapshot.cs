@@ -928,9 +928,7 @@ namespace GiselX.Web.Context.Migrations
 
                     b.HasIndex("SelloutUploadGroupId");
 
-                    b.HasIndex("CompanyId", "ReportingWeekStart")
-                        .IsUnique()
-                        .HasFilter("[Status] = 2");
+                    b.HasIndex("CompanyId", "ReportingWeekStart");
 
                     b.ToTable("SelloutUploadBatch", t =>
                         {

@@ -79,14 +79,6 @@ BEGIN
       -- Period
       AND (@Year        IS NULL OR YEAR([InvoiceDate])  = @Year)
       AND (@Month       IS NULL OR MONTH([InvoiceDate]) = @Month)
-      -- Latest upload batch within the period
-      AND [CreatedDate] = (
-          SELECT MAX([CreatedDate])
-          FROM [dbo].[SalesTransaction]
-          WHERE [CompanyId] = @CompanyId
-            AND (@Year  IS NULL OR YEAR([InvoiceDate])  = @Year)
-            AND (@Month IS NULL OR MONTH([InvoiceDate]) = @Month)
-      )
       AND (@SearchTerm IS NULL OR
            CASE WHEN @UseDistributorIdentity=1 THEN COALESCE(NULLIF([DistributorProductId],''),[ProductId]) ELSE [ProductId] END LIKE @SearchTerm OR
            CASE WHEN @UseDistributorIdentity=1 THEN COALESCE(NULLIF([DistributorProductName],''),[ProductName]) ELSE [ProductName] END LIKE @SearchTerm)
@@ -231,13 +223,6 @@ BEGIN
     WHERE [CompanyId] = @CompanyId
       AND (@Year        IS NULL OR YEAR([InvoiceDate])  = @Year)
       AND (@Month       IS NULL OR MONTH([InvoiceDate]) = @Month)
-      AND [CreatedDate] = (
-          SELECT MAX([CreatedDate])
-          FROM [dbo].[SalesTransaction]
-          WHERE [CompanyId] = @CompanyId
-            AND (@Year  IS NULL OR YEAR([InvoiceDate])  = @Year)
-            AND (@Month IS NULL OR MONTH([InvoiceDate]) = @Month)
-      )
       AND (@SearchTerm IS NULL OR
            CASE WHEN @UseDistributorIdentity=1 THEN COALESCE(NULLIF([DistributorProductId],''),[ProductId]) ELSE [ProductId] END LIKE @SearchTerm OR
            CASE WHEN @UseDistributorIdentity=1 THEN COALESCE(NULLIF([DistributorProductName],''),[ProductName]) ELSE [ProductName] END LIKE @SearchTerm)
