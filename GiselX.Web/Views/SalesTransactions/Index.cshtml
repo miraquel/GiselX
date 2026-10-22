@@ -276,7 +276,7 @@
 
                 const message = document.getElementById('uploadPreviewMessage');
                 message.textContent = data.isMultiWeek
-                    ? 'This workbook affects multiple reporting weeks. Confirming will replace every week listed below as one all-or-nothing upload.'
+                    ? 'This workbook spans several reporting weeks. Confirming replaces your published sales for the dates shown under What this replaces.'
                     : 'Confirm the reporting week derived from the workbook invoice dates.';
                 message.className = `alert ${errors.length ? 'alert-danger' : data.isMultiWeek ? 'alert-warning' : 'alert-info'}`;
 

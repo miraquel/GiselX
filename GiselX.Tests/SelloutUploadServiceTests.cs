@@ -360,7 +360,8 @@ public sealed class SelloutUploadServiceTests
 
     private static (SelloutUploadService Service, FakeUploadRepository Repository, FakeTransaction Transaction)
         CreateService(SelloutWorkbookAnalysisDto analysis, decimal maxInvalidRowPercentage = 5m,
-            IUploadNotificationDispatcher? notifications = null, IUploadArchive? archive = null)
+            IUploadNotificationDispatcher? notifications = null, IUploadArchive? archive = null,
+            int maxReplacementDays = 45)
     {
         var repository = new FakeUploadRepository();
         var transaction = new FakeTransaction();
@@ -370,7 +371,8 @@ public sealed class SelloutUploadServiceTests
             transaction,
             Options.Create(new SelloutUploadOptions
             {
-                MaxFileSizeBytes = 1024, MaxInvalidRowPercentage = maxInvalidRowPercentage
+                MaxFileSizeBytes = 1024, MaxInvalidRowPercentage = maxInvalidRowPercentage,
+                MaxReplacementDays = maxReplacementDays
             }),
             notifications ?? new RecordingUploadNotificationDispatcher(),
             archive ?? new RecordingUploadArchive());
@@ -467,6 +469,85 @@ public sealed class SelloutUploadServiceTests
         Assert.Empty(repository.Batches);
         Assert.Empty(repository.StagingRows);
         Assert.False(transaction.CommitCalled);
+    }
+
+    private static SelloutWorkbookAnalysisDto SpanningAnalysis(DateTime first, DateTime last) =>
+        AnalysisOf([(first, true), (last, true)]);
+
+    [Fact]
+    public async Task Preflight_reports_a_span_beyond_the_limit_as_an_error()
+    {
+        // A year typo on one row stretches the range across the whole year; publishing would delete it all.
+        var (service, repository, _) = CreateService(
+            SpanningAnalysis(new DateTime(2025, 1, 6), new DateTime(2026, 10, 14)));
+
+        var response = await service.PreflightAsync(Stream(), "sales.xlsx", 9, CancellationToken.None);
+
+        Assert.False(response.IsSuccess);
+        Assert.Contains(
+            "The invoice dates in this workbook run from 06 Jan 2025 to 14 Oct 2026 (647 days), more than the "
+            + "45 days one upload may replace. Check the file for a mistyped invoice date.",
+            response.Errors);
+        Assert.Empty(repository.RangeReads);
+    }
+
+    [Fact]
+    public async Task UploadAsync_refuses_a_span_beyond_the_limit_and_publishes_nothing()
+    {
+        var notifications = new RecordingUploadNotificationDispatcher();
+        var (service, repository, transaction) = CreateService(
+            SpanningAnalysis(new DateTime(2025, 1, 6), new DateTime(2026, 10, 14)), notifications: notifications);
+
+        var response = await service.UploadAsync(Stream(), "sales.xlsx", 9, multiWeekConfirmed: true,
+            "budi", ConfirmedSha(), CancellationToken.None);
+
+        Assert.False(response.IsSuccess);
+        Assert.Contains("647 days", response.Message);
+        Assert.Empty(repository.Batches);
+        Assert.Empty(repository.StagingRows);
+        Assert.Null(repository.PromotedGroupId);
+        Assert.Equal(1, transaction.CommitCount);
+        Assert.Empty(notifications.Enqueued);
+    }
+
+    [Fact]
+    public async Task A_span_of_exactly_the_limit_is_allowed()
+    {
+        // 1 Oct to 15 Nov inclusive is 46 days; 1 Oct to 14 Nov is exactly 45.
+        var (service, _, _) = CreateService(
+            SpanningAnalysis(new DateTime(2026, 10, 1), new DateTime(2026, 11, 14)));
+
+        var preflight = await service.PreflightAsync(Stream(), "sales.xlsx", 9, CancellationToken.None);
+        var upload = await service.UploadAsync(Stream(), "sales.xlsx", 9, multiWeekConfirmed: true,
+            "budi", ConfirmedSha(), CancellationToken.None);
+
+        Assert.True(preflight.IsSuccess);
+        Assert.True(upload.IsSuccess);
+    }
+
+    [Fact]
+    public async Task A_span_one_day_over_the_limit_is_refused()
+    {
+        var (service, _, _) = CreateService(
+            SpanningAnalysis(new DateTime(2026, 10, 1), new DateTime(2026, 11, 15)));
+
+        var preflight = await service.PreflightAsync(Stream(), "sales.xlsx", 9, CancellationToken.None);
+
+        Assert.False(preflight.IsSuccess);
+    }
+
+    [Fact]
+    public async Task A_limit_of_zero_disables_the_span_check()
+    {
+        var (service, _, _) = CreateService(
+            SpanningAnalysis(new DateTime(2025, 1, 6), new DateTime(2026, 10, 14)), maxReplacementDays: 0);
+
+        var preflight = await service.PreflightAsync(Stream(), "sales.xlsx", 9, CancellationToken.None);
+        var upload = await service.UploadAsync(Stream(), "sales.xlsx", 9, multiWeekConfirmed: true,
+            "budi", ConfirmedSha(), CancellationToken.None);
+
+        Assert.True(preflight.IsSuccess);
+        Assert.True(upload.IsSuccess);
     }
 
     private static MemoryStream Stream() => new([1, 2, 3, 4]);

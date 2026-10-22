@@ -43,7 +43,13 @@ public sealed class SelloutUploadService(
         var analysis = await analysisService.AnalyzeAsync(contentResponse.Content!, companyId, cancellationToken);
         var data = ToPreflight(analysis, contentResponse.SourceSha256!);
         var errors = CollectErrors(analysis);
-        if (errors.Count == 0) data.Replacement = await DescribeReplacementAsync(analysis, companyId, cancellationToken);
+        if (errors.Count == 0)
+        {
+            // The same refusal the upload applies, so the preview never offers a Confirm that would fail.
+            var spanRefusal = DescribeSpanRefusal(analysis);
+            if (spanRefusal is not null) errors.Add(spanRefusal);
+            else data.Replacement = await DescribeReplacementAsync(analysis, companyId, cancellationToken);
+        }
         return new ServiceResponse<SelloutUploadPreflightDto>
         {
             Data = data,
@@ -170,8 +176,8 @@ public sealed class SelloutUploadService(
             ? SelloutUploadBatchStatus.CompletedWithWarnings
             : SelloutUploadBatchStatus.Completed;
         var message = invalidRows > 0
-            ? $"Sellout data was replaced for every reporting week in the workbook, with {invalidRows:N0} invalid row(s) excluded."
-            : "Sellout data was replaced successfully for every reporting week in the workbook.";
+            ? $"Sellout upload published, with {invalidRows:N0} invalid row(s) excluded."
+            : "Sellout upload published.";
         return new ServiceResponse<SelloutUploadResultDto>
         {
             Data = new SelloutUploadResultDto
@@ -235,7 +241,7 @@ public sealed class SelloutUploadService(
     /// Why this workbook cannot be published at all, or null when its valid rows should go through. A few
     /// unreadable cells no longer reject a month of sellout, but a workbook whose invalid share reaches
     /// the configured limit is a mapping or export problem rather than a few bad cells, and publishing
-    /// part of it would quietly replace whole reporting weeks with less than they should hold.
+    /// part of it would quietly replace published dates with less than they should hold.
     /// </summary>
     private string? DescribeRefusal(SelloutWorkbookAnalysisDto analysis, int totalRows, int validRows,
         int invalidRows)
@@ -244,14 +250,39 @@ public sealed class SelloutUploadService(
         if (analysis.Mapping is null) return "No active distributor mapping matches this workbook.";
         if (totalRows == 0) return "The workbook contains no data rows.";
         if (validRows == 0) return $"All {totalRows:N0} row(s) failed validation. No data was published.";
-        if (invalidRows == 0) return null;
+        if (invalidRows > 0)
+        {
+            var limit = options.Value.MaxInvalidRowPercentage;
+            var share = invalidRows * 100m / totalRows;
+            if (share >= limit)
+                return $"{invalidRows:N0} of {totalRows:N0} row(s) ({share:0.#}%) failed validation, which is at or "
+                       + $"above the {limit:0.#}% limit. No data was published.";
+        }
 
-        var limit = options.Value.MaxInvalidRowPercentage;
-        var share = invalidRows * 100m / totalRows;
-        return share < limit
-            ? null
-            : $"{invalidRows:N0} of {totalRows:N0} row(s) ({share:0.#}%) failed validation, which is at or "
-              + $"above the {limit:0.#}% limit. No data was published.";
+        return DescribeSpanRefusal(analysis);
+    }
+
+    /// <summary>
+    /// Publication deletes every published row between the earliest and latest invoice date of the valid
+    /// rows, so one mistyped year would stretch the range across months of other sales. Refuse a range
+    /// wider than SelloutUpload:MaxReplacementDays instead of deleting it; zero or less disables the check.
+    /// </summary>
+    private string? DescribeSpanRefusal(SelloutWorkbookAnalysisDto analysis)
+    {
+        var limit = options.Value.MaxReplacementDays;
+        if (limit <= 0) return null;
+
+        var dates = analysis.Rows.Where(row => row.IsValid && row.InvoiceDate.HasValue)
+            .Select(row => row.InvoiceDate!.Value.Date).ToList();
+        if (dates.Count == 0) return null;
+
+        var from = dates.Min();
+        var to = dates.Max();
+        var days = (to - from).TotalDays + 1;
+        return days > limit
+            ? string.Create(CultureInfo.InvariantCulture,
+                $"The invoice dates in this workbook run from {from:dd MMM yyyy} to {to:dd MMM yyyy} ({days:0} days), more than the {limit} days one upload may replace. Check the file for a mistyped invoice date.")
+            : null;
     }
 
     public async Task<ServiceResponse<ArchivedUploadFileDto>> DownloadSourceAsync(long groupId, int companyId,
@@ -458,7 +489,7 @@ public sealed class SelloutUploadService(
         ValidRows = group.ValidRows,
         InvalidRows = group.InvalidRows,
         Message = group.ErrorSummary ?? (group.Status is SelloutUploadGroupStatus.Completed or SelloutUploadGroupStatus.CompletedWithWarnings
-            ? "Upload completed for every reporting week." : string.Empty),
+            ? "Upload completed." : string.Empty),
         UploadedBy = group.UploadedBy,
         UploadedDate = group.UploadedDate,
         CompletedDate = group.CompletedDate,
