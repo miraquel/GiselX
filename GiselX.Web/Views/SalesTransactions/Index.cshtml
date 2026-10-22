@@ -275,9 +275,11 @@
                 if (!(data.weeks || []).length) addTextRow(weeksBody, ['No reporting week detected', '0']);
 
                 const message = document.getElementById('uploadPreviewMessage');
-                message.textContent = data.isMultiWeek
-                    ? 'This workbook spans several reporting weeks. Confirming replaces your published sales for the dates shown under What this replaces.'
-                    : 'Confirm the reporting week derived from the workbook invoice dates.';
+                message.textContent = errors.length
+                    ? 'This workbook cannot be uploaded. Fix the problems listed below and preview it again.'
+                    : data.isMultiWeek
+                        ? 'This workbook spans several reporting weeks. Confirming replaces your published sales for the dates shown under What this replaces.'
+                        : 'Confirm the reporting week derived from the workbook invoice dates.';
                 message.className = `alert ${errors.length ? 'alert-danger' : data.isMultiWeek ? 'alert-warning' : 'alert-info'}`;
 
                 // Replacement states which published sales confirming overwrites; unlike errors it must not hide Confirm.
