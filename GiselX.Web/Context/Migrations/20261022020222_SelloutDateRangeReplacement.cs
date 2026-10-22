@@ -30,11 +30,21 @@ namespace GiselX.Web.Context.Migrations
                 name: "IX_SelloutUploadBatch_CompanyId_ReportingWeekStart",
                 table: "SelloutUploadBatch",
                 columns: new[] { "CompanyId", "ReportingWeekStart" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_SalesTransaction_CompanyId_InvoiceDate",
+                table: "SalesTransaction",
+                columns: new[] { "CompanyId", "InvoiceDate" })
+                .Annotation("SqlServer:Include", new[] { "SelloutUploadBatchId" });
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.DropIndex(
+                name: "IX_SalesTransaction_CompanyId_InvoiceDate",
+                table: "SalesTransaction");
+
             migrationBuilder.DropIndex(
                 name: "IX_SelloutUploadBatch_CompanyId_ReportingWeekStart",
                 table: "SelloutUploadBatch");

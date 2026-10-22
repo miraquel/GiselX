@@ -699,6 +699,10 @@ namespace GiselX.Web.Context.Migrations
 
                     b.HasIndex("CompanyId", "CreatedDate");
 
+                    b.HasIndex("CompanyId", "InvoiceDate");
+
+                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("CompanyId", "InvoiceDate"), new[] { "SelloutUploadBatchId" });
+
                     b.HasIndex("CompanyId", "ReportingWeekStart");
 
                     b.ToTable("SalesTransaction");

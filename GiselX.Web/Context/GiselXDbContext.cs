@@ -554,6 +554,8 @@ public partial class GiselXDbContext : IdentityDbContext<AppIdentityUser, AppIde
             // GiselSales_* SPs filter by CompanyId and pick the latest CreatedDate batch
             entity.HasIndex(e => new { e.CompanyId, e.CreatedDate });
             entity.HasIndex(e => new { e.CompanyId, e.ReportingWeekStart });
+            // Serves the publish path: the range delete and the touched-batch lookup filter on both.
+            entity.HasIndex(e => new { e.CompanyId, e.InvoiceDate }).IncludeProperties(e => e.SelloutUploadBatchId);
 
             entity.HasOne(d => d.Company).WithMany(p => p.SalesTransaction)
                 .HasForeignKey(d => d.CompanyId)

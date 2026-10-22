@@ -348,6 +348,14 @@ END';
 
     IF NOT EXISTS
     (
+        SELECT 1 FROM sys.indexes
+        WHERE name = N'IX_SalesTransaction_CompanyId_InvoiceDate'
+          AND object_id = OBJECT_ID(N'dbo.SalesTransaction', N'U')
+    )
+        CREATE INDEX IX_SalesTransaction_CompanyId_InvoiceDate ON dbo.SalesTransaction (CompanyId, InvoiceDate) INCLUDE (SelloutUploadBatchId);
+
+    IF NOT EXISTS
+    (
         SELECT 1 FROM dbo.__EFMigrationsHistory
         WHERE MigrationId = N'20261022020222_SelloutDateRangeReplacement'
     )

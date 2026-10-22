@@ -42,6 +42,16 @@ public sealed class SelloutDateRangeManualSqlScriptTests
     }
 
     [Fact]
+    public void Script_creates_the_invoice_date_index_behind_a_guard()
+    {
+        var sql = ReadScript(out _);
+
+        Assert.Matches(new Regex(
+            @"IF\s+NOT\s+EXISTS[\s\S]*?IX_SalesTransaction_CompanyId_InvoiceDate[\s\S]*?CREATE INDEX IX_SalesTransaction_CompanyId_InvoiceDate ON dbo\.SalesTransaction \(CompanyId, InvoiceDate\) INCLUDE \(SelloutUploadBatchId\);",
+            RegexOptions.IgnoreCase), sql);
+    }
+
+    [Fact]
     public void Script_does_no_destructive_data_work()
     {
         var sql = ReadScript(out _);

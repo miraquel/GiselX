@@ -45,7 +45,7 @@ public sealed class SelloutReplacementSqlTests
         Assert.Contains("sales.CompanyId=@CompanyId", delete, StringComparison.Ordinal);
         Assert.Contains("sales.InvoiceDate >= @From", delete, StringComparison.Ordinal);
         Assert.Contains("sales.InvoiceDate < DATEADD(day,1,@To)", delete, StringComparison.Ordinal);
-        Assert.DoesNotContain("ReportingWeekStart=currentBatch.ReportingWeekStart", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("ReportingWeekStart", delete, StringComparison.Ordinal);
         Assert.Contains("@From IS NOT NULL", sql, StringComparison.Ordinal);
     }
 
@@ -58,9 +58,10 @@ public sealed class SelloutReplacementSqlTests
 
         Assert.Contains("DECLARE @Touched TABLE", sql, StringComparison.Ordinal);
         Assert.Contains("prior.Status IN (2,4)", touched, StringComparison.Ordinal);
-        Assert.Contains("prior.SelloutUploadGroupId<>@GroupId", touched, StringComparison.Ordinal);
+        Assert.DoesNotContain("SelloutUploadGroupId", touched, StringComparison.Ordinal);
         Assert.Contains("prior.CompanyId=@CompanyId", touched, StringComparison.Ordinal);
         Assert.Contains("sales.InvoiceDate >= @From", touched, StringComparison.Ordinal);
+        Assert.Contains("sales.InvoiceDate < DATEADD(day,1,@To)", touched, StringComparison.Ordinal);
         Assert.Contains("JOIN @Touched", mark, StringComparison.Ordinal);
         Assert.Contains("NOT EXISTS (SELECT 1 FROM SalesTransaction", mark, StringComparison.Ordinal);
         Assert.Contains("SelloutUploadBatchId=prior.Id", mark, StringComparison.Ordinal);

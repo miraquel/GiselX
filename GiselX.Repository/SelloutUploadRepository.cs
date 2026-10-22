@@ -107,13 +107,14 @@ public sealed class SelloutUploadRepository(IDbConnection connection, IDbTransac
 
             IF @From IS NOT NULL
             BEGIN
-                -- Status 4 is CompletedWithWarnings: as live as status 2. Record which live batches own
+                -- Status 4 is CompletedWithWarnings: as live as status 2. This group's own batches are
+                -- still Processing, so the status filter excludes them, and batches from before groups
+                -- existed (no group at all) are covered. Record which live batches own
                 -- rows in the range before those rows go, so only they can be marked replaced afterwards.
                 INSERT INTO @Touched (Id)
                 SELECT DISTINCT prior.Id
                 FROM SelloutUploadBatch prior WITH (UPDLOCK,HOLDLOCK)
                 WHERE prior.CompanyId=@CompanyId AND prior.Status IN (2,4)
-                  AND prior.SelloutUploadGroupId<>@GroupId
                   AND EXISTS (SELECT 1 FROM SalesTransaction sales
                               WHERE sales.SelloutUploadBatchId=prior.Id
                                 AND sales.InvoiceDate >= @From AND sales.InvoiceDate < DATEADD(day,1,@To));
