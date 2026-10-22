@@ -218,11 +218,40 @@ public sealed class StockTemplateMappingServiceTests
         CanonicalField = field
     };
 
-    private static (StockTemplateMappingService Service, FakeRepository Repository, FakeTransaction Transaction) CreateService()
+    [Fact]
+    public async Task SaveAsync_refuses_a_template_without_area_for_a_company_that_has_areas()
+    {
+        // Every upload through it would be refused; saying so at save time spares a distributor the trip.
+        var (service, repository, _) = CreateService([new StockArea { Id = 1, Name = "Medan" }]);
+
+        var response = await service.SaveAsync(ValidMapping(), "admin", CancellationToken.None);
+
+        Assert.False(response.IsSuccess);
+        Assert.Contains(response.Errors, error => error.Contains("Area", StringComparison.Ordinal)
+            && error.Contains("Medan", StringComparison.Ordinal));
+        Assert.Empty(repository.Inserted);
+    }
+
+    [Fact]
+    public async Task SaveAsync_accepts_a_template_with_area_for_a_company_that_has_areas()
+    {
+        var dto = ValidMapping();
+        dto.Columns.Add(Column(4, StockCanonicalField.Area));
+        var (service, repository, _) = CreateService([new StockArea { Id = 1, Name = "Medan" }]);
+
+        var response = await service.SaveAsync(dto, "admin", CancellationToken.None);
+
+        Assert.True(response.IsSuccess);
+        Assert.Single(repository.Inserted);
+    }
+
+    private static (StockTemplateMappingService Service, FakeRepository Repository, FakeTransaction Transaction) CreateService(
+        IReadOnlyList<StockArea>? areas = null)
     {
         var repository = new FakeRepository();
         var transaction = new FakeTransaction();
-        return (new StockTemplateMappingService(repository, transaction), repository, transaction);
+        return (new StockTemplateMappingService(repository, transaction, new StubStockAreaRepository(areas ?? [])),
+            repository, transaction);
     }
 
     private sealed class FakeRepository : IStockTemplateMappingRepository

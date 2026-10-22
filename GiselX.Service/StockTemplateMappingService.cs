@@ -10,7 +10,8 @@ namespace GiselX.Service;
 
 public sealed class StockTemplateMappingService(
     IStockTemplateMappingRepository repository,
-    IDbTransaction dbTransaction) : IStockTemplateMappingService
+    IDbTransaction dbTransaction,
+    IStockAreaRepository areaRepository) : IStockTemplateMappingService
 {
     public async Task<ServiceResponse<IReadOnlyList<StockTemplateMappingDto>>> ListAsync(int companyId,
         CancellationToken cancellationToken)
@@ -40,6 +41,18 @@ public sealed class StockTemplateMappingService(
     {
         var existingMappings = await repository.GetByCompanyAsync(dto.CompanyId, cancellationToken);
         var errors = Validate(dto, existingMappings);
+
+        // Uploads refuse a template without Area once the company has any area (active or not), so a
+        // template saved that way could never be used. Refuse it here, where the admin can fix it.
+        if (dto.Columns.All(column => column.CanonicalField != StockCanonicalField.Area))
+        {
+            var areas = await areaRepository.ListAsync(dto.CompanyId, false, cancellationToken);
+            if (areas.Count > 0)
+                errors.Add("This company has Stock areas registered (" +
+                    string.Join(", ", areas.Select(area => area.Name)) +
+                    "), so the template must map an Area column; uploads through a template without one are refused.");
+        }
+
         if (errors.Count > 0)
         {
             return new ServiceResponse<int>
