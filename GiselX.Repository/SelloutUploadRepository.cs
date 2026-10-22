@@ -68,7 +68,8 @@ public sealed class SelloutUploadRepository(IDbConnection connection, IDbTransac
             }, transaction, cancellationToken: cancellationToken));
 
     /// <summary>
-    /// Publishes a group's valid staging rows, replacing every reporting week the group covers. Invalid
+    /// Publishes a group's valid staging rows, replacing the company's rows for the invoice-date range those
+    /// rows span (not whole reporting weeks). Invalid
     /// rows stay in staging as the record of what the workbook could not supply and are never published;
     /// the batch they belong to completes with warnings rather than cleanly.
     /// </summary>
@@ -82,36 +83,56 @@ public sealed class SelloutUploadRepository(IDbConnection connection, IDbTransac
             IF NOT EXISTS (SELECT 1 FROM SelloutUploadBatch WHERE SelloutUploadGroupId=@GroupId AND Status=0)
              THROW 50002, 'Upload group contains no processing batches.', 1;
 
-            -- Status 4 is CompletedWithWarnings: a batch that published its valid rows while excluding
-            -- others. It is as much a live batch as status 2 and must be superseded the same way.
-            SELECT prior.Id FROM SelloutUploadBatch prior WITH (UPDLOCK,HOLDLOCK)
-            JOIN SelloutUploadBatch currentBatch ON currentBatch.SelloutUploadGroupId=@GroupId
-             AND currentBatch.CompanyId=prior.CompanyId
-             AND currentBatch.ReportingWeekStart=prior.ReportingWeekStart
-            WHERE prior.Status IN (2,4);
+            -- Publishes for one company take turns. Two uploads whose date ranges overlap would otherwise
+            -- delete and insert the same rows concurrently and could deadlock (error 1205). The lock
+            -- belongs to the ambient transaction, so the service's commit releases it.
+            DECLARE @LockResource nvarchar(255) = N'GiselX-SelloutPublish-' + CAST(@CompanyId AS nvarchar(20));
+            DECLARE @LockResult int;
+            EXEC @LockResult = sys.sp_getapplock
+                @Resource = @LockResource,
+                @LockMode = N'Exclusive',
+                @LockOwner = N'Transaction',
+                @LockTimeout = 30000;
+            IF @LockResult < 0
+                THROW 50003, 'Could not acquire the Sellout publish lock for this company.', 1;
 
-            UPDATE prior SET Status=3
-            FROM SelloutUploadBatch prior
-            JOIN SelloutUploadBatch currentBatch ON currentBatch.SelloutUploadGroupId=@GroupId
-             AND currentBatch.CompanyId=prior.CompanyId
-             AND currentBatch.ReportingWeekStart=prior.ReportingWeekStart
-            WHERE prior.Status IN (2,4);
+            -- The range replaced is the invoice dates the valid rows carry and nothing wider. Invalid
+            -- rows are never published, so they must not stretch it.
+            DECLARE @From date, @To date;
+            SELECT @From = CONVERT(date, MIN(s.InvoiceDate)), @To = CONVERT(date, MAX(s.InvoiceDate))
+            FROM SelloutStaging s JOIN SelloutUploadBatch b ON b.Id=s.SelloutUploadBatchId
+            WHERE b.SelloutUploadGroupId=@GroupId AND s.IsValid=1;
 
-            DELETE staging FROM SelloutStaging staging
-            JOIN SelloutUploadBatch replaced ON replaced.Id=staging.SelloutUploadBatchId
-            WHERE replaced.Status=3 AND EXISTS (
-                SELECT 1 FROM SelloutUploadBatch currentBatch
-                WHERE currentBatch.SelloutUploadGroupId=@GroupId
-                  AND currentBatch.CompanyId=replaced.CompanyId
-                  AND currentBatch.ReportingWeekStart=replaced.ReportingWeekStart);
+            DECLARE @Touched TABLE (Id bigint PRIMARY KEY);
 
-            DELETE sales FROM SalesTransaction sales
-            WHERE sales.CompanyId=@CompanyId AND EXISTS (
-                SELECT 1 FROM SelloutUploadBatch currentBatch
-                WHERE currentBatch.SelloutUploadGroupId=@GroupId AND
-                 (sales.ReportingWeekStart=currentBatch.ReportingWeekStart OR
-                  (sales.ReportingWeekStart IS NULL AND sales.InvoiceDate>=currentBatch.ReportingWeekStart
-                   AND sales.InvoiceDate<DATEADD(day,7,currentBatch.ReportingWeekStart))));
+            IF @From IS NOT NULL
+            BEGIN
+                -- Status 4 is CompletedWithWarnings: as live as status 2. Record which live batches own
+                -- rows in the range before those rows go, so only they can be marked replaced afterwards.
+                INSERT INTO @Touched (Id)
+                SELECT DISTINCT prior.Id
+                FROM SelloutUploadBatch prior WITH (UPDLOCK,HOLDLOCK)
+                WHERE prior.CompanyId=@CompanyId AND prior.Status IN (2,4)
+                  AND prior.SelloutUploadGroupId<>@GroupId
+                  AND EXISTS (SELECT 1 FROM SalesTransaction sales
+                              WHERE sales.SelloutUploadBatchId=prior.Id
+                                AND sales.InvoiceDate >= @From AND sales.InvoiceDate < DATEADD(day,1,@To));
+
+                -- Every row of the company in the range goes, including legacy rows that have no batch.
+                DELETE sales FROM SalesTransaction sales
+                WHERE sales.CompanyId=@CompanyId
+                  AND sales.InvoiceDate >= @From AND sales.InvoiceDate < DATEADD(day,1,@To);
+
+                -- A touched batch is replaced only when nothing of it remains outside the range.
+                UPDATE prior SET Status=3
+                FROM SelloutUploadBatch prior JOIN @Touched t ON t.Id=prior.Id
+                WHERE NOT EXISTS (SELECT 1 FROM SalesTransaction sales WHERE sales.SelloutUploadBatchId=prior.Id);
+
+                DELETE staging FROM SelloutStaging staging
+                JOIN SelloutUploadBatch replaced ON replaced.Id=staging.SelloutUploadBatchId
+                JOIN @Touched t ON t.Id=replaced.Id
+                WHERE replaced.Status=3;
+            END;
 
             INSERT INTO SalesTransaction (CustomerId,CustomerName,CustomerAlias,CustomerAddress,ProductId,ProductBrand,
              ProductName,DistributorProductId,DistributorProductName,ItemMappingId,ProductPackaging,ProductPcsInCtn,BatchNumber,ExpiredDate,InvoiceNo,InvoiceDate,InvoiceQty,InvoiceUnit,
