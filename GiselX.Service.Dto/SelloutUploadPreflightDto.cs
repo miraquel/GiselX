@@ -19,6 +19,12 @@ public sealed class SelloutUploadPreflightDto
     public IReadOnlyList<SelloutWeekSummaryDto> Weeks { get; set; } = [];
     public IReadOnlyList<int> IgnoredSummaryRowNumbers { get; set; } = [];
     public IReadOnlyList<SelloutStagingErrorDto> RowErrors { get; set; } = [];
+
+    /// <summary>
+    /// <see cref="RowErrors"/> as readable lines. Below the invalid-row limit these rows are skipped, not
+    /// fatal, so the preview lists them beside a Confirm that still publishes the rest.
+    /// </summary>
+    public IReadOnlyList<string> RowErrorMessages { get; set; } = [];
     public IReadOnlyList<string> Errors { get; set; } = [];
     public bool IsMultiWeek => Weeks.Count > 1;
 

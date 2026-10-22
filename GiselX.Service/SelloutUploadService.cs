@@ -42,14 +42,18 @@ public sealed class SelloutUploadService(
 
         var analysis = await analysisService.AnalyzeAsync(contentResponse.Content!, companyId, cancellationToken);
         var data = ToPreflight(analysis, contentResponse.SourceSha256!);
-        var errors = CollectErrors(analysis);
+
+        // Only what would refuse the upload blocks it - the same refusal UploadAsync applies, so the preview
+        // never offers a Confirm that would fail and never hides one that would succeed. Invalid rows below
+        // SelloutUpload:MaxInvalidRowPercentage are skipped, not fatal; they stay in data.RowErrors so the
+        // preview can list them as rows that will not be published.
+        var totalRows = analysis.Rows.Count;
+        var invalidRows = analysis.Rows.Count(row => !row.IsValid);
+        var refusal = DescribeRefusal(analysis, totalRows, totalRows - invalidRows, invalidRows);
+        List<string> errors = refusal is null ? [] : analysis.Errors.Count > 0 ? [.. analysis.Errors] : [refusal];
         if (errors.Count == 0)
-        {
-            // The same refusal the upload applies, so the preview never offers a Confirm that would fail.
-            var spanRefusal = DescribeSpanRefusal(analysis);
-            if (spanRefusal is not null) errors.Add(spanRefusal);
-            else data.Replacement = await DescribeReplacementAsync(analysis, companyId, cancellationToken);
-        }
+            data.Replacement = await DescribeReplacementAsync(analysis, companyId, cancellationToken);
+
         return new ServiceResponse<SelloutUploadPreflightDto>
         {
             Data = data,
@@ -459,17 +463,19 @@ public sealed class SelloutUploadService(
         Weeks = analysis.WeekSummaries,
         IgnoredSummaryRowNumbers = analysis.IgnoredSummaryRowNumbers,
         RowErrors = analysis.RowErrors,
+        RowErrorMessages = DescribeRowErrors(analysis.RowErrors),
         Errors = analysis.Errors
     };
 
-    private static List<string> CollectErrors(SelloutWorkbookAnalysisDto analysis) =>
-        analysis.Errors
-            .Concat(analysis.RowErrors.Select(error =>
-                // The rejected text is the whole diagnosis for a bad cell - without it "not a valid
-                // DateTime" leaves the user opening the workbook to find out what the cell actually held.
-                string.IsNullOrWhiteSpace(error.RejectedValue)
-                    ? $"Row {error.SourceRowNumber}, {error.Field}: {error.Reason}"
-                    : $"Row {error.SourceRowNumber}, {error.Field}: {error.Reason} (cell value: \"{error.RejectedValue}\")"))
+    /// <summary>
+    /// One readable line per bad cell, as the preview lists them. The rejected text is the whole diagnosis
+    /// for a bad cell - without it "not a valid DateTime" leaves the user opening the workbook to find out
+    /// what the cell actually held.
+    /// </summary>
+    private static List<string> DescribeRowErrors(IEnumerable<SelloutStagingErrorDto> rowErrors) =>
+        rowErrors.Select(error => string.IsNullOrWhiteSpace(error.RejectedValue)
+                ? $"Baris {error.SourceRowNumber}, {error.Field}: {error.Reason}"
+                : $"Baris {error.SourceRowNumber}, {error.Field}: {error.Reason} (isi sel: \"{error.RejectedValue}\")")
             .ToList();
 
     private static ServiceResponse<SelloutUploadGroupDto> GroupNotFound() => new()

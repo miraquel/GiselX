@@ -175,6 +175,11 @@
                     <p id="previewReplacementSummary" class="mb-2"></p>
                     <ul id="previewReplaces" class="mb-3"></ul>
                 </div>
+                <div id="previewSkippedContainer" class="d-none">
+                    <h6 class="text-warning">Baris bermasalah</h6>
+                    <p id="previewSkippedNote" class="small text-muted mb-2"></p>
+                    <ul id="previewSkipped" class="mb-3"></ul>
+                </div>
                 <div id="previewErrorsContainer" class="d-none">
                     <h6 class="text-danger">Validation errors</h6>
                     <ul id="previewErrors" class="mb-0"></ul>
@@ -313,6 +318,21 @@
                     errorList.appendChild(item);
                 });
                 errorContainer.classList.toggle('d-none', errors.length === 0);
+
+                // Rows below the invalid-row limit are skipped rather than fatal: they are listed here,
+                // and Confirm stays available because the rest of the workbook is still published.
+                const skipped = data.rowErrorMessages || [];
+                const skippedList = document.getElementById('previewSkipped');
+                skippedList.replaceChildren();
+                skipped.forEach(line => {
+                    const item = document.createElement('li');
+                    item.textContent = line;
+                    skippedList.appendChild(item);
+                });
+                document.getElementById('previewSkippedNote').textContent = errors.length
+                    ? 'Perbaiki baris berikut di file, lalu preview ulang.'
+                    : 'Baris berikut tidak akan diupload; baris lainnya tetap diupload. Perbaiki file dan upload ulang bila baris ini perlu masuk.';
+                document.getElementById('previewSkippedContainer').classList.toggle('d-none', skipped.length === 0);
                 document.getElementById('confirmSelloutUpload').classList.toggle('d-none', errors.length > 0);
                 previewModal?.show();
             }
