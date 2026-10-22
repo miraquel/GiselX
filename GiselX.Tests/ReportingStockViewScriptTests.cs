@@ -26,6 +26,15 @@ public sealed class ReportingStockViewScriptTests
         Assert.Contains("AS Condition", sql);
     }
 
+    [Fact]
+    public void Stock_view_exposes_cartons_and_pieces()
+    {
+        var sql = ReadScript();
+
+        Assert.Contains("stock.QtyCarton,", sql);
+        Assert.Contains("stock.QtyPcs,", sql);
+    }
+
     private static string ReadScript()
     {
         var current = new DirectoryInfo(AppContext.BaseDirectory);

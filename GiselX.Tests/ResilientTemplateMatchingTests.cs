@@ -49,7 +49,7 @@ public sealed class ResilientTemplateMatchingTests
 
         Assert.False(result.IsMatch);
         Assert.Contains(result.Errors, error => error.Contains("Customer ID", StringComparison.Ordinal)
-            && error.Contains("was not found", StringComparison.OrdinalIgnoreCase));
+            && error.Contains("tidak ditemukan", StringComparison.Ordinal));
     }
 
     [Fact]

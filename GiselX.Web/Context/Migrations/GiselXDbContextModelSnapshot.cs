@@ -1253,6 +1253,12 @@ namespace GiselX.Web.Context.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<decimal?>("QtyCarton")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<decimal?>("QtyPcs")
+                        .HasColumnType("decimal(18, 4)");
+
                     b.Property<decimal>("SaldoAkhir")
                         .HasColumnType("decimal(18, 4)");
 
@@ -1395,6 +1401,12 @@ namespace GiselX.Web.Context.Migrations
                     b.Property<string>("ProductUnit")
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
+
+                    b.Property<decimal?>("QtyCarton")
+                        .HasColumnType("decimal(18, 4)");
+
+                    b.Property<decimal?>("QtyPcs")
+                        .HasColumnType("decimal(18, 4)");
 
                     b.Property<decimal?>("SaldoAkhir")
                         .HasColumnType("decimal(18, 4)");

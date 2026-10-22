@@ -19,10 +19,11 @@
                 <div class="col-lg-7">
                     <form id="stockUploadForm" enctype="multipart/form-data">
                         @Html.AntiForgeryToken()
+                        <label class="form-label mb-1" for="stockDate">Tanggal stok (posisi stok per tanggal) dan file Excel</label>
                         <div class="input-group">
                             <input type="date" name="stockDate" id="stockDate" class="form-control" required />
                             <input type="file" name="file" id="stockFile" class="form-control" accept=".xlsx,.xls" required />
-                            <button type="submit" class="btn btn-outline-success" id="reviewUploadButton"><span class="ri-upload-2-fill me-1"></span>Review Upload</button>
+                            <button type="submit" class="btn btn-outline-success" id="reviewUploadButton"><span class="ri-upload-2-fill me-1"></span>Periksa File</button>
                         </div>
                     </form>
                 </div>
@@ -30,12 +31,13 @@
             @if (User.HasClaim("permission", PermissionConstants.Stocks.Download))
             {
                 <div class="col-lg-5">
+                    <label class="form-label mb-1" for="downloadBatchId">Unduh snapshot yang sudah diupload</label>
                     <form asp-action="DownloadBatch" method="get" class="input-group">
-                        <select name="batchId" class="form-select" required>
-                            <option value="">Select uploaded snapshot</option>
+                        <select name="batchId" id="downloadBatchId" class="form-select" required>
+                            <option value="">Pilih snapshot</option>
                             @foreach (var upload in Model.CompletedUploads) { <option value="@upload.BatchId">@(User.IsInRole("Administrator") ? upload.AdministratorDisplayText : upload.DisplayText)</option> }
                         </select>
-                        <button class="btn btn-outline-primary"><span class="ri-download-2-fill me-1"></span>Download</button>
+                        <button class="btn btn-outline-primary"><span class="ri-download-2-fill me-1"></span>Unduh</button>
                     </form>
                 </div>
             }
@@ -47,21 +49,20 @@
             <div class="col-md-6">
                 <select id="monthSelect" name="month" class="form-control"></select>
             </div>
+            <div class="col-12"><div class="form-text" id="periodHint">Pilih tahun dan bulan untuk menampilkan data Stock.</div></div>
         </div>
         <div class="mt-4">
-            <div class="d-flex justify-content-between align-items-center mb-2"><h6 class="mb-0">Selected data summary</h6><small class="text-muted">@(User.IsInRole("Administrator") ? "Latest snapshot in the selected month; updates with distributor and table filters" : "Latest snapshot in the selected month; updates with table filters")</small></div>
+            <div class="d-flex justify-content-between align-items-center mb-2"><h6 class="mb-0">Ringkasan data terpilih</h6><small class="text-muted">@(User.IsInRole("Administrator") ? "Snapshot terakhir tiap distributor di bulan terpilih; ikut berubah sesuai filter distributor dan tabel" : "Snapshot terakhir di bulan terpilih; ikut berubah sesuai filter tabel")</small></div>
             <div class="row g-2" id="stockSelectionSummary">
                 @if (User.IsInRole("Administrator"))
                 {
-                    <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Distributors</small><div class="fs-5 fw-semibold" id="stockSummaryDistributors">—</div></div></div>
+                    <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Distributor</small><div class="fs-5 fw-semibold" id="stockSummaryDistributors">—</div></div></div>
                 }
-                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Rows</small><div class="fs-5 fw-semibold" id="stockSummaryRows">—</div></div></div>
-                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Saldo Awal</small><div class="fs-5 fw-semibold" id="stockSummaryAwal">—</div></div></div>
-                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Masuk PO</small><div class="fs-5 fw-semibold" id="stockSummaryMasuk">—</div></div></div>
-                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Saldo Akhir</small><div class="fs-5 fw-semibold" id="stockSummaryAkhir">—</div></div></div>
-                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Saldo Akhir Good</small><div class="fs-5 fw-semibold" id="stockSummaryAkhirGood">—</div></div></div>
-                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Saldo Akhir Bad</small><div class="fs-5 fw-semibold" id="stockSummaryAkhirBad">—</div></div></div>
-                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Stock value</small><div class="fs-5 fw-semibold" id="stockSummaryValue">—</div></div></div>
+                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Baris</small><div class="fs-5 fw-semibold" id="stockSummaryRows">—</div></div></div>
+                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Qty Karton</small><div class="fs-5 fw-semibold" id="stockSummaryCarton">—</div></div></div>
+                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Qty Pcs</small><div class="fs-5 fw-semibold" id="stockSummaryPcs">—</div></div></div>
+                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Karton Bad</small><div class="fs-5 fw-semibold" id="stockSummaryCartonBad">—</div></div></div>
+                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Pcs Bad</small><div class="fs-5 fw-semibold" id="stockSummaryPcsBad">—</div></div></div>
             </div>
         </div>
     </div>
@@ -70,65 +71,65 @@
             @if (User.IsInRole("Administrator")) { <th>Distributor</th> }
             <th>Area</th><th>Condition</th>
             <th>Product ID</th><th>Product Name</th><th>Packaging</th><th>Pcs/Ctn</th><th>Netto</th><th>Unit</th>
-            <th>Smallest Unit</th><th>Qty per Smallest Unit</th><th>Price Unit</th>
-            <th>Saldo Awal</th><th>Saldo Masuk PO</th><th>Saldo Akhir</th><th>Batch No</th><th>Expired Date</th><th>Stock Date</th>
+            <th>Satuan Terkecil</th><th>Qty per Satuan Terkecil</th><th>Harga</th>
+            <th>Qty Karton</th><th>Qty Pcs</th><th>Batch No</th><th>Expired</th><th>Tanggal Stok</th>
         </tr></thead>
         <tfoot><tr>
-            @if (User.IsInRole("Administrator")) { <th><input id="stockDistributorFilter" class="form-control form-control-sm" placeholder="Filter distributor" /></th> }
-            <th><input id="stockAreaFilter" class="form-control form-control-sm" placeholder="Filter area" /></th>
-            <th><select id="stockConditionFilter" class="form-select form-select-sm"><option value="">All</option><option value="Good">Good</option><option value="Bad">Bad</option></select></th>
-            @for (var index = 0; index < 15; index++) { <th></th> }
+            @if (User.IsInRole("Administrator")) { <th><input id="stockDistributorFilter" class="form-control form-control-sm" placeholder="Cari distributor" /></th> }
+            <th><input id="stockAreaFilter" class="form-control form-control-sm" placeholder="Cari area" /></th>
+            <th><select id="stockConditionFilter" class="form-select form-select-sm"><option value="">Semua</option><option value="Good">Good</option><option value="Bad">Bad</option></select></th>
+            @for (var index = 0; index < 14; index++) { <th></th> }
         </tr></tfoot>
         </table>
     </div>
 </div>
 
 <div class="modal fade" id="reviewModal" tabindex="-1" aria-labelledby="reviewModalTitle" aria-hidden="true"><div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content">
-    <div class="modal-header"><h5 class="modal-title" id="reviewModalTitle">Stock upload summary</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+    <div class="modal-header"><h5 class="modal-title" id="reviewModalTitle">Ringkasan upload Stock</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button></div>
     <div class="modal-body">
         <div id="reviewAlert" class="alert d-none"></div>
         <div class="row g-3 mb-4">
-            <div class="col-sm-6 col-xl-3"><div class="border rounded p-3 h-100"><div class="text-muted small">Total data rows</div><div class="fs-3 fw-semibold" id="summaryTotalRows">0</div></div></div>
-            <div class="col-sm-6 col-xl-3"><div class="border border-success rounded p-3 h-100"><div class="text-success small">Ready to publish</div><div class="fs-3 fw-semibold text-success" id="summaryValidRows">0</div></div></div>
-            <div class="col-sm-6 col-xl-3"><div class="border border-danger rounded p-3 h-100"><div class="text-danger small">Invalid / excluded</div><div class="fs-3 fw-semibold text-danger" id="summaryInvalidRows">0</div></div></div>
-            <div class="col-sm-6 col-xl-3"><div class="border rounded p-3 h-100"><div class="text-muted small">Ignored summary rows</div><div class="fs-3 fw-semibold" id="summaryIgnoredRows">0</div></div></div>
+            <div class="col-sm-6 col-xl-3"><div class="border rounded p-3 h-100"><div class="text-muted small">Total baris data</div><div class="fs-3 fw-semibold" id="summaryTotalRows">0</div></div></div>
+            <div class="col-sm-6 col-xl-3"><div class="border border-success rounded p-3 h-100"><div class="text-success small">Siap disimpan</div><div class="fs-3 fw-semibold text-success" id="summaryValidRows">0</div></div></div>
+            <div class="col-sm-6 col-xl-3"><div class="border border-danger rounded p-3 h-100"><div class="text-danger small">Tidak valid / dilewati</div><div class="fs-3 fw-semibold text-danger" id="summaryInvalidRows">0</div></div></div>
+            <div class="col-sm-6 col-xl-3"><div class="border rounded p-3 h-100"><div class="text-muted small">Baris total diabaikan</div><div class="fs-3 fw-semibold" id="summaryIgnoredRows">0</div></div></div>
         </div>
         <div class="row g-4">
             <div class="col-lg-6">
-                <h6 class="mb-3">Upload information</h6>
+                <h6 class="mb-3">Informasi upload</h6>
                 <dl class="row mb-0">
                     <dt class="col-sm-5">File</dt><dd class="col-sm-7 text-break" id="reviewFileName"></dd>
-                    <dt class="col-sm-5">Detected mapping</dt><dd class="col-sm-7" id="mappingName"></dd>
-                    <dt class="col-sm-5">Stock date</dt><dd class="col-sm-7" id="reviewStockDate"></dd>
-                    <dt class="col-sm-5">Ignored row numbers</dt><dd class="col-sm-7" id="ignoredRows"></dd>
-                    <dt class="col-sm-5">Skipped worksheets</dt><dd class="col-sm-7" id="ignoredWorksheets"></dd>
+                    <dt class="col-sm-5">Template terdeteksi</dt><dd class="col-sm-7" id="mappingName"></dd>
+                    <dt class="col-sm-5">Tanggal stok</dt><dd class="col-sm-7" id="reviewStockDate"></dd>
+                    <dt class="col-sm-5">Nomor baris total diabaikan</dt><dd class="col-sm-7" id="ignoredRows"></dd>
+                    <dt class="col-sm-5">Sheet dilewati (tidak cocok dengan template)</dt><dd class="col-sm-7" id="ignoredWorksheets"></dd>
                 </dl>
             </div>
             <div class="col-lg-6">
-                <h6 class="mb-3">Stock totals from valid rows</h6>
+                <h6 class="mb-3">Total stok dari baris valid</h6>
                 <div class="table-responsive"><table class="table table-sm table-bordered mb-0"><tbody>
-                    <tr><th>Saldo Awal</th><td class="text-end fw-semibold" id="totalSaldoAwal">0</td></tr>
-                    <tr><th>Saldo Masuk PO</th><td class="text-end fw-semibold" id="totalSaldoMasukPo">0</td></tr>
-                    <tr><th>Saldo Akhir</th><td class="text-end fw-semibold" id="totalSaldoAkhir">0</td></tr>
+                    <tr><th>Qty Karton</th><td class="text-end fw-semibold" id="totalQtyCarton">0</td></tr>
+                    <tr><th>Qty Pcs</th><td class="text-end fw-semibold" id="totalQtyPcs">0</td></tr>
                 </tbody></table></div>
-                <div class="form-text mt-2">Totals include only rows that will be published.</div>
+                <div class="form-text mt-2">Total hanya menghitung baris yang akan disimpan.</div>
             </div>
         </div>
         <hr class="my-4" />
-        <h6>Areas</h6>
+        <div id="stockNotices" class="alert alert-warning d-none"><ul class="mb-0" id="stockNoticeList"></ul></div>
+        <h6>Area</h6>
         <div class="table-responsive mb-2"><table class="table table-sm table-bordered mb-0">
-            <thead><tr><th>Area</th><th class="text-end">Valid rows</th><th class="text-end">Good Saldo Akhir</th><th class="text-end">Bad Saldo Akhir</th><th>Replaces</th></tr></thead>
+            <thead><tr><th>Area</th><th class="text-end">Baris valid</th><th class="text-end">Good (Karton / Pcs)</th><th class="text-end">Bad (Karton / Pcs)</th><th>Menggantikan</th></tr></thead>
             <tbody id="areaBreakdown"></tbody>
         </table></div>
         <div class="small text-muted mb-4" id="untouchedAreas"></div>
-        <h6>Worksheets in this workbook</h6>
+        <h6>Sheet di file ini</h6>
         <div class="table-responsive mb-4"><table class="table table-sm table-bordered mb-0">
-            <thead><tr><th>Worksheet</th><th>Mapping</th><th class="text-end">Rows</th><th class="text-end">Ready</th><th class="text-end">Invalid</th><th class="text-end">Ignored summary rows</th></tr></thead>
+            <thead><tr><th>Sheet</th><th>Template</th><th class="text-end">Baris</th><th class="text-end">Siap</th><th class="text-end">Tidak valid</th><th class="text-end">Baris total diabaikan</th></tr></thead>
             <tbody id="sheetBreakdown"></tbody>
         </table></div>
-        <h6>Validation details</h6><ul id="validationDetails" class="mb-0"></ul>
+        <h6>Detail validasi</h6><ul id="validationDetails" class="mb-0"></ul>
     </div>
-    <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button><button type="button" class="btn btn-success" id="confirmUpload"><span class="ri-upload-2-fill me-1"></span>Confirm and Upload</button></div>
+    <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button><button type="button" class="btn btn-success" id="confirmUpload"><span class="ri-upload-2-fill me-1"></span>Konfirmasi &amp; Upload</button></div>
 </div></div></div>
 
 @section scripts {
@@ -149,6 +150,8 @@ $(function () {
  let confirmedSha256 = null;
  document.getElementById('stockFile')?.addEventListener('change', () => { confirmedSha256 = null; });
  const numberFormatter = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 });
+ // Row errors carry the canonical field as its enum number; show the name the template editor uses.
+ const stockFieldNames = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Enum.GetNames<GiselX.Domain.StockCanonicalField>()));
  let lastStockQuery = {};
  let stockSummaryRequest = 0;
  async function refreshStockSummary(query) {
@@ -160,13 +163,11 @@ $(function () {
        if (!response.ok || !data) throw new Error(payload.message || 'Summary unavailable');
        $('#stockSummaryDistributors').text(numberFormatter.format(data.distributorCount || 0));
        $('#stockSummaryRows').text(numberFormatter.format(data.rowCount || 0));
-       $('#stockSummaryAwal').text(numberFormatter.format(data.saldoAwal || 0));
-       $('#stockSummaryMasuk').text(numberFormatter.format(data.saldoMasukPO || 0));
-       $('#stockSummaryAkhir').text(numberFormatter.format(data.saldoAkhir || 0));
-       $('#stockSummaryAkhirGood').text(numberFormatter.format(data.saldoAkhirGood || 0));
-       $('#stockSummaryAkhirBad').text(numberFormatter.format(data.saldoAkhirBad || 0));
-       $('#stockSummaryValue').text(numberFormatter.format(data.stockValue || 0));
-     } catch { $('#stockSelectionSummary .fw-semibold').text('Unavailable'); }
+       $('#stockSummaryCarton').text(numberFormatter.format(data.qtyCarton || 0));
+       $('#stockSummaryPcs').text(numberFormatter.format(data.qtyPcs || 0));
+       $('#stockSummaryCartonBad').text(numberFormatter.format(data.qtyCartonBad || 0));
+       $('#stockSummaryPcsBad').text(numberFormatter.format(data.qtyPcsBad || 0));
+     } catch { $('#stockSelectionSummary .fw-semibold').text('Tidak tersedia'); }
  }
  // Browsed by month like Sellout: the table stays hidden and unloaded until a year and a month are
  // chosen, and the server shows each distributor's latest snapshot inside that month.
@@ -181,14 +182,18 @@ $(function () {
    });
    select.val(null).trigger('change');
  }
- periodsSelect(yearSelect, 'Select Year', periods =>
+ periodsSelect(yearSelect, 'Pilih Tahun', periods =>
    [...new Set(periods.map(p => p.year))].map(year => ({ id: year, text: year.toString() })));
- periodsSelect(monthSelect, 'Select Month', periods => {
+ periodsSelect(monthSelect, 'Pilih Bulan', periods => {
    const year = parseInt(yearSelect.val());
    return [...new Set(periods.filter(p => p.year === year).map(p => p.month))]
      .map(month => ({ id: month, text: moment().month(month - 1).format('MMMM') }));
  });
  monthSelect.prop('disabled', true);
+ // A new distributor has nothing to browse yet; an empty year list with no word of why looks broken.
+ fetch('/api/Stocks/SelectPeriods').then(r => r.json()).then(p => {
+   if (!(p.data || []).length) $('#periodHint').text('Belum ada data Stock. Upload file Stock untuk mulai; data akan muncul di sini.');
+ }).catch(() => {});
  function canLoadTable() { return yearSelect.val() && monthSelect.val(); }
  function loadTable() {
    if (table) { table.ajax.reload(); return; }
@@ -218,8 +223,10 @@ $(function () {
     {data:'areaName',defaultContent:''},{data:'condition'},
     {data:'productId'},{data:'productName'},{data:'productPackaging'},{data:'productPcsInCtn'},
     {data:'productNetto'},{data:'productUnit'},{data:'smallestUnit'},{data:'smallestUnitQty'},
-    {data:'priceUnit'},{data:'saldoAwal'},{data:'saldoMasukPO'},
-    {data:'saldoAkhir'},{data:'batchNumber'},
+    {data:'priceUnit',render:d=>d==null?'':numberFormatter.format(d)},
+    {data:'qtyCarton',render:d=>d==null?'':numberFormatter.format(d)},
+    {data:'qtyPcs',render:d=>d==null?'':numberFormatter.format(d)},
+    {data:'batchNumber'},
     {data:'expiredDate',render:d=>d&&d.substring(0,10)!=='1753-01-01'?moment(d).format('DD MMM YYYY'):''},
     {data:'stockDate',render:d=>d?moment(d).format('DD MMM YYYY'):''}
    ]
@@ -255,9 +262,9 @@ $(function () {
    $('#summaryInvalidRows').text(numberFormatter.format(preflight.invalidRows || 0));
    $('#summaryIgnoredRows').text(numberFormatter.format(preflight.ignoredSummaryRowNumbers?.length || 0));
    $('#reviewFileName').text(document.getElementById('stockFile')?.files?.[0]?.name || '');
-   $('#mappingName').text(preflight.mappingName || 'Not detected'); $('#reviewStockDate').text(preflight.stockDate?.substring(0,10) || '');
-   $('#ignoredRows').text(preflight.ignoredSummaryRowNumbers?.join(', ') || 'None');
-   $('#ignoredWorksheets').text(preflight.ignoredWorksheetNames?.join(', ') || 'None');
+   $('#mappingName').text(preflight.mappingName || 'Tidak terdeteksi'); $('#reviewStockDate').text(preflight.stockDate?.substring(0,10) || '');
+   $('#ignoredRows').text(preflight.ignoredSummaryRowNumbers?.join(', ') || 'Tidak ada');
+   $('#ignoredWorksheets').text(preflight.ignoredWorksheetNames?.join(', ') || 'Tidak ada');
    const sheets=$('#sheetBreakdown').empty();
    (preflight.sheets||[]).forEach(s=>sheets.append($('<tr>')
      .append($('<td>').text(s.worksheetName||''))
@@ -266,32 +273,36 @@ $(function () {
      .append($('<td class="text-end">').text(numberFormatter.format(s.validRows||0)))
      .append($('<td class="text-end">').text(numberFormatter.format(s.invalidRows||0)))
      .append($('<td class="text-end">').text(s.ignoredSummaryRowNumbers?.join(', ')||'—'))));
-   if(!sheets.children().length) sheets.append($('<tr>').append($('<td colspan="6" class="text-muted">').text('No mapped worksheet was detected.')));
+   if(!sheets.children().length) sheets.append($('<tr>').append($('<td colspan="6" class="text-muted">').text('Tidak ada sheet yang cocok dengan template.')));
    const areaRows=$('#areaBreakdown').empty();
    (preflight.areas||[]).forEach(a=>{
      const replaces=$('<td>');
-     if(!(a.replaces||[]).length) replaces.text('nothing published yet for this date');
-     else a.replaces.forEach(r=>replaces.append($('<div>').text(`replaces ${numberFormatter.format(r.rowCount||0)} rows uploaded ${(r.uploadedDate||'').substring(0,10)} by ${r.uploadedBy||''} (${r.originalFileName||''})`)));
+     if(!(a.replaces||[]).length) replaces.text('belum ada data untuk tanggal ini');
+     else a.replaces.forEach(r=>replaces.append($('<div>').text(`menggantikan ${numberFormatter.format(r.rowCount||0)} baris yang diupload ${r.uploadedDate?moment(r.uploadedDate).format('DD MMM YYYY'):''} oleh ${r.uploadedBy||''} (${r.originalFileName||''})`)));
      areaRows.append($('<tr>')
        .append($('<td>').text(a.areaName||''))
        .append($('<td class="text-end">').text(numberFormatter.format(a.validRows||0)))
-       .append($('<td class="text-end">').text(numberFormatter.format(a.saldoAkhirGood||0)))
-       .append($('<td class="text-end">').text(numberFormatter.format(a.saldoAkhirBad||0)))
+       .append($('<td class="text-end">').text(`${numberFormatter.format(a.qtyCartonGood||0)} / ${numberFormatter.format(a.qtyPcsGood||0)}`))
+       .append($('<td class="text-end">').text(`${numberFormatter.format(a.qtyCartonBad||0)} / ${numberFormatter.format(a.qtyPcsBad||0)}`))
        .append(replaces));
    });
-   if(!areaRows.children().length) areaRows.append($('<tr>').append($('<td colspan="5" class="text-muted">').text('No area information is available.')));
-   $('#untouchedAreas').text((preflight.untouchedAreaNames||[]).length?`Not affected: ${preflight.untouchedAreaNames.join(', ')}`:'');
-   $('#totalSaldoAwal').text(numberFormatter.format(preflight.totalSaldoAwal || 0));
-   $('#totalSaldoMasukPo').text(numberFormatter.format(preflight.totalSaldoMasukPo || 0));
-   $('#totalSaldoAkhir').text(numberFormatter.format(preflight.totalSaldoAkhir || 0));
+   if(!areaRows.children().length) areaRows.append($('<tr>').append($('<td colspan="5" class="text-muted">').text('Tidak ada informasi area.')));
+   $('#untouchedAreas').text((preflight.untouchedAreaNames||[]).length?`Tidak berubah (data sebelumnya tetap dipakai): ${preflight.untouchedAreaNames.join(', ')}`:'');
+   const notices=[];
+   if((preflight.missingAreaNames||[]).length) notices.push(`Area berikut belum punya data Stock untuk tanggal ini: ${preflight.missingAreaNames.join(', ')}. Upload file area tersebut bila sudah tersedia.`);
+   (preflight.worksheetsWithoutCondition||[]).forEach(w=>notices.push(`Template untuk sheet "${w}" tidak punya kolom Condition, jadi semua barisnya dianggap Good.`));
+   const noticeList=$('#stockNoticeList').empty(); notices.forEach(n=>noticeList.append($('<li>').text(n)));
+   $('#stockNotices').toggleClass('d-none',!notices.length);
+   $('#totalQtyCarton').text(numberFormatter.format(preflight.totalQtyCarton || 0));
+   $('#totalQtyPcs').text(numberFormatter.format(preflight.totalQtyPcs || 0));
    const details=$('#validationDetails').empty(); (preflight.errors||[]).forEach(e=>details.append($('<li>').text(e)));
-   (preflight.rowErrors||[]).forEach(e=>details.append($('<li>').text(`${e.worksheetName?e.worksheetName+' — ':''}Row ${e.sourceRowNumber}${e.field!==null&&e.field!==undefined?' — '+e.field:''}: ${e.reason}${e.rejectedValue?` (cell value: "${e.rejectedValue}")`:''}`)));
-   if(!details.children().length) details.append($('<li>').text('All rows are valid.'));
-   $('#reviewAlert').removeClass('d-none alert-success alert-warning alert-danger').addClass(preflight.canPublish?(preflight.invalidRows?'alert-warning':'alert-success'):'alert-danger').text(message||'Review complete.');
+   (preflight.rowErrors||[]).forEach(e=>details.append($('<li>').text(`${e.worksheetName?e.worksheetName+' — ':''}Baris ${e.sourceRowNumber}${e.field!==null&&e.field!==undefined?' — '+(stockFieldNames[e.field]??e.field):''}: ${e.reason}${e.rejectedValue?` (isi sel: "${e.rejectedValue}")`:''}`)));
+   if(!details.children().length) details.append($('<li>').text('Semua baris valid.'));
+   $('#reviewAlert').removeClass('d-none alert-success alert-warning alert-danger').addClass(preflight.canPublish?(preflight.invalidRows?'alert-warning':'alert-success'):'alert-danger').text(message||'Pemeriksaan selesai.');
    $('#confirmUpload').prop('disabled',!preflight.canPublish); modal.show();
  }
- form?.addEventListener('submit', async e => { e.preventDefault(); const response=await fetch('@Url.Action("PreflightUpload")',{method:'POST',body:new FormData(form),headers:{RequestVerificationToken:token}}); const body=await response.json(); if(body.data){ confirmedSha256=body.data.fileSha256; render(body.data,body.message); } else { confirmedSha256=null; alert(body.message||'Unable to analyze workbook.'); } });
- $('#confirmUpload').on('click', async function(){ this.disabled=true; const data=new FormData(form); data.append('confirmed','true'); data.append('confirmedSha256', confirmedSha256 || ''); const response=await fetch('@Url.Action("Upload")',{method:'POST',body:data,headers:{RequestVerificationToken:token}}); const body=await response.json(); if(body.data?.batchId){window.location.href='@Url.Action("Result")?batchId='+body.data.batchId;return;} alert(body.message||'Upload failed.'); this.disabled=false; });
+ form?.addEventListener('submit', async e => { e.preventDefault(); const response=await fetch('@Url.Action("PreflightUpload")',{method:'POST',body:new FormData(form),headers:{RequestVerificationToken:token}}); const body=await response.json(); if(body.data){ confirmedSha256=body.data.fileSha256; render(body.data,body.message); } else { confirmedSha256=null; alert(body.message||'File tidak bisa dianalisis.'); } });
+ $('#confirmUpload').on('click', async function(){ this.disabled=true; const data=new FormData(form); data.append('confirmed','true'); data.append('confirmedSha256', confirmedSha256 || ''); const response=await fetch('@Url.Action("Upload")',{method:'POST',body:data,headers:{RequestVerificationToken:token}}); const body=await response.json(); if(body.data?.batchId){window.location.href='@Url.Action("Result")?batchId='+body.data.batchId;return;} alert(body.message||'Upload gagal.'); this.disabled=false; });
 });
 </script>
 }

@@ -17,5 +17,7 @@ public enum StockCanonicalField
     SmallestUnit,
     SmallestUnitQty,
     Area,
-    Condition
+    Condition,
+    QtyCarton,
+    QtyPcs
 }

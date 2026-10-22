@@ -22,6 +22,10 @@
                     {
                         <span class="badge bg-label-danger ms-1">Required</span>
                     }
+                    else if (StockCanonicalFieldCatalog.QuantityFields.Contains(canonicalField))
+                    {
+                        <span class="badge bg-label-warning ms-1">Map one or both</span>
+                    }
                 }
                 <input asp-for="Columns[i].CanonicalField" type="hidden" />
             </td>
@@ -60,12 +64,13 @@
 </div>
 <script>
 const stockCanonicalFields = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(
-    Enum.GetValues<StockCanonicalField>().Select(field => new
+    StockCanonicalFieldCatalog.OfferedFields.Select(field => new
     {
         value = (int)field,
         name = field.ToString(),
         type = StockCanonicalFieldCatalog.GetValueTypeLabel(field),
-        required = StockCanonicalFieldCatalog.RequiredFields.Contains(field)
+        required = StockCanonicalFieldCatalog.RequiredFields.Contains(field),
+        quantity = StockCanonicalFieldCatalog.QuantityFields.Contains(field)
     })));
 const stockConditionFieldValue = @((int)StockCanonicalField.Condition);
 const updateConditionValuesVisibility = () => {
@@ -129,7 +134,7 @@ document.getElementById('inspect').onclick = async () => {
  document.querySelector('#columns tbody').innerHTML = stockCanonicalFields.map((field, index) => {
    const selected = previous.get(String(field.value)) ?? '0';
    const options = headers.map(item => `<option value="${item.number}" data-header="${encode(item.header)}" ${String(item.number) === selected ? 'selected' : ''}>${item.number} — ${encode(item.header)}</option>`).join('');
-   return `<tr><td>${encode(field.name)}<span class="badge bg-label-info ms-1">${encode(field.type)}</span>${field.required ? '<span class="badge bg-label-danger ms-1">Required</span>' : ''}<input type="hidden" name="Columns[${index}].CanonicalField" value="${field.value}"></td><td><select class="form-select source-header-select" data-canonical-value="${field.value}" name="Columns[${index}].SourceColumnNumber"><option value="0">Not mapped</option>${options}</select><input type="hidden" class="source-header-value" name="Columns[${index}].SourceHeader" value=""></td></tr>`;
+   return `<tr><td>${encode(field.name)}<span class="badge bg-label-info ms-1">${encode(field.type)}</span>${field.required ? '<span class="badge bg-label-danger ms-1">Required</span>' : field.quantity ? '<span class="badge bg-label-warning ms-1">Map one or both</span>' : ''}<input type="hidden" name="Columns[${index}].CanonicalField" value="${field.value}"></td><td><select class="form-select source-header-select" data-canonical-value="${field.value}" name="Columns[${index}].SourceColumnNumber"><option value="0">Not mapped</option>${options}</select><input type="hidden" class="source-header-value" name="Columns[${index}].SourceHeader" value=""></td></tr>`;
  }).join('');
  wireStockSourceSelects();
  document.querySelectorAll('.source-header-select').forEach(updateStockSourceHeaderValue);

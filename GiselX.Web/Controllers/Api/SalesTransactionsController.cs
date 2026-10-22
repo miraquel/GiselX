@@ -22,7 +22,7 @@ public class SalesTransactionsController : ControllerBase
     public async Task<IActionResult> SelectAsync([FromQuery] PagedListRequestDto listRequest,
         CancellationToken cancellationToken)
     {
-        var response = await _salesTransactionService.SelectAsync(listRequest, User.IsInRole("Distributor"), cancellationToken);
+        var response = await _salesTransactionService.SelectAsync(listRequest, User.SeesDistributorItemIdentity(), cancellationToken);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -31,7 +31,7 @@ public class SalesTransactionsController : ControllerBase
     public async Task<IActionResult> SummaryAsync([FromQuery] PagedListRequestDto listRequest,
         CancellationToken cancellationToken)
     {
-        var response = await _salesTransactionService.SelectSummaryAsync(listRequest, User.IsInRole("Distributor"), cancellationToken);
+        var response = await _salesTransactionService.SelectSummaryAsync(listRequest, User.SeesDistributorItemIdentity(), cancellationToken);
         return StatusCode(response.StatusCode, response);
     }
 

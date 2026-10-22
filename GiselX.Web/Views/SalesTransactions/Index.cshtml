@@ -39,15 +39,22 @@
             @if (User.HasClaim("permission", PermissionConstants.SalesTransactions.Upload))
             {
                 <form id="selloutUploadForm" asp-controller="SalesTransactions" asp-action="Upload" method="post" enctype="multipart/form-data">
+                    <label class="form-label mb-1" for="fileInput">File Excel Sellout (Sales Transaction)</label>
                     <input type="hidden" id="multiWeekConfirmed" name="multiWeekConfirmed" value="false" />
                     <input type="hidden" id="confirmedSha256" name="confirmedSha256" value="" />
                     <div class="input-group">
                         <input type="file" id="fileInput" name="file" class="form-control" aria-describedby="fileInputAddon" aria-label="Upload" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" required>
                         <button type="submit" class="btn btn-outline-success material-shadow-none" id="fileInputAddon">
                             <span class="ri-upload-2-fill me-1"></span>
-                            Upload
+                            Periksa File
                         </button>
                     </div>
+                    <div class="form-text">File diperiksa dulu; data baru disimpan setelah Anda menekan Konfirmasi &amp; Upload.</div>
+                    @if (User.IsInRole("Administrator"))
+                    {
+                        @* Only an administrator can act on it: a distributor sending this file still needs a template mapping made from it first. *@
+                        <div class="form-text"><a asp-action="DownloadTemplate"><span class="ri-file-excel-2-line me-1"></span>Unduh format standar Sellout</a> — untuk distributor yang belum punya format sendiri; buat template mapping dari file ini sebelum dipakai.</div>
+                    }
                 </form>
             }
         </div>
@@ -58,19 +65,20 @@
             <div class="col-md-6">
                 <select id="monthSelect" name="month" class="form-control"></select>
             </div>
+            <div class="col-12"><div class="form-text" id="periodHint">Pilih tahun dan bulan untuk menampilkan data Sellout.</div></div>
         </div>
         <div class="mt-4">
-            <div class="d-flex justify-content-between align-items-center mb-2"><h6 class="mb-0">Selected data summary</h6><small class="text-muted">@(User.IsInRole("Administrator") ? "Updates with period, distributor, search, and column filters" : "Updates with period, search, and column filters")</small></div>
+            <div class="d-flex justify-content-between align-items-center mb-2"><h6 class="mb-0">Ringkasan data terpilih</h6><small class="text-muted">@(User.IsInRole("Administrator") ? "Ikut berubah sesuai periode, distributor, pencarian, dan filter kolom" : "Ikut berubah sesuai periode, pencarian, dan filter kolom")</small></div>
             <div class="row g-2" id="salesSelectionSummary">
                 @if (User.IsInRole("Administrator"))
                 {
-                    <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Distributors</small><div class="fs-5 fw-semibold" id="salesSummaryDistributors">—</div></div></div>
+                    <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Distributor</small><div class="fs-5 fw-semibold" id="salesSummaryDistributors">—</div></div></div>
                 }
-                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Rows</small><div class="fs-5 fw-semibold" id="salesSummaryRows">—</div></div></div>
-                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Invoice quantity</small><div class="fs-5 fw-semibold" id="salesSummaryQty">—</div></div></div>
-                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Gross value</small><div class="fs-5 fw-semibold" id="salesSummaryGross">—</div></div></div>
+                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Baris</small><div class="fs-5 fw-semibold" id="salesSummaryRows">—</div></div></div>
+                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Invoice Qty</small><div class="fs-5 fw-semibold" id="salesSummaryQty">—</div></div></div>
+                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Gross</small><div class="fs-5 fw-semibold" id="salesSummaryGross">—</div></div></div>
                 <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Discount</small><div class="fs-5 fw-semibold" id="salesSummaryDiscount">—</div></div></div>
-                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Net value</small><div class="fs-5 fw-semibold" id="salesSummaryNet">—</div></div></div>
+                <div class="col-6 col-lg-4 col-xl-2"><div class="border rounded p-2"><small class="text-muted">Net</small><div class="fs-5 fw-semibold" id="salesSummaryNet">—</div></div></div>
             </div>
         </div>
     </div>
@@ -132,57 +140,62 @@
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="selloutUploadPreviewTitle">Sellout upload summary</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <h5 class="modal-title" id="selloutUploadPreviewTitle">Ringkasan upload Sellout</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
             </div>
             <div class="modal-body">
                 <div id="uploadPreviewMessage" class="alert d-none" role="alert"></div>
                 <div class="row g-3 mb-4">
-                    <div class="col-sm-6 col-xl-3"><div class="border rounded p-3 h-100"><div class="text-muted small">Total transaction rows</div><div class="fs-3 fw-semibold" id="previewTotalRows">0</div></div></div>
-                    <div class="col-sm-6 col-xl-3"><div class="border border-success rounded p-3 h-100"><div class="text-success small">Ready to publish</div><div class="fs-3 fw-semibold text-success" id="previewValidRows">0</div></div></div>
-                    <div class="col-sm-6 col-xl-3"><div class="border border-danger rounded p-3 h-100"><div class="text-danger small">Invalid rows</div><div class="fs-3 fw-semibold text-danger" id="previewInvalidRows">0</div></div></div>
-                    <div class="col-sm-6 col-xl-3"><div class="border rounded p-3 h-100"><div class="text-muted small">Ignored summary rows</div><div class="fs-3 fw-semibold" id="previewIgnoredRowCount">0</div></div></div>
+                    <div class="col-sm-6 col-xl-3"><div class="border rounded p-3 h-100"><div class="text-muted small">Total baris transaksi</div><div class="fs-3 fw-semibold" id="previewTotalRows">0</div></div></div>
+                    <div class="col-sm-6 col-xl-3"><div class="border border-success rounded p-3 h-100"><div class="text-success small">Siap disimpan</div><div class="fs-3 fw-semibold text-success" id="previewValidRows">0</div></div></div>
+                    <div class="col-sm-6 col-xl-3"><div class="border border-danger rounded p-3 h-100"><div class="text-danger small">Baris tidak valid</div><div class="fs-3 fw-semibold text-danger" id="previewInvalidRows">0</div></div></div>
+                    <div class="col-sm-6 col-xl-3"><div class="border rounded p-3 h-100"><div class="text-muted small">Baris total diabaikan</div><div class="fs-3 fw-semibold" id="previewIgnoredRowCount">0</div></div></div>
                 </div>
                 <div class="row g-4 mb-4">
                     <div class="col-lg-6">
-                        <h6 class="mb-3">Upload information</h6>
+                        <h6 class="mb-3">Informasi upload</h6>
                         <dl class="row mb-0">
                             <dt class="col-sm-4">File</dt><dd class="col-sm-8 text-break" id="previewFileName">-</dd>
-                            <dt class="col-sm-4">Detected mapping</dt><dd class="col-sm-8" id="previewMapping">-</dd>
-                            <dt class="col-sm-4">Ignored row numbers</dt><dd class="col-sm-8" id="previewIgnoredRows">None</dd>
+                            <dt class="col-sm-4">Template terdeteksi</dt><dd class="col-sm-8" id="previewMapping">-</dd>
+                            <dt class="col-sm-4">Nomor baris total diabaikan</dt><dd class="col-sm-8" id="previewIgnoredRows">Tidak ada</dd>
                         </dl>
                     </div>
                     <div class="col-lg-6">
-                        <h6 class="mb-3">Sellout totals from valid rows</h6>
+                        <h6 class="mb-3">Total Sellout dari baris valid</h6>
                         <div class="table-responsive"><table class="table table-sm table-bordered mb-0"><tbody>
-                            <tr><th>Invoice quantity</th><td class="text-end fw-semibold" id="previewInvoiceQty">0</td></tr>
-                            <tr><th>Gross value</th><td class="text-end fw-semibold" id="previewGrossValue">0</td></tr>
-                            <tr><th>Discount value</th><td class="text-end fw-semibold" id="previewDiscountValue">0</td></tr>
-                            <tr><th>Net value</th><td class="text-end fw-semibold" id="previewNetValue">0</td></tr>
+                            <tr><th>Invoice Qty</th><td class="text-end fw-semibold" id="previewInvoiceQty">0</td></tr>
+                            <tr><th>Gross</th><td class="text-end fw-semibold" id="previewGrossValue">0</td></tr>
+                            <tr><th>Discount</th><td class="text-end fw-semibold" id="previewDiscountValue">0</td></tr>
+                            <tr><th>Net</th><td class="text-end fw-semibold" id="previewNetValue">0</td></tr>
                         </tbody></table></div>
-                        <div class="form-text mt-2">Totals include only valid rows. Missing gross or net values are derived from quantity, unit price, and discount when possible.</div>
+                        <div class="form-text mt-2">Total hanya menghitung baris valid. Gross atau Net yang kosong dihitung dari qty, harga satuan, dan diskon bila memungkinkan.</div>
                     </div>
                 </div>
-                <h6>Affected reporting weeks</h6>
+                <h6>Minggu laporan yang terdampak</h6>
                 <div class="table-responsive">
                     <table class="table table-sm table-bordered">
-                        <thead><tr><th>Week (Monday–Sunday)</th><th class="text-end">Rows</th></tr></thead>
+                        <thead><tr><th>Minggu (Senin–Minggu)</th><th class="text-end">Baris</th></tr></thead>
                         <tbody id="previewWeeks"></tbody>
                     </table>
                 </div>
                 <div id="previewReplacementContainer" class="d-none">
-                    <h6 class="text-warning">What this replaces</h6>
+                    <h6 class="text-warning">Data yang akan diganti</h6>
                     <p id="previewReplacementSummary" class="mb-2"></p>
                     <ul id="previewReplaces" class="mb-3"></ul>
                 </div>
+                <div id="previewSkippedContainer" class="d-none">
+                    <h6 class="text-warning">Baris bermasalah</h6>
+                    <p id="previewSkippedNote" class="small text-muted mb-2"></p>
+                    <ul id="previewSkipped" class="mb-3"></ul>
+                </div>
                 <div id="previewErrorsContainer" class="d-none">
-                    <h6 class="text-danger">Validation errors</h6>
+                    <h6 class="text-danger">Masalah yang harus diperbaiki</h6>
                     <ul id="previewErrors" class="mb-0"></ul>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-success" id="confirmSelloutUpload"><span class="ri-upload-2-fill me-1"></span>Confirm and upload</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                <button type="button" class="btn btn-success" id="confirmSelloutUpload"><span class="ri-upload-2-fill me-1"></span>Konfirmasi &amp; Upload</button>
             </div>
         </div>
     </div>
@@ -223,7 +236,7 @@
                         $('#salesSummaryGross').text(numberFormatter.format(data.grossValue || 0));
                         $('#salesSummaryDiscount').text(numberFormatter.format(data.discountValue || 0));
                         $('#salesSummaryNet').text(numberFormatter.format(data.netValue || 0));
-                    } catch { $('#salesSelectionSummary .fw-semibold').text('Unavailable'); }
+                    } catch { $('#salesSelectionSummary .fw-semibold').text('Tidak tersedia'); }
             }
 
             function addTextRow(target, cells) {
@@ -258,9 +271,9 @@
                 document.getElementById('previewInvalidRows').textContent = numberFormatter.format(data.invalidRows || 0);
                 document.getElementById('previewIgnoredRowCount').textContent = numberFormatter.format(data.ignoredSummaryRowNumbers?.length || 0);
                 document.getElementById('previewFileName').textContent = document.getElementById('fileInput')?.files?.[0]?.name || '-';
-                document.getElementById('previewMapping').textContent = data.mappingName || 'Not detected';
+                document.getElementById('previewMapping').textContent = data.mappingName || 'Tidak terdeteksi';
                 document.getElementById('previewIgnoredRows').textContent = data.ignoredSummaryRowNumbers?.length
-                    ? data.ignoredSummaryRowNumbers.join(', ') : 'None';
+                    ? data.ignoredSummaryRowNumbers.join(', ') : 'Tidak ada';
                 document.getElementById('previewInvoiceQty').textContent = numberFormatter.format(data.totalInvoiceQty || 0);
                 document.getElementById('previewGrossValue').textContent = numberFormatter.format(data.totalGrossValue || 0);
                 document.getElementById('previewDiscountValue').textContent = numberFormatter.format(data.totalDiscountValue || 0);
@@ -272,14 +285,14 @@
                     `${dateOnly(week.reportingWeekStart)} – ${weekEnd(week.reportingWeekStart)}`,
                     String(week.rowCount)
                 ]));
-                if (!(data.weeks || []).length) addTextRow(weeksBody, ['No reporting week detected', '0']);
+                if (!(data.weeks || []).length) addTextRow(weeksBody, ['Tidak ada minggu laporan terdeteksi', '0']);
 
                 const message = document.getElementById('uploadPreviewMessage');
                 message.textContent = errors.length
-                    ? 'This workbook cannot be uploaded. Fix the problems listed below and preview it again.'
+                    ? 'File ini belum bisa diupload. Perbaiki masalah di bawah, lalu periksa ulang file.'
                     : data.isMultiWeek
-                        ? 'This workbook spans several reporting weeks. Confirming replaces your published sales for the dates shown under What this replaces.'
-                        : 'Confirm the reporting week derived from the workbook invoice dates.';
+                        ? 'File ini mencakup beberapa minggu laporan. Konfirmasi akan mengganti data sales pada tanggal yang tercantum di bagian Data yang akan diganti.'
+                        : 'Periksa minggu laporan (dari tanggal invoice di file), lalu konfirmasi.';
                 message.className = `alert ${errors.length ? 'alert-danger' : data.isMultiWeek ? 'alert-warning' : 'alert-info'}`;
 
                 // Replacement states which published sales confirming overwrites; unlike errors it must not hide Confirm.
@@ -292,13 +305,13 @@
                     const replaces = replacement.replaces || [];
                     replaces.forEach(batch => {
                         const item = document.createElement('li');
-                        item.textContent = `Week starting ${dateOnly(batch.reportingWeekStart)}, ${numberFormatter.format(batch.rowCount)} rows, `
-                            + `uploaded ${dateOnly(batch.uploadedDate)} by ${batch.uploadedBy} (${batch.originalFileName})`;
+                        item.textContent = `Minggu mulai ${dateOnly(batch.reportingWeekStart)}, ${numberFormatter.format(batch.rowCount)} baris, `
+                            + `diupload ${batch.uploadedDate ? moment(batch.uploadedDate).format('DD MMM YYYY') : ''} oleh ${batch.uploadedBy} (${batch.originalFileName})`;
                         replaceList.appendChild(item);
                     });
                     if (!replaces.length) {
                         const item = document.createElement('li');
-                        item.textContent = 'Nothing is published for these dates yet.';
+                        item.textContent = 'Belum ada data untuk tanggal-tanggal ini.';
                         replaceList.appendChild(item);
                     }
                 }
@@ -313,6 +326,21 @@
                     errorList.appendChild(item);
                 });
                 errorContainer.classList.toggle('d-none', errors.length === 0);
+
+                // Rows below the invalid-row limit are skipped rather than fatal: they are listed here,
+                // and Confirm stays available because the rest of the workbook is still published.
+                const skipped = data.rowErrorMessages || [];
+                const skippedList = document.getElementById('previewSkipped');
+                skippedList.replaceChildren();
+                skipped.forEach(line => {
+                    const item = document.createElement('li');
+                    item.textContent = line;
+                    skippedList.appendChild(item);
+                });
+                document.getElementById('previewSkippedNote').textContent = errors.length
+                    ? 'Perbaiki baris berikut di file, lalu preview ulang.'
+                    : 'Baris berikut tidak akan diupload; baris lainnya tetap diupload. Perbaiki file dan upload ulang bila baris ini perlu masuk.';
+                document.getElementById('previewSkippedContainer').classList.toggle('d-none', skipped.length === 0);
                 document.getElementById('confirmSelloutUpload').classList.toggle('d-none', errors.length > 0);
                 previewModal?.show();
             }
@@ -331,7 +359,7 @@
                     const payload = await response.json();
                     showUploadPreview(payload);
                 } catch {
-                    showUploadPreview({ errors: ['The workbook could not be analyzed. Please try again.'] });
+                    showUploadPreview({ errors: ['File tidak bisa dianalisis. Silakan coba lagi.'] });
                 } finally {
                     uploadButton.disabled = false;
                 }
@@ -350,8 +378,17 @@
 
             monthSelect.prop('disabled', true);
 
+            // A new distributor has nothing to browse yet; an empty year list with no word of why looks broken.
+            fetch('/api/SalesTransactions/SelectPeriods', { headers: { 'RequestVerificationToken': token } })
+                .then(r => r.json())
+                .then(p => {
+                    if (!(p.data || []).length) document.getElementById('periodHint').textContent =
+                        'Belum ada data Sellout. Upload file Sales Transaction untuk mulai; data akan muncul di sini.';
+                })
+                .catch(() => {});
+
             yearSelect.select2({
-                placeholder: "Select Year",
+                placeholder: "Pilih Tahun",
                 theme: "bootstrap-5",
                 allowClear: true,
                 ajax: {
@@ -371,7 +408,7 @@
             yearSelect.val(null).trigger('change');
 
             monthSelect.select2({
-                placeholder: "Select Month",
+                placeholder: "Pilih Bulan",
                 theme: "bootstrap-5",
                 allowClear: true,
                 ajax: {
@@ -409,13 +446,13 @@
                     text: '<i class="ri-refresh-line"></i> Refresh',
                     className: 'btn btn-outline-primary',
                     action: function (e, dt, node, config) { dt.ajax.reload(); },
-                    titleAttr: 'Refresh Table'
+                    titleAttr: 'Muat ulang tabel'
                 };
             }
 
             function getDownloadButton() {
                 return {
-                    text: '<i class="ri-download-2-fill me-1"></i> Download',
+                    text: '<i class="ri-download-2-fill me-1"></i> Unduh',
                     className: 'btn btn-outline-primary',
                     action: function (e, dt, node, config) {
                         const year = yearSelect.val();
@@ -423,7 +460,7 @@
                         if (year && month) {
                             window.location.href = `/SalesTransactions/DownloadSelectByCustPeriod?year=${year}&month=${month}`;
                         } else {
-                            alert('Please select both Year and Month before downloading.');
+                            alert('Pilih tahun dan bulan sebelum mengunduh.');
                         }
                     }
                 };
@@ -440,7 +477,7 @@
                     layout: {
                         topStart: {
                             rowClass: "row m-3 mx-2 my-0 justify-content-between",
-                            features: [{ pageLength: { menu: [10, 25, 50, 100], text: "Show_MENU_entries" } }]
+                            features: [{ pageLength: { menu: [10, 25, 50, 100], text: "Tampilkan _MENU_ baris" } }]
                         },
                         topEnd: {
                             buttons: {
@@ -500,7 +537,7 @@
                             return json;
                         },
                         error: function(err) {
-                            alert(err.responseJSON?.errorMessage || "An error occurred while fetching data");
+                            alert(err.responseJSON?.errorMessage || "Terjadi kesalahan saat mengambil data");
                         }
                     },
                     columns: [
@@ -523,32 +560,32 @@
                         },
                         {
                             data: 'invoiceQty', width: '100px',
-                            render: function(data) { return data ? numberFormat2Decimals.format(data) : ''; }
+                            render: function(data) { return data == null ? '' : numberFormat2Decimals.format(data); }
                         },
                         { data: 'invoiceUnit', width: '80px' },
                         {
                             data: 'unitPrice', width: '110px',
-                            render: function(data) { return data ? numberFormat2Decimals.format(data) : ''; }
+                            render: function(data) { return data == null ? '' : numberFormat2Decimals.format(data); }
                         },
                         {
                             data: 'grossValue', width: '110px',
-                            render: function(data) { return data ? numberFormat2Decimals.format(data) : ''; }
+                            render: function(data) { return data == null ? '' : numberFormat2Decimals.format(data); }
                         },
                         {
                             data: 'discountValue', width: '110px',
-                            render: function(data) { return data ? numberFormat2Decimals.format(data) : ''; }
+                            render: function(data) { return data == null ? '' : numberFormat2Decimals.format(data); }
                         },
                         {
                             data: 'discountPct', width: '90px',
-                            render: function(data) { return data ? numberFormat2Decimals.format(data) : ''; }
+                            render: function(data) { return data == null ? '' : numberFormat2Decimals.format(data); }
                         },
                         {
                             data: 'netValue', width: '110px',
-                            render: function(data) { return data ? numberFormat2Decimals.format(data) : ''; }
+                            render: function(data) { return data == null ? '' : numberFormat2Decimals.format(data); }
                         },
                         {
                             data: 'inKg', width: '90px',
-                            render: function(data) { return data ? numberFormat2Decimals.format(data) : ''; }
+                            render: function(data) { return data == null ? '' : numberFormat2Decimals.format(data); }
                         },
                         {
                             data: 'shipDate', width: '120px',

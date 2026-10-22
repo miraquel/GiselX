@@ -91,8 +91,9 @@ public sealed class ReminderJobRecipientTests
 
     private sealed class StubUploadCheck(bool hasUploaded) : IUploadCheckService
     {
-        public Task<bool> HasUploadedThisPeriodAsync(int companyId, bool isWeekly) =>
-            Task.FromResult(hasUploaded);
+        public Task<IReadOnlyList<string>> FindMissingUploadsAsync(int companyId, DateTime fromLocal,
+            DateTime toLocal, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<string>>(hasUploaded ? [] : ["Stock"]);
     }
 
     private sealed class CapturingEmailService : IEmailService
@@ -101,7 +102,8 @@ public sealed class ReminderJobRecipientTests
         public IReadOnlyCollection<string>? Recipients { get; private set; }
 
         public Task SendReminderAsync(IReadOnlyCollection<string> recipients, string companyName,
-            DateTime deadline, bool isFinalReminder)
+            DateTime deadline, bool isFinalReminder,
+            IReadOnlyList<string>? missingItems = null)
         {
             WasCalled = true;
             Recipients = recipients;

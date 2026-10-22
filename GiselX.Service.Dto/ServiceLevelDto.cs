@@ -38,6 +38,9 @@ public class ServiceLevelDto
     public string CreatedBy { get; set; } = string.Empty;
     [Display(Name = "Created Date")] public DateTime CreatedDate { get; set; } = SqlDateTime.MinValue.Value;
     public int CompanyId { get; set; }
+
+    /// <summary>The workbook row this line was read from, so validation messages point at the right row.</summary>
+    public int SourceRowNumber { get; set; }
     [Display(Name = "Distributor")]
     public string CompanyName { get; set; } = string.Empty;
 }

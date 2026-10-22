@@ -59,7 +59,7 @@ public sealed class StockWorkbookParserTests
         var row = Assert.Single(result.Rows);
         Assert.False(row.IsValid);
         Assert.Contains(result.Errors, error => error.Field == StockCanonicalField.ProductId &&
-            error.Reason == "A value is required.");
+            error.Reason == "Wajib diisi.");
     }
 
     [Fact]
@@ -72,7 +72,7 @@ public sealed class StockWorkbookParserTests
         Assert.False(row.IsValid);
         Assert.Contains(result.Errors, error => error.SourceRowNumber == 3 &&
             error.Field == StockCanonicalField.SaldoAkhir &&
-            error.Reason == "SaldoAkhir must not be negative.");
+            error.Reason == "Tidak boleh negatif.");
     }
 
     [Fact]
@@ -202,7 +202,7 @@ public sealed class StockWorkbookParserTests
         Assert.Equal(-0.01m, row.PriceUnit);
         Assert.False(row.IsValid);
         Assert.Contains(result.Errors, error => error.Field == StockCanonicalField.PriceUnit &&
-            error.Reason == "PriceUnit must not be negative.");
+            error.Reason == "Tidak boleh negatif.");
     }
 
     [Fact]
@@ -214,7 +214,7 @@ public sealed class StockWorkbookParserTests
         Assert.Null(row.PriceUnit);
         Assert.False(row.IsValid);
         Assert.Contains(result.Errors, error => error.Field == StockCanonicalField.PriceUnit &&
-            error.RejectedValue == "free" && error.Reason.Contains("Decimal"));
+            error.RejectedValue == "free" && error.Reason == "Bukan angka yang valid.");
     }
 
     private static StockParseResult Parse(
@@ -273,7 +273,7 @@ public sealed class StockWorkbookParserTests
         Assert.Equal(-1m, row.SmallestUnitQty);
         Assert.False(row.IsValid);
         Assert.Contains(result.Errors, error => error.Field == StockCanonicalField.SmallestUnitQty &&
-            error.Reason == "SmallestUnitQty must not be negative.");
+            error.Reason == "Tidak boleh negatif.");
     }
 
     [Fact]
@@ -285,7 +285,7 @@ public sealed class StockWorkbookParserTests
         Assert.Null(row.SmallestUnitQty);
         Assert.False(row.IsValid);
         Assert.Contains(result.Errors, error => error.Field == StockCanonicalField.SmallestUnitQty &&
-            error.RejectedValue == "many" && error.Reason.Contains("Decimal"));
+            error.RejectedValue == "many" && error.Reason == "Bukan angka yang valid.");
     }
 
     [Fact]
@@ -296,7 +296,7 @@ public sealed class StockWorkbookParserTests
         var row = Assert.Single(result.Rows);
         Assert.False(row.IsValid);
         Assert.Contains(result.Errors, error => error.Field == StockCanonicalField.SmallestUnit &&
-            error.Reason == "Value exceeds the maximum length of 50.");
+            error.Reason == "Melebihi panjang maksimal 50 karakter.");
     }
 
     [Fact]

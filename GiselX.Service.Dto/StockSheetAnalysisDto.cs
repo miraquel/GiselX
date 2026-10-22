@@ -9,6 +9,8 @@ public sealed class StockSheetAnalysisDto
     public string WorksheetName { get; set; } = string.Empty;
     public int MappingId { get; set; }
     public string MappingName { get; set; } = string.Empty;
+    /// <summary>False when the template has no Condition column, so every row of the sheet is Good.</summary>
+    public bool MapsCondition { get; set; }
     public int TotalRows { get; set; }
     public int ValidRows { get; set; }
     public int InvalidRows { get; set; }

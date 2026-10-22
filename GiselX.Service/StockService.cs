@@ -186,9 +186,8 @@ public class StockService : IStockService
             Data = new StockSelectionSummaryDto
             {
                 DistributorCount = summary.DistributorCount, RowCount = summary.RowCount,
-                SaldoAwal = summary.SaldoAwal, SaldoMasukPO = summary.SaldoMasukPO,
-                SaldoAkhir = summary.SaldoAkhir, SaldoAkhirGood = summary.SaldoAkhirGood,
-                SaldoAkhirBad = summary.SaldoAkhirBad, StockValue = summary.StockValue
+                QtyCarton = summary.QtyCarton, QtyPcs = summary.QtyPcs,
+                QtyCartonBad = summary.QtyCartonBad, QtyPcsBad = summary.QtyPcsBad
             },
             Message = "Stock summary retrieved successfully."
         };

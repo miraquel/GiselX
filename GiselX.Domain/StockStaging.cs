@@ -22,6 +22,10 @@ public sealed class StockStaging
     public decimal? SaldoAwal { get; set; }
     public decimal? SaldoMasukPO { get; set; }
     public decimal? SaldoAkhir { get; set; }
+    /// <summary>Stock on hand in cartons, when the template maps a carton column.</summary>
+    public decimal? QtyCarton { get; set; }
+    /// <summary>Stock on hand in pieces, when the template maps a piece column.</summary>
+    public decimal? QtyPcs { get; set; }
     public string? BatchNumber { get; set; }
     public DateTime? ExpiredDate { get; set; }
     public int? StockAreaId { get; set; }

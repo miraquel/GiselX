@@ -21,6 +21,10 @@ public class Stock
     public decimal SaldoAwal { get; set; }
     public decimal SaldoMasukPO { get; set; }
     public decimal SaldoAkhir { get; set; }
+    /// <summary>Stock on hand in cartons, when the template maps a carton column.</summary>
+    public decimal? QtyCarton { get; set; }
+    /// <summary>Stock on hand in pieces, when the template maps a piece column.</summary>
+    public decimal? QtyPcs { get; set; }
     public string BatchNumber { get; set; } = string.Empty;
     public DateTime ExpiredDate { get; set; } = SqlDateTime.MinValue.Value;
     public int CompanyId { get; set; }

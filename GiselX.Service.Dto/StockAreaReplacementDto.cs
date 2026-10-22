@@ -8,7 +8,9 @@ public sealed class StockAreaReplacementDto
     /// <summary>"(no area)" when the rows carry no area.</summary>
     public string AreaName { get; set; } = string.Empty;
     public int ValidRows { get; set; }
-    public decimal SaldoAkhirGood { get; set; }
-    public decimal SaldoAkhirBad { get; set; }
+    public decimal QtyCartonGood { get; set; }
+    public decimal QtyPcsGood { get; set; }
+    public decimal QtyCartonBad { get; set; }
+    public decimal QtyPcsBad { get; set; }
     public IReadOnlyList<PublishedStockArea> Replaces { get; set; } = [];
 }

@@ -10,7 +10,7 @@ public static class StockConditionResolver
         var text = StockTextNormalizer.Normalize(cellText);
         if (text.Length == 0)
         {
-            return (null, "Condition is empty.");
+            return (null, "Kolom Condition kosong. Isi kondisi stok (Good/Bad) di file lalu upload ulang.");
         }
 
         var isGood = StockTextNormalizer.SplitList(goodValues).Contains(text, StringComparer.OrdinalIgnoreCase);
@@ -18,7 +18,7 @@ public static class StockConditionResolver
 
         if (isGood && isBad)
         {
-            return (null, $"Condition '{text}' is both a Good and a Bad value of template {templateName}.");
+            return (null, $"Nilai Condition '{text}' terdaftar sebagai Good sekaligus Bad di template {templateName}. Admin PT. GMK perlu memperbaiki template.");
         }
 
         if (isGood)
@@ -31,6 +31,6 @@ public static class StockConditionResolver
             return (StockCondition.Bad, null);
         }
 
-        return (null, $"Condition '{text}' is neither a Good nor a Bad value of template {templateName}.");
+        return (null, $"Nilai Condition '{text}' tidak dikenali template {templateName}. Gunakan nilai Good/Bad yang biasa, atau minta admin PT. GMK menambahkannya ke template.");
     }
 }

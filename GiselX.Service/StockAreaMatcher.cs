@@ -71,19 +71,19 @@ public sealed class StockAreaMatcher
         var text = StockTextNormalizer.Normalize(cellText);
         if (text.Length == 0)
         {
-            return new StockAreaResolution(null, "Area is empty.");
+            return new StockAreaResolution(null, "Kolom Area kosong. Isi area di file lalu upload ulang.");
         }
 
         if (!index.TryGetValue(text, out var matches))
         {
-            return new StockAreaResolution(null, $"Area '{text}' is not registered for {companyName}.");
+            return new StockAreaResolution(null, $"Area '{text}' belum terdaftar untuk {companyName}. Perbaiki isi kolom Area di file, atau minta admin PT. GMK mendaftarkan area ini.");
         }
 
         if (matches.Count > 1)
         {
             var names = string.Join(", ", matches.Select(a => a.Name));
             return new StockAreaResolution(null,
-                $"Area '{text}' matches more than one area of {companyName}: {names}. Make the area names and aliases unique.");
+                $"Area '{text}' cocok dengan lebih dari satu area {companyName}: {names}. Admin PT. GMK perlu membuat nama dan alias area unik.");
         }
 
         return new StockAreaResolution(matches[0].Id, null);

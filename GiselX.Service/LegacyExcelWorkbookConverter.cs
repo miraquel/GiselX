@@ -10,9 +10,9 @@ namespace GiselX.Service;
 /// </summary>
 public static class LegacyExcelWorkbookConverter
 {
-    public const string UnsupportedFileMessage = "Only .xlsx and .xls files are supported.";
+    public const string UnsupportedFileMessage = "Hanya file .xlsx dan .xls yang didukung.";
     public const string InvalidLegacyWorkbookMessage =
-        "The file could not be read as an Excel 97-2003 (.xls) workbook. Open it in Excel and save it as .xlsx, then upload again.";
+        "File tidak bisa dibaca sebagai Excel 97-2003 (.xls). Buka file di Excel, simpan sebagai .xlsx, lalu upload ulang.";
 
     private static readonly byte[] CompoundFileSignature = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
     private static readonly byte[] ZipSignature = [0x50, 0x4B, 0x03, 0x04];

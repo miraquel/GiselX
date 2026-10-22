@@ -1,4 +1,6 @@
 ﻿@using GiselX.Common.Constants
+@using GiselX.Service
+@model GiselX.Web.Models.HomeIndexViewModel
 @{
     ViewData["Title"] = "Home Page";
 
@@ -7,6 +9,8 @@
     var canServiceLevel = User.HasClaim(c => c is { Type: "permission", Value: PermissionConstants.ServiceLevels.Index });
     var canSellout = User.HasClaim(c => c is { Type: "permission", Value: PermissionConstants.SalesTransactions.Index });
     var canStock = User.HasClaim(c => c is { Type: "permission", Value: PermissionConstants.Stocks.Index });
+    var status = Model?.DeadlineStatus;
+    var culture = UploadNotificationMessage.Culture;
 }
 
 <div class="container py-5">
@@ -21,6 +25,34 @@
             </p>
         </div>
     </div>
+
+    @if (status is not null)
+    {
+        <div class="row justify-content-center mb-4">
+            <div class="col-lg-9">
+                <div class="card border @(status.Missing.Count == 0 ? "border-success" : status.DaysLeft <= 1 ? "border-danger" : "border-warning")">
+                    <div class="card-body">
+                        <h5 class="mb-1">Batas upload berikutnya: @status.Deadline.ToString("dddd, dd MMMM yyyy", culture)</h5>
+                        <p class="text-muted mb-3">
+                            @(status.DaysLeft == 0 ? "Hari ini." : status.DaysLeft == 1 ? "Besok." : $"{status.DaysLeft} hari lagi.")
+                            Data yang dihitung untuk batas ini: upload sejak @status.From.ToString("dd MMMM yyyy", culture).
+                        </p>
+                        @if (status.Missing.Count == 0)
+                        {
+                            <p class="text-success mb-0"><i class="ri ri-checkbox-circle-line me-1"></i>Semua data untuk batas ini sudah kami terima. Terima kasih!</p>
+                        }
+                        else
+                        {
+                            <p class="mb-1">Data yang belum kami terima:</p>
+                            <ul class="mb-0">
+                                @foreach (var item in status.Missing) { <li>@item</li> }
+                            </ul>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
 
     <div class="row g-4 justify-content-center">
         @if (canSellout)
@@ -100,10 +132,10 @@
                     <h6 class="mb-3">Yang perlu Anda ketahui sebelum mengunggah</h6>
                     <ul class="mb-0 ps-3">
                         <li class="mb-2">
-                            <strong>File diperiksa dulu sebelum disimpan.</strong> Setelah memilih
-                            file, Anda akan melihat ringkasan isinya &mdash; jumlah baris, periode,
-                            dan baris mana yang bermasalah beserta alasannya. Data baru masuk
-                            setelah Anda menekan konfirmasi.
+                            <strong>File Sellout dan Stock diperiksa dulu sebelum disimpan.</strong>
+                            Setelah memilih file, Anda akan melihat ringkasan isinya &mdash; jumlah
+                            baris, periode, data yang akan digantikan, dan baris mana yang bermasalah
+                            beserta alasannya. Data baru masuk setelah Anda menekan konfirmasi.
                         </li>
                         <li class="mb-2">
                             <strong>Format file Anda sendiri bisa dipakai.</strong> Susunan kolom
@@ -112,9 +144,11 @@
                             <code>.xls</code> keduanya diterima.
                         </li>
                         <li class="mb-2">
-                            <strong>Baris yang bermasalah tidak menggagalkan seluruh file.</strong>
-                            Baris yang valid tetap tersimpan, dan baris yang ditolak dilaporkan
-                            supaya bisa Anda perbaiki lalu unggah ulang.
+                            <strong>Beberapa baris bermasalah tidak menggagalkan seluruh file.</strong>
+                            Untuk Sellout dan Stock, baris yang valid tetap tersimpan dan baris yang
+                            ditolak dilaporkan supaya bisa Anda perbaiki lalu unggah ulang. File Sellout
+                            ditolak seluruhnya bila 5% barisnya atau lebih bermasalah. File Service
+                            Level disimpan hanya bila semua barisnya benar.
                         </li>
                         <li class="mb-0">
                             <strong>Anda menerima email otomatis.</strong> Pengingat menjelang batas

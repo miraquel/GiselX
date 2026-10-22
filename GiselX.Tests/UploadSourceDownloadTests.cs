@@ -53,7 +53,7 @@ public sealed class UploadSourceDownloadTests
         var response = await service.DownloadSourceAsync(901, OwningCompany, CancellationToken.None);
 
         Assert.False(response.IsSuccess);
-        Assert.Contains(response.Errors, error => error.Contains("not archived"));
+        Assert.Contains(response.Errors, error => error.Contains("tidak diarsipkan"));
     }
 
     [Fact]
@@ -64,7 +64,7 @@ public sealed class UploadSourceDownloadTests
         var response = await service.DownloadSourceAsync(901, OwningCompany, CancellationToken.None);
 
         Assert.False(response.IsSuccess);
-        Assert.Contains(response.Errors, error => error.Contains("no longer available"));
+        Assert.Contains(response.Errors, error => error.Contains("sudah tidak tersedia"));
     }
 
     private static (StockUploadService Service, RecordingUploadArchive Archive) CreateService(string? archivedPath)

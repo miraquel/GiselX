@@ -85,6 +85,8 @@ AS
             stock.SaldoAwal,
             stock.SaldoMasukPO,
             stock.SaldoAkhir,
+            stock.QtyCarton,
+            stock.QtyPcs,
             stock.BatchNumber,
             stock.ExpiredDate,
             stock.StockUploadBatchId,

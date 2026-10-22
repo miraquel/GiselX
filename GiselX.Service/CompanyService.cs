@@ -32,6 +32,7 @@ public class CompanyService : ICompanyService
     {
         if (ValidateContactEmail(companyDto) is { } contactEmailError) return contactEmailError;
         if (NormalizeLocation(companyDto) is { } locationError) return locationError;
+        if (ValidateReminderLeadDays(companyDto) is { } leadDaysError) return leadDaysError;
 
         if (!await IsSelectableBusinessUnitAsync(companyDto.BusinessUnitId, cancellationToken))
             return InvalidBusinessUnitResponse();
@@ -99,6 +100,24 @@ public class CompanyService : ICompanyService
     }
 
     /// <summary>
+    /// The lead reminder goes out ReminderLeadDays before the deadline. Up to 28 days suits a monthly
+    /// deadline; a weekly one allows at most 6, or the lead reminder would arrive before the previous
+    /// deadline had passed.
+    /// </summary>
+    private static ServiceResponse<CompanyDto>? ValidateReminderLeadDays(CompanyDto companyDto)
+    {
+        var weekly = companyDto.DeadlineDaysOfWeek is > 0 && companyDto.DeadlineDayOfMonth is null;
+        var maximum = weekly ? 6 : 28;
+        if (companyDto.ReminderLeadDays >= 0 && companyDto.ReminderLeadDays <= maximum) return null;
+
+        return new ServiceResponse<CompanyDto>
+        {
+            Errors = [$"Reminder lead days must be between 0 and {maximum} for a {(weekly ? "weekly" : "monthly")} deadline."],
+            StatusCode = StatusCodes.Status400BadRequest
+        };
+    }
+
+    /// <summary>
     /// Location is free text shown on the Companies screens and in the Power BI views, so it is stored
     /// trimmed, with a blank entry stored as no location rather than as spaces.
     /// </summary>
@@ -146,6 +165,7 @@ public class CompanyService : ICompanyService
     {
         if (ValidateContactEmail(companyDto) is { } contactEmailError) return contactEmailError;
         if (NormalizeLocation(companyDto) is { } locationError) return locationError;
+        if (ValidateReminderLeadDays(companyDto) is { } leadDaysError) return leadDaysError;
 
         var existing = await _companyRepository.GetCompanyByIdAsync(companyDto.Id, cancellationToken);
         if (existing is null)

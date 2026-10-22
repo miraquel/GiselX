@@ -86,8 +86,9 @@ public sealed class XlsxStockWorkbookInspector : IStockWorkbookInspector
         if (matches.Count == 0)
         {
             result.Errors.Add(rejections.Count == 0
-                ? "No active Stock mapping is configured for this company."
-                : "No active Stock mapping matches this workbook.");
+                ? "Belum ada template Stock aktif untuk perusahaan ini. " + UploadMessages.ContactGmk
+                : "Format file tidak cocok dengan template Stock aktif mana pun. Pastikan memakai format file yang biasa; "
+                  + "bila formatnya memang berubah, hubungi admin PT. GMK.");
             result.Errors.AddRange(rejections);
             return result;
         }
@@ -100,9 +101,9 @@ public sealed class XlsxStockWorkbookInspector : IStockWorkbookInspector
         if (contested.Count > 0)
         {
             result.Errors.AddRange(contested.Select(group =>
-                $"Multiple active Stock mappings match worksheet '{group.Key}': " +
+                $"Lebih dari satu template Stock aktif cocok dengan sheet '{group.Key}': " +
                 string.Join(", ", group.Select(match => match.Mapping.Name).OrderBy(name => name, StringComparer.Ordinal)) +
-                ". Deactivate all but one."));
+                ". Admin PT. GMK perlu menonaktifkan salah satunya."));
             return result;
         }
 

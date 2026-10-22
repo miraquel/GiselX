@@ -33,16 +33,23 @@ public sealed class StockUploadService(
         if (analysis.Errors.Count == 0)
         {
             var published = await repository.GetPublishedAreasAsync(companyId, stockDate.Date, cancellationToken);
-            var names = (await areaRepository.ListAsync(companyId, false, cancellationToken))
-                .ToDictionary(area => area.Id, area => area.Name);
+            var registered = await areaRepository.ListAsync(companyId, false, cancellationToken);
+            var names = registered.ToDictionary(area => area.Id, area => area.Name);
             (data.Areas, data.UntouchedAreaNames) = DescribeAreas(analysis, published, names);
+
+            // An area nobody has uploaded for this date yet is the one most likely forgotten: a second
+            // location's file that arrives later, or never. Saying so here costs nothing.
+            var covered = analysis.Rows.Where(row => row.IsValid).Select(row => row.StockAreaId)
+                .Concat(published.Select(entry => entry.StockAreaId)).ToHashSet();
+            data.MissingAreaNames = registered.Where(area => area.IsActive && !covered.Contains(area.Id))
+                .Select(area => area.Name).OrderBy(name => name, StringComparer.CurrentCultureIgnoreCase).ToList();
         }
 
         return new ServiceResponse<StockUploadPreflightDto>
         {
             Data = data,
             Errors = analysis.Errors.ToList(),
-            Message = analysis.Errors.Count == 0 ? "Workbook analysis completed." : "Workbook validation failed.",
+            Message = analysis.Errors.Count == 0 ? "Analisis file selesai." : "File tidak lolos validasi.",
             StatusCode = analysis.Errors.Count == 0 ? StatusCodes.Status200OK : StatusCodes.Status400BadRequest
         };
     }
@@ -51,7 +58,7 @@ public sealed class StockUploadService(
         DateTime stockDate, int companyId, bool confirmed, string uploadedBy, string? confirmedSha256,
         CancellationToken cancellationToken)
     {
-        if (!confirmed) return Failure("Review the workbook and confirm the Stock upload before continuing.");
+        if (!confirmed) return Failure(UploadConfirmation.NotConfirmed);
         var request = await ReadRequestAsync(file, originalFileName, stockDate, cancellationToken);
         if (request.Error is not null) return Failure(request.Error);
 
@@ -93,7 +100,7 @@ public sealed class StockUploadService(
         {
             var message = analysis.Errors.Count > 0
                 ? string.Join(" ", analysis.Errors)
-                : "No valid Stock rows are available to publish.";
+                : "Tidak ada baris Stock valid yang bisa disimpan.";
             await repository.MarkFailedAsync(batch.Id, message, cancellationToken);
             transaction.Commit();
             return new ServiceResponse<StockUploadResultDto>
@@ -129,8 +136,8 @@ public sealed class StockUploadService(
         });
 
         var successMessage = status == StockUploadBatchStatus.Completed
-            ? "Stock snapshot uploaded successfully."
-            : $"Stock snapshot uploaded with {analysis.InvalidRows} invalid row(s) excluded from the final Stock table.";
+            ? "Snapshot Stock berhasil diupload."
+            : $"Snapshot Stock berhasil diupload; {analysis.InvalidRows:N0} baris tidak valid tidak disimpan.";
         return new ServiceResponse<StockUploadResultDto>
         {
             Data = Result(batch, status, successMessage, analysis),
@@ -145,15 +152,15 @@ public sealed class StockUploadService(
         // scoped by it — a distributor guessing another batch id gets "not found", not a file.
         var found = await repository.GetBatchAsync(batchId, companyId, cancellationToken);
         if (found is null)
-            return NotFound("Stock upload batch was not found.");
+            return NotFound("Batch upload Stock tidak ditemukan.");
 
         var batch = found.Value.Batch;
         if (string.IsNullOrWhiteSpace(batch.ArchivedFilePath))
-            return NotFound("The uploaded file for this batch was not archived.");
+            return NotFound("File asli upload ini tidak diarsipkan.");
 
         var content = await archive.OpenAsync(batch.ArchivedFilePath, cancellationToken);
         if (content is null)
-            return NotFound("The archived file is no longer available on the server.");
+            return NotFound("File arsip sudah tidak tersedia di server.");
 
         return new ServiceResponse<ArchivedUploadFileDto>
         {
@@ -173,7 +180,7 @@ public sealed class StockUploadService(
         if (found is null)
             return new ServiceResponse<StockUploadBatchDto>
             {
-                Errors = ["Stock upload batch was not found."], StatusCode = StatusCodes.Status404NotFound
+                Errors = ["Batch upload Stock tidak ditemukan."], StatusCode = StatusCodes.Status404NotFound
             };
         var (batch, rows) = found.Value;
         return new ServiceResponse<StockUploadBatchDto>
@@ -183,7 +190,9 @@ public sealed class StockUploadService(
                 BatchId = batch.Id, CompanyId = batch.CompanyId, StockDate = batch.StockDate,
                 OriginalFileName = batch.OriginalFileName, FileSha256 = batch.FileSha256, Status = batch.Status,
                 TotalRows = batch.TotalRows, ValidRows = batch.ValidRows, InvalidRows = batch.InvalidRows,
-                Message = batch.ErrorSummary ?? "Upload completed.", UploadedBy = batch.UploadedBy,
+                Message = batch.ErrorSummary ?? (batch.InvalidRows > 0
+                    ? $"Upload selesai; {batch.InvalidRows:N0} baris tidak valid tidak disimpan."
+                    : "Upload selesai."), UploadedBy = batch.UploadedBy,
                 UploadedDate = batch.UploadedDate, CompletedDate = batch.CompletedDate,
                 IgnoredSummaryRowNumbers = Deserialize<int>(batch.IgnoredSummaryRowsJson),
                 Errors = rows.SelectMany(row => Deserialize<StockStagingErrorDto>(row.ValidationErrorsJson)).ToList()
@@ -211,7 +220,7 @@ public sealed class StockUploadService(
     private async Task<(byte[]? Content, string? SourceSha256, string? Error)> ReadRequestAsync(Stream file,
         string filename, DateTime stockDate, CancellationToken cancellationToken)
     {
-        if (stockDate == default) return (null, null, "Stock date is required.");
+        if (stockDate == default) return (null, null, "Tanggal stok wajib diisi.");
         if (!LegacyExcelWorkbookConverter.IsSupportedExtension(filename))
             return (null, null, LegacyExcelWorkbookConverter.UnsupportedFileMessage);
         try
@@ -222,10 +231,10 @@ public sealed class StockUploadService(
             while ((read = await file.ReadAsync(buffer, cancellationToken)) > 0)
             {
                 if (output.Length + read > options.Value.MaxFileSizeBytes)
-                    throw new InvalidDataException($"The workbook exceeds the {options.Value.MaxFileSizeBytes} byte upload limit.");
+                    throw new InvalidDataException(UploadMessages.FileTooLarge(options.Value.MaxFileSizeBytes));
                 await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
             }
-            if (output.Length == 0) return (null, null, "The workbook is empty.");
+            if (output.Length == 0) return (null, null, UploadMessages.EmptyFile);
 
             // Hash what the distributor actually sent; a converted .xls is not the audited artifact.
             var source = output.ToArray();
@@ -248,12 +257,12 @@ public sealed class StockUploadService(
         ProductPcsInCtn = row.ProductPcsInCtn, ProductNetto = row.ProductNetto, ProductUnit = row.ProductUnit,
         SmallestUnit = row.SmallestUnit, SmallestUnitQty = row.SmallestUnitQty,
         PriceUnit = row.PriceUnit, SaldoAwal = row.SaldoAwal, SaldoMasukPO = row.SaldoMasukPO,
-        SaldoAkhir = row.SaldoAkhir,
+        SaldoAkhir = row.SaldoAkhir, QtyCarton = row.QtyCarton, QtyPcs = row.QtyPcs,
         BatchNumber = row.BatchNumber, ExpiredDate = row.ExpiredDate, IsValid = row.IsValid,
         ValidationErrorsJson = row.ValidationErrorsJson
     };
 
-    private const string NoAreaName = "(no area)";
+    private const string NoAreaName = "(tanpa area)";
 
     /// <summary>
     /// The scope of a publication is the areas carried by valid rows, so that is what is listed and
@@ -273,8 +282,10 @@ public sealed class StockUploadService(
             {
                 AreaName = NameOf(group.Key),
                 ValidRows = group.Count(),
-                SaldoAkhirGood = group.Where(row => row.Condition == StockCondition.Good).Sum(row => row.SaldoAkhir ?? 0m),
-                SaldoAkhirBad = group.Where(row => row.Condition == StockCondition.Bad).Sum(row => row.SaldoAkhir ?? 0m),
+                QtyCartonGood = group.Where(row => row.Condition == StockCondition.Good).Sum(row => row.QtyCarton ?? 0m),
+                QtyPcsGood = group.Where(row => row.Condition == StockCondition.Good).Sum(row => row.QtyPcs ?? 0m),
+                QtyCartonBad = group.Where(row => row.Condition == StockCondition.Bad).Sum(row => row.QtyCarton ?? 0m),
+                QtyPcsBad = group.Where(row => row.Condition == StockCondition.Bad).Sum(row => row.QtyPcs ?? 0m),
                 Replaces = published.Where(entry => entry.StockAreaId == group.Key).ToList()
             })
             // "(no area)" sorts first, the rest alphabetically.
@@ -293,10 +304,11 @@ public sealed class StockUploadService(
         FileSha256 = fileSha256,
         MappingName = DescribeMappings(analysis), StockDate = stockDate, TotalRows = analysis.Rows.Count,
         ValidRows = analysis.ValidRows, InvalidRows = analysis.InvalidRows,
-        TotalSaldoAwal = analysis.Rows.Where(row => row.IsValid).Sum(row => row.SaldoAwal ?? 0m),
-        TotalSaldoMasukPo = analysis.Rows.Where(row => row.IsValid).Sum(row => row.SaldoMasukPO ?? 0m),
-        TotalSaldoAkhir = analysis.Rows.Where(row => row.IsValid).Sum(row => row.SaldoAkhir ?? 0m),
+        TotalQtyCarton = analysis.Rows.Where(row => row.IsValid).Sum(row => row.QtyCarton ?? 0m),
+        TotalQtyPcs = analysis.Rows.Where(row => row.IsValid).Sum(row => row.QtyPcs ?? 0m),
         Sheets = analysis.Sheets, IgnoredWorksheetNames = analysis.IgnoredWorksheetNames,
+        WorksheetsWithoutCondition = analysis.Sheets.Where(sheet => !sheet.MapsCondition)
+            .Select(sheet => sheet.WorksheetName).ToList(),
         IgnoredSummaryRowNumbers = analysis.IgnoredSummaryRowNumbers,
         RowErrors = analysis.RowErrors, Errors = analysis.Errors
     };

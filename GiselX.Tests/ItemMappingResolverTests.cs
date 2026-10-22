@@ -50,7 +50,8 @@ public sealed class ItemMappingResolverTests
 
         Assert.False(result.IsMapped);
         Assert.Equal("P-MISSING", result.DistributorItemId);
-        Assert.Equal("Distributor Item ID \"P-MISSING\" has no active GMK item mapping.", result.ErrorReason);
+        Assert.Equal("Item ID distributor \"P-MISSING\" belum punya item mapping GMK yang aktif. "
+            + "Minta admin PT. GMK menambahkan mapping item ini.", result.ErrorReason);
     }
 
     [Fact]
@@ -64,7 +65,8 @@ public sealed class ItemMappingResolverTests
 
         var result = resolver.Resolve(context, "P-INACTIVE", "Product");
 
-        Assert.Equal("Distributor Item ID \"P-INACTIVE\" has no active GMK item mapping.", result.ErrorReason);
+        Assert.Equal("Item ID distributor \"P-INACTIVE\" belum punya item mapping GMK yang aktif. "
+            + "Minta admin PT. GMK menambahkan mapping item ini.", result.ErrorReason);
     }
 
     [Fact]
@@ -80,7 +82,8 @@ public sealed class ItemMappingResolverTests
         var result = resolver.Resolve(context, "inactive", "Product");
 
         Assert.Equal(1, mappings.ActiveReadCount);
-        Assert.Equal("Distributor Item ID \"inactive\" has no active GMK item mapping.", result.ErrorReason);
+        Assert.Equal("Item ID distributor \"inactive\" belum punya item mapping GMK yang aktif. "
+            + "Minta admin PT. GMK menambahkan mapping item ini.", result.ErrorReason);
     }
 
     [Fact]

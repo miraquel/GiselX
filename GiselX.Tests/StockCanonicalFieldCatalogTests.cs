@@ -6,10 +6,11 @@ namespace GiselX.Tests;
 public sealed class StockCanonicalFieldCatalogTests
 {
     [Fact]
-    public void Required_fields_are_product_identity_and_closing_balance()
+    public void Required_fields_are_product_identity()
     {
+        // The quantity is required as "at least one of QtyCarton and QtyPcs", checked by the template service.
         Assert.Equal(
-            [StockCanonicalField.ProductId, StockCanonicalField.ProductName, StockCanonicalField.SaldoAkhir],
+            [StockCanonicalField.ProductId, StockCanonicalField.ProductName],
             StockCanonicalFieldCatalog.RequiredFields.Order());
     }
 

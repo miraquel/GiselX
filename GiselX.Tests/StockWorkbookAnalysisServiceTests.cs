@@ -207,6 +207,24 @@ public sealed class StockWorkbookAnalysisServiceTests
     }
 
     [Fact]
+    public async Task An_area_column_is_ignored_for_a_company_without_any_area()
+    {
+        // The Stock area master is hidden from the Companies screen, so a company has no areas to resolve
+        // against; a template that happens to map an Area column must not invalidate every row.
+        var service = AreaService(AreaAndConditionMapping(), []);
+        var workbook = ClosedXmlSelloutWorkbookInspectorTests.BuildWorkbook("Stock",
+            [(3, 1, "P1"), (3, 2, "N"), (3, 3, "4"), (3, 4, "Medan"), (3, 5, "BAD")]);
+
+        var result = await service.AnalyzeAsync(workbook, 7, CancellationToken.None);
+
+        var row = Assert.Single(result.Rows);
+        Assert.True(row.IsValid);
+        Assert.Null(row.StockAreaId);
+        Assert.Equal("Medan", row.SourceAreaText);
+        Assert.Equal(StockCondition.Bad, row.Condition);
+    }
+
+    [Fact]
     public async Task A_company_with_areas_refuses_a_template_that_does_not_map_area()
     {
         var service = AreaService(Mapping(), [new StockArea { Id = 5, CompanyId = 7, Name = "Medan" }]);
@@ -215,7 +233,8 @@ public sealed class StockWorkbookAnalysisServiceTests
 
         var result = await service.AnalyzeAsync(workbook, 7, CancellationToken.None);
 
-        Assert.Equal("Template 'Daily Stock' does not map an Area column, but Acme has Stock areas registered.",
+        Assert.Equal("Template 'Daily Stock' belum memetakan kolom Area, padahal Acme punya Stock area terdaftar. "
+            + "Hubungi admin PT. GMK.",
             Assert.Single(result.Errors));
         Assert.Empty(result.Rows);
     }
@@ -229,7 +248,8 @@ public sealed class StockWorkbookAnalysisServiceTests
 
         var result = await service.AnalyzeAsync(workbook, 7, CancellationToken.None);
 
-        Assert.Equal("Template 'Daily Stock' does not map an Area column, but Acme has Stock areas registered.",
+        Assert.Equal("Template 'Daily Stock' belum memetakan kolom Area, padahal Acme punya Stock area terdaftar. "
+            + "Hubungi admin PT. GMK.",
             Assert.Single(result.Errors));
         Assert.Empty(result.Rows);
     }

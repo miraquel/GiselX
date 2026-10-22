@@ -55,9 +55,15 @@ public sealed class StockWorkbookParser
                 if (!StockCellValueConverter.TryConvert(raw, column.CanonicalField, out var value))
                 {
                     errors.Add(Error(source.Key, column.CanonicalField, raw,
-                        $"Value is not a valid {StockCanonicalFieldCatalog.GetValueType(column.CanonicalField).Name}."));
+                        UploadMessages.NotAValid(StockCanonicalFieldCatalog.GetValueType(column.CanonicalField))));
                     continue;
                 }
+
+                // A distributor leaves a quantity cell blank when the product carries no stock. Read that as
+                // zero so the product still reaches the snapshot - but only for a column the template maps,
+                // so an unmapped carton column stays "not given" rather than becoming a claimed zero.
+                if (value is null && StockCanonicalFieldCatalog.ZeroWhenBlankFields.Contains(column.CanonicalField))
+                    value = 0m;
 
                 Assign(row, column.CanonicalField, value);
             }
@@ -72,7 +78,7 @@ public sealed class StockWorkbookParser
         return new StockParseResult(
             staged,
             allErrors,
-            staged.Count == 0 ? "The workbook contains no data rows." : null,
+            staged.Count == 0 ? UploadMessages.NoDataRows : null,
             ignoredSummaryRows.OrderBy(row => row).ToList());
     }
 
@@ -157,25 +163,37 @@ public sealed class StockWorkbookParser
                 continue;
             }
 
-            errors.Add(Error(row.SourceRowNumber, field, null, "A value is required."));
+            errors.Add(Error(row.SourceRowNumber, field, null, UploadMessages.ValueRequired));
         }
 
         if (row.SaldoAkhir < 0)
         {
             errors.Add(Error(row.SourceRowNumber, StockCanonicalField.SaldoAkhir,
-                row.SaldoAkhir.Value.ToString(), "SaldoAkhir must not be negative."));
+                row.SaldoAkhir.Value.ToString(), UploadMessages.MustNotBeNegative));
+        }
+
+        if (row.QtyCarton < 0)
+        {
+            errors.Add(Error(row.SourceRowNumber, StockCanonicalField.QtyCarton,
+                row.QtyCarton.Value.ToString(), UploadMessages.MustNotBeNegative));
+        }
+
+        if (row.QtyPcs < 0)
+        {
+            errors.Add(Error(row.SourceRowNumber, StockCanonicalField.QtyPcs,
+                row.QtyPcs.Value.ToString(), UploadMessages.MustNotBeNegative));
         }
 
         if (row.PriceUnit < 0)
         {
             errors.Add(Error(row.SourceRowNumber, StockCanonicalField.PriceUnit,
-                row.PriceUnit.Value.ToString(), "PriceUnit must not be negative."));
+                row.PriceUnit.Value.ToString(), UploadMessages.MustNotBeNegative));
         }
 
         if (row.SmallestUnitQty < 0)
         {
             errors.Add(Error(row.SourceRowNumber, StockCanonicalField.SmallestUnitQty,
-                row.SmallestUnitQty.Value.ToString(), "SmallestUnitQty must not be negative."));
+                row.SmallestUnitQty.Value.ToString(), UploadMessages.MustNotBeNegative));
         }
 
         foreach (var field in Enum.GetValues<StockCanonicalField>())
@@ -184,7 +202,7 @@ public sealed class StockWorkbookParser
             if (limit.HasValue && GetValue(row, field) is string text && text.Length > limit.Value)
             {
                 errors.Add(Error(row.SourceRowNumber, field, text,
-                    $"Value exceeds the maximum length of {limit.Value}."));
+                    UploadMessages.TooLong(limit.Value)));
             }
         }
     }
@@ -207,6 +225,8 @@ public sealed class StockWorkbookParser
         StockCanonicalField.ExpiredDate => row.ExpiredDate,
         StockCanonicalField.Area => row.SourceAreaText,
         StockCanonicalField.Condition => row.SourceConditionText,
+        StockCanonicalField.QtyCarton => row.QtyCarton,
+        StockCanonicalField.QtyPcs => row.QtyPcs,
         _ => throw new ArgumentOutOfRangeException(nameof(field))
     };
 
@@ -230,6 +250,8 @@ public sealed class StockWorkbookParser
             case StockCanonicalField.ExpiredDate: row.ExpiredDate = (DateTime?)value; break;
             case StockCanonicalField.Area: row.SourceAreaText = (string?)value; break;
             case StockCanonicalField.Condition: row.SourceConditionText = (string?)value; break;
+            case StockCanonicalField.QtyCarton: row.QtyCarton = (decimal?)value; break;
+            case StockCanonicalField.QtyPcs: row.QtyPcs = (decimal?)value; break;
             default: throw new ArgumentOutOfRangeException(nameof(field));
         }
     }

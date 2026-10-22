@@ -18,6 +18,8 @@ public partial class MapperlyMapper
     public partial ListRequestDto MapToDto(ListRequest listRequest);
     
     // ServiceLevel
+    // SourceRowNumber only numbers validation messages; the table has no column for it.
+    [MapperIgnoreSource(nameof(ServiceLevelDto.SourceRowNumber))]
     public partial ServiceLevel MapToEntity(ServiceLevelDto serviceLevelDto);
     public partial IEnumerable<ServiceLevel> MapToEntity(IEnumerable<ServiceLevelDto> serviceLevelDtos);
     public partial PagedList<ServiceLevel> MapToEntity(PagedListDto<ServiceLevelDto> pagedListDto);

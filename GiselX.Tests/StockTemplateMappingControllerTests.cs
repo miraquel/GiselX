@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using GiselX.Domain;
+using GiselX.Service;
 using GiselX.Service.Dto;
 using GiselX.Service.Dto.Common;
 using GiselX.Service.Interface;
@@ -28,14 +29,14 @@ public sealed class StockTemplateMappingControllerTests
     }
 
     [Fact]
-    public void Create_returns_one_row_for_every_canonical_field()
+    public void Create_returns_one_row_for_every_offered_canonical_field()
     {
         var controller = CreateController(new CapturingService());
 
         var result = controller.Create(8);
 
         var model = Assert.IsType<StockTemplateMappingEditViewModel>(Assert.IsType<ViewResult>(result).Model);
-        Assert.Equal(Enum.GetValues<StockCanonicalField>(), model.Columns.Select(column => column.CanonicalField!.Value));
+        Assert.Equal(StockCanonicalFieldCatalog.OfferedFields, model.Columns.Select(column => column.CanonicalField!.Value));
         Assert.All(model.Columns, column => Assert.Equal(0, column.SourceColumnNumber));
     }
 

@@ -149,7 +149,7 @@ public sealed class StockTemplateMappingsController(
             .GroupBy(column => column.CanonicalField)
             .ToDictionary(group => group.Key, group => group.First());
 
-        return Enum.GetValues<StockCanonicalField>()
+        return StockCanonicalFieldCatalog.OfferedFields
             .Select(field =>
             {
                 mappedByField.TryGetValue(field, out var mapped);

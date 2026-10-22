@@ -35,15 +35,15 @@ public sealed class XlsxWorkbookInspector
 
         if (headerRowNumber < 1)
         {
-            result.Errors.Add("Header row number must be at least 1.");
+            result.Errors.Add("Nomor baris header minimal 1.");
         }
         if (firstDataRowNumber <= headerRowNumber)
         {
-            result.Errors.Add("First data row number must be after the header row.");
+            result.Errors.Add("Baris data pertama harus setelah baris header.");
         }
         if (workbook.Length == 0)
         {
-            result.Errors.Add("The workbook is empty.");
+            result.Errors.Add("File kosong.");
             return Task.FromResult(result);
         }
 
@@ -58,13 +58,13 @@ public sealed class XlsxWorkbookInspector
             var selected = ResolveWorksheet(sheets, worksheetName, out var ambiguous);
             if (ambiguous.Count > 1)
             {
-                result.Errors.Add($"Worksheet '{worksheetName}' matches more than one worksheet " +
-                    $"({string.Join(", ", ambiguous.Select(sheet => $"'{sheet.Name}'"))}). Rename the worksheets so they differ by more than letter case or surrounding spaces.");
+                result.Errors.Add($"Sheet '{worksheetName}' cocok dengan lebih dari satu sheet " +
+                    $"({string.Join(", ", ambiguous.Select(sheet => $"'{sheet.Name}'"))}). Ganti nama sheet agar tidak hanya berbeda huruf besar/kecil atau spasi.");
                 return Task.FromResult(result);
             }
             if (selected is null)
             {
-                result.Errors.Add($"Worksheet '{worksheetName}' was not found. The workbook contains " +
+                result.Errors.Add($"Sheet '{worksheetName}' tidak ditemukan. Sheet yang ada di file: " +
                     $"{string.Join(", ", sheets.Select(sheet => $"'{sheet.Name}'"))}.");
                 return Task.FromResult(result);
             }
@@ -97,7 +97,7 @@ public sealed class XlsxWorkbookInspector
                 mergedHeaderContinuationColumns));
             if (result.Headers.Count == 0)
             {
-                result.Errors.Add($"No headers were found on row {headerRowNumber}.");
+                result.Errors.Add($"Tidak ada header di baris {headerRowNumber}.");
             }
 
             result.SampleRows = rows
@@ -110,11 +110,11 @@ public sealed class XlsxWorkbookInspector
         }
         catch (InvalidDataException)
         {
-            result.Errors.Add("The file is not a valid .xlsx workbook.");
+            result.Errors.Add("File bukan workbook .xlsx yang valid.");
         }
         catch (Exception exception) when (exception is System.Xml.XmlException or FormatException)
         {
-            result.Errors.Add("The workbook structure is invalid.");
+            result.Errors.Add("Struktur workbook tidak valid.");
         }
 
         return Task.FromResult(result);
@@ -133,18 +133,18 @@ public sealed class XlsxWorkbookInspector
         var actual = preview.NormalizedHeaders.ToArray();
         if (expected.Length != actual.Length)
         {
-            return $"the header row has {actual.Length} column(s) but the template expects {expected.Length}.";
+            return $"baris header berisi {actual.Length} kolom, tetapi template mengharapkan {expected.Length} kolom.";
         }
 
         var differences = expected.Zip(actual, (want, got) => (Want: want, Got: got))
             .Select((pair, index) => (pair.Want, pair.Got, Column: index + 1))
             .Where(pair => !string.Equals(pair.Want, pair.Got, StringComparison.Ordinal))
             .Take(3)
-            .Select(pair => $"column {pair.Column} is '{pair.Got}' but the template expects '{pair.Want}'")
+            .Select(pair => $"kolom {pair.Column} berisi '{pair.Got}', tetapi template mengharapkan '{pair.Want}'")
             .ToList();
         return differences.Count == 0
-            ? "the header signature differs from the template."
-            : "the header row differs - " + string.Join("; ", differences) + ".";
+            ? "header berbeda dengan template."
+            : "baris header berbeda - " + string.Join("; ", differences) + ".";
     }
 
     internal static IReadOnlyDictionary<int, IReadOnlyDictionary<int, string>> ReadWorksheet(
@@ -155,7 +155,7 @@ public sealed class XlsxWorkbookInspector
         using var stream = new MemoryStream(workbook, writable: false);
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
         var sheet = ResolveWorksheet(ReadSheets(archive), worksheetName, out _)
-            ?? throw new InvalidDataException($"Worksheet '{worksheetName}' was not found.");
+            ?? throw new InvalidDataException($"Sheet '{worksheetName}' tidak ditemukan.");
         var worksheet = ReadWorksheetData(archive, sheet.Path, ReadSharedStrings(archive));
         return ExpandVerticalMergedValues(worksheet, firstDataRowNumber);
     }
@@ -165,7 +165,7 @@ public sealed class XlsxWorkbookInspector
         using var stream = new MemoryStream(workbook, writable: false);
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
         var sheet = ResolveWorksheet(ReadSheets(archive), worksheetName, out _)
-            ?? throw new InvalidDataException($"Worksheet '{worksheetName}' was not found.");
+            ?? throw new InvalidDataException($"Sheet '{worksheetName}' tidak ditemukan.");
         return ReadWorksheetData(archive, sheet.Path, ReadSharedStrings(archive));
     }
 
@@ -433,6 +433,6 @@ public sealed class XlsxWorkbookInspector
     /// </summary>
     internal static string DescribeMissingHeader(string? missingHeader) =>
         string.IsNullOrWhiteSpace(missingHeader)
-            ? " The template maps a column that carries no header, so it can only be matched by position."
-            : $" The header '{missingHeader}' the template maps was not found on the worksheet.";
+            ? " Template memetakan kolom tanpa header, sehingga hanya bisa dicocokkan berdasarkan posisi."
+            : $" Header '{missingHeader}' yang dipetakan template tidak ditemukan di sheet.";
 }

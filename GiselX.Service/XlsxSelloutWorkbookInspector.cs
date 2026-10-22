@@ -79,14 +79,15 @@ public sealed class XlsxSelloutWorkbookInspector : ISelloutWorkbookInspector
         if (matches.Count == 0)
         {
             result.Errors.Add(rejections.Count == 0
-                ? "No active distributor mapping is configured for this company."
-                : "No active distributor mapping matches this workbook.");
+                ? "Belum ada template Sellout aktif untuk perusahaan ini. " + UploadMessages.ContactGmk
+                : "Format file tidak cocok dengan template Sellout aktif mana pun. Pastikan memakai format file yang biasa; "
+                  + "bila formatnya memang berubah, hubungi admin PT. GMK.");
             result.Errors.AddRange(rejections);
         }
         else
         {
-            result.Errors.Add("Multiple active distributor mappings exactly match this workbook: " +
-                string.Join(", ", result.CandidateMappingNames) + ". Deactivate all but one.");
+            result.Errors.Add("Lebih dari satu template Sellout aktif cocok dengan file ini: " +
+                string.Join(", ", result.CandidateMappingNames) + ". Admin PT. GMK perlu menonaktifkan salah satunya.");
         }
 
         return result;

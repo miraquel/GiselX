@@ -86,7 +86,8 @@ public sealed class MultiSheetStockDetectionTests
 
         Assert.False(result.IsMatch);
         Assert.Empty(result.Matches);
-        Assert.Contains("No active Stock mapping matches this workbook.", result.Errors);
+        Assert.Contains(result.Errors, error => error.StartsWith("Format file tidak cocok dengan template Stock aktif",
+            StringComparison.Ordinal));
         Assert.Contains(result.Errors, error => error.Contains("gudang", StringComparison.Ordinal)
             && error.Contains("KODE BARANG", StringComparison.Ordinal));
     }

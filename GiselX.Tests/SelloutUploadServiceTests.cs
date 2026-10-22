@@ -61,7 +61,7 @@ public sealed class SelloutUploadServiceTests
             Stream(), "sales.xlsx", 9, multiWeekConfirmed: false, "uploader", ConfirmedSha(), CancellationToken.None);
 
         Assert.False(response.IsSuccess);
-        Assert.Contains("multiple reporting weeks", response.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("beberapa minggu laporan", response.Message, StringComparison.Ordinal);
         Assert.Empty(repository.Groups);
         Assert.False(transaction.CommitCalled);
     }
@@ -204,7 +204,7 @@ public sealed class SelloutUploadServiceTests
 
         Assert.False(response.IsSuccess);
         Assert.Contains("20%", response.Message, StringComparison.Ordinal);
-        Assert.Contains("5% limit", response.Message, StringComparison.Ordinal);
+        Assert.Contains("batas 5%", response.Message, StringComparison.Ordinal);
         Assert.Empty(repository.StagingRows);
         Assert.Null(repository.PromotedGroupId);
     }
@@ -389,7 +389,7 @@ public sealed class SelloutUploadServiceTests
             "uploader", otherWorkbook, CancellationToken.None);
 
         Assert.False(response.IsSuccess);
-        Assert.Contains("not the workbook that was uploaded", response.Message, StringComparison.Ordinal);
+        Assert.Contains("berbeda dengan file yang diupload", response.Message, StringComparison.Ordinal);
         Assert.Empty(repository.Groups);
         Assert.False(transaction.CommitCalled);
     }
@@ -420,11 +420,15 @@ public sealed class SelloutUploadServiceTests
     public async Task Preflight_states_the_range_of_the_valid_rows()
     {
         var analysis = ValidAnalysis(multiWeek: false);
+        // One invalid row among enough valid ones to stay under the 5% limit: it is skipped, not fatal, so
+        // the preview still states the replacement range - computed from the valid rows only.
         analysis.Rows =
         [
             new SelloutStaging { SourceRowNumber = 3, InvoiceDate = new DateTime(2026, 10, 7), IsValid = true },
             new SelloutStaging { SourceRowNumber = 4, InvoiceDate = new DateTime(2026, 10, 1, 13, 0, 0), IsValid = true },
-            new SelloutStaging { SourceRowNumber = 5, InvoiceDate = new DateTime(2026, 10, 20), IsValid = false }
+            new SelloutStaging { SourceRowNumber = 5, InvoiceDate = new DateTime(2026, 10, 20), IsValid = false },
+            .. Enumerable.Range(6, 20).Select(row => new SelloutStaging
+                { SourceRowNumber = row, InvoiceDate = new DateTime(2026, 10, 4), IsValid = true })
         ];
         var (service, repository, _) = CreateService(analysis);
 
@@ -433,8 +437,53 @@ public sealed class SelloutUploadServiceTests
         var replacement = response.Data!.Replacement!;
         Assert.Equal(new DateTime(2026, 10, 1), replacement.From);
         Assert.Equal(new DateTime(2026, 10, 7), replacement.To);
-        Assert.Equal("Confirming replaces your published sales from 01 Oct 2026 to 07 Oct 2026.", replacement.Summary);
+        Assert.Equal(string.Create(UploadNotificationMessage.Culture,
+            $"Konfirmasi akan mengganti data sales yang sudah tersimpan dari {new DateTime(2026, 10, 1):dd MMM yyyy} "
+            + $"sampai {new DateTime(2026, 10, 7):dd MMM yyyy}."), replacement.Summary);
         Assert.Equal((9, new DateTime(2026, 10, 1), new DateTime(2026, 10, 7)), Assert.Single(repository.RangeReads));
+    }
+
+    [Fact]
+    public async Task Preflight_with_invalid_rows_below_the_limit_can_still_be_confirmed()
+    {
+        var analysis = ValidAnalysis(multiWeek: false);
+        analysis.Rows =
+        [
+            .. Enumerable.Range(3, 30).Select(row => new SelloutStaging
+                { SourceRowNumber = row, InvoiceDate = new DateTime(2026, 7, 4), IsValid = true }),
+            new SelloutStaging { SourceRowNumber = 40, InvoiceDate = new DateTime(2026, 7, 4), IsValid = false }
+        ];
+        analysis.RowErrors = [new SelloutStagingErrorDto { SourceRowNumber = 40, Reason = "Value is required." }];
+        var (service, _, _) = CreateService(analysis);
+
+        var response = await service.PreflightAsync(Stream(), "sales.xlsx", 9, CancellationToken.None);
+
+        Assert.True(response.IsSuccess);
+        Assert.Equal(200, response.StatusCode);
+        Assert.Empty(response.Errors);
+        Assert.Equal(40, Assert.Single(response.Data!.RowErrors).SourceRowNumber);
+        Assert.NotNull(response.Data.Replacement);
+    }
+
+    [Fact]
+    public async Task Preflight_at_or_above_the_invalid_row_limit_is_refused_with_the_limit_named()
+    {
+        var analysis = ValidAnalysis(multiWeek: false);
+        analysis.Rows =
+        [
+            .. Enumerable.Range(3, 19).Select(row => new SelloutStaging
+                { SourceRowNumber = row, InvoiceDate = new DateTime(2026, 7, 4), IsValid = true }),
+            new SelloutStaging { SourceRowNumber = 40, InvoiceDate = new DateTime(2026, 7, 4), IsValid = false }
+        ];
+        analysis.RowErrors = [new SelloutStagingErrorDto { SourceRowNumber = 40, Reason = "Value is required." }];
+        var (service, repository, _) = CreateService(analysis);
+
+        var response = await service.PreflightAsync(Stream(), "sales.xlsx", 9, CancellationToken.None);
+
+        Assert.False(response.IsSuccess);
+        Assert.Contains(response.Errors, error => error.Contains("batas 5%", StringComparison.Ordinal));
+        Assert.Null(response.Data!.Replacement);
+        Assert.Empty(repository.RangeReads);
     }
 
     [Fact]
@@ -485,8 +534,8 @@ public sealed class SelloutUploadServiceTests
 
         Assert.False(response.IsSuccess);
         Assert.Contains(
-            "The invoice dates in this workbook run from 06 Jan 2025 to 14 Oct 2026 (647 days), more than the "
-            + "45 days one upload may replace. Check the file for a mistyped invoice date.",
+            string.Create(UploadNotificationMessage.Culture,
+                $"Tanggal invoice di file ini dari {new DateTime(2025, 1, 6):dd MMM yyyy} sampai {new DateTime(2026, 10, 14):dd MMM yyyy} (647 hari), lebih dari 45 hari yang boleh diganti satu upload. Periksa apakah ada tanggal invoice yang salah ketik."),
             response.Errors);
         Assert.Empty(repository.RangeReads);
     }
@@ -502,7 +551,7 @@ public sealed class SelloutUploadServiceTests
             "budi", ConfirmedSha(), CancellationToken.None);
 
         Assert.False(response.IsSuccess);
-        Assert.Contains("647 days", response.Message);
+        Assert.Contains("647 hari", response.Message);
         Assert.Empty(repository.Batches);
         Assert.Empty(repository.StagingRows);
         Assert.Null(repository.PromotedGroupId);

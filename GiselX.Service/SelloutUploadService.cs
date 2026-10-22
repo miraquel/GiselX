@@ -21,7 +21,7 @@ public sealed class SelloutUploadService(
     IUploadArchive archive) : ISelloutUploadService
 {
     private const string MultiWeekConfirmationMessage =
-        "This workbook contains multiple reporting weeks. Review the affected weeks and confirm the upload before continuing.";
+        "File ini berisi beberapa minggu laporan. Periksa minggu yang terdampak dan konfirmasi upload sebelum melanjutkan.";
 
     public async Task<ServiceResponse<SelloutUploadPreflightDto>> PreflightAsync(
         Stream file,
@@ -42,19 +42,23 @@ public sealed class SelloutUploadService(
 
         var analysis = await analysisService.AnalyzeAsync(contentResponse.Content!, companyId, cancellationToken);
         var data = ToPreflight(analysis, contentResponse.SourceSha256!);
-        var errors = CollectErrors(analysis);
+
+        // Only what would refuse the upload blocks it - the same refusal UploadAsync applies, so the preview
+        // never offers a Confirm that would fail and never hides one that would succeed. Invalid rows below
+        // SelloutUpload:MaxInvalidRowPercentage are skipped, not fatal; they stay in data.RowErrors so the
+        // preview can list them as rows that will not be published.
+        var totalRows = analysis.Rows.Count;
+        var invalidRows = analysis.Rows.Count(row => !row.IsValid);
+        var refusal = DescribeRefusal(analysis, totalRows, totalRows - invalidRows, invalidRows);
+        List<string> errors = refusal is null ? [] : analysis.Errors.Count > 0 ? [.. analysis.Errors] : [refusal];
         if (errors.Count == 0)
-        {
-            // The same refusal the upload applies, so the preview never offers a Confirm that would fail.
-            var spanRefusal = DescribeSpanRefusal(analysis);
-            if (spanRefusal is not null) errors.Add(spanRefusal);
-            else data.Replacement = await DescribeReplacementAsync(analysis, companyId, cancellationToken);
-        }
+            data.Replacement = await DescribeReplacementAsync(analysis, companyId, cancellationToken);
+
         return new ServiceResponse<SelloutUploadPreflightDto>
         {
             Data = data,
             Errors = errors,
-            Message = errors.Count == 0 ? "Workbook analysis completed." : "Workbook validation failed.",
+            Message = errors.Count == 0 ? "Analisis file selesai." : "File tidak lolos validasi.",
             StatusCode = errors.Count == 0 ? StatusCodes.Status200OK : StatusCodes.Status400BadRequest
         };
     }
@@ -176,8 +180,8 @@ public sealed class SelloutUploadService(
             ? SelloutUploadBatchStatus.CompletedWithWarnings
             : SelloutUploadBatchStatus.Completed;
         var message = invalidRows > 0
-            ? $"Sellout upload published, with {invalidRows:N0} invalid row(s) excluded."
-            : "Sellout upload published.";
+            ? $"Upload Sellout berhasil disimpan; {invalidRows:N0} baris tidak valid tidak disimpan."
+            : "Upload Sellout berhasil disimpan.";
         return new ServiceResponse<SelloutUploadResultDto>
         {
             Data = new SelloutUploadResultDto
@@ -247,16 +251,16 @@ public sealed class SelloutUploadService(
         int invalidRows)
     {
         if (analysis.Errors.Count > 0) return string.Join(" ", analysis.Errors);
-        if (analysis.Mapping is null) return "No active distributor mapping matches this workbook.";
-        if (totalRows == 0) return "The workbook contains no data rows.";
-        if (validRows == 0) return $"All {totalRows:N0} row(s) failed validation. No data was published.";
+        if (analysis.Mapping is null) return "Format file tidak cocok dengan template Sellout aktif mana pun. " + UploadMessages.ContactGmk;
+        if (totalRows == 0) return UploadMessages.NoDataRows;
+        if (validRows == 0) return $"Semua {totalRows:N0} baris gagal validasi. Tidak ada data yang disimpan.";
         if (invalidRows > 0)
         {
             var limit = options.Value.MaxInvalidRowPercentage;
             var share = invalidRows * 100m / totalRows;
             if (share >= limit)
-                return $"{invalidRows:N0} of {totalRows:N0} row(s) ({share:0.#}%) failed validation, which is at or "
-                       + $"above the {limit:0.#}% limit. No data was published.";
+                return $"{invalidRows:N0} dari {totalRows:N0} baris ({share:0.#}%) gagal validasi, mencapai atau "
+                       + $"melebihi batas {limit:0.#}%. Tidak ada data yang disimpan; perbaiki file lalu upload ulang.";
         }
 
         return DescribeSpanRefusal(analysis);
@@ -280,8 +284,8 @@ public sealed class SelloutUploadService(
         var to = dates.Max();
         var days = (to - from).TotalDays + 1;
         return days > limit
-            ? string.Create(CultureInfo.InvariantCulture,
-                $"The invoice dates in this workbook run from {from:dd MMM yyyy} to {to:dd MMM yyyy} ({days:0} days), more than the {limit} days one upload may replace. Check the file for a mistyped invoice date.")
+            ? string.Create(UploadNotificationMessage.Culture,
+                $"Tanggal invoice di file ini dari {from:dd MMM yyyy} sampai {to:dd MMM yyyy} ({days:0} hari), lebih dari {limit} hari yang boleh diganti satu upload. Periksa apakah ada tanggal invoice yang salah ketik.")
             : null;
     }
 
@@ -291,15 +295,15 @@ public sealed class SelloutUploadService(
         // The company id comes from the signed-in user, never from the request, and the lookup is
         // scoped by it — a distributor guessing another group id gets "not found", not a file.
         var found = await uploadRepository.GetGroupAsync(groupId, companyId, cancellationToken);
-        if (found is null) return NotFoundFile("Sellout upload group was not found.");
+        if (found is null) return NotFoundFile("Upload Sellout tidak ditemukan.");
 
         var group = found.Value.Group;
         if (string.IsNullOrWhiteSpace(group.ArchivedFilePath))
-            return NotFoundFile("The uploaded file for this upload was not archived.");
+            return NotFoundFile("File asli upload ini tidak diarsipkan.");
 
         var content = await archive.OpenAsync(group.ArchivedFilePath, cancellationToken);
         if (content is null)
-            return NotFoundFile("The archived file is no longer available on the server.");
+            return NotFoundFile("File arsip sudah tidak tersedia di server.");
 
         return new ServiceResponse<ArchivedUploadFileDto>
         {
@@ -316,7 +320,7 @@ public sealed class SelloutUploadService(
     {
         var found = await uploadRepository.GetBatchAsync(batchId, companyId, cancellationToken);
         if (found is null)
-            return new ServiceResponse<SelloutUploadBatchDto> { Errors = ["Upload batch was not found."], StatusCode = StatusCodes.Status404NotFound };
+            return new ServiceResponse<SelloutUploadBatchDto> { Errors = ["Batch upload tidak ditemukan."], StatusCode = StatusCodes.Status404NotFound };
 
         var (batch, rows) = found.Value;
         var errors = rows.SelectMany(row => JsonSerializer.Deserialize<List<SelloutStagingErrorDto>>(row.ValidationErrorsJson) ?? []).ToList();
@@ -368,7 +372,7 @@ public sealed class SelloutUploadService(
         try
         {
             var source = await ReadBoundedAsync(file, options.Value.MaxFileSizeBytes, cancellationToken);
-            if (source.Length == 0) return (null, null, "The workbook is empty.");
+            if (source.Length == 0) return (null, null, UploadMessages.EmptyFile);
 
             // Hash what the distributor actually sent; a converted .xls is not the audited artifact.
             var sha256 = Convert.ToHexString(SHA256.HashData(source)).ToLowerInvariant();
@@ -387,7 +391,7 @@ public sealed class SelloutUploadService(
         int read;
         while ((read = await source.ReadAsync(buffer, cancellationToken)) > 0)
         {
-            if (output.Length + read > maximum) throw new InvalidDataException($"The workbook exceeds the {maximum} byte upload limit.");
+            if (output.Length + read > maximum) throw new InvalidDataException(UploadMessages.FileTooLarge(maximum));
             await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
         }
         return output.ToArray();
@@ -436,8 +440,8 @@ public sealed class SelloutUploadService(
         {
             From = from,
             To = to,
-            Summary = string.Create(CultureInfo.InvariantCulture,
-                $"Confirming replaces your published sales from {from:dd MMM yyyy} to {to:dd MMM yyyy}."),
+            Summary = string.Create(UploadNotificationMessage.Culture,
+                $"Konfirmasi akan mengganti data sales yang sudah tersimpan dari {from:dd MMM yyyy} sampai {to:dd MMM yyyy}."),
             Replaces = await uploadRepository.GetPublishedInRangeAsync(companyId, from, to, cancellationToken)
         };
     }
@@ -459,22 +463,24 @@ public sealed class SelloutUploadService(
         Weeks = analysis.WeekSummaries,
         IgnoredSummaryRowNumbers = analysis.IgnoredSummaryRowNumbers,
         RowErrors = analysis.RowErrors,
+        RowErrorMessages = DescribeRowErrors(analysis.RowErrors),
         Errors = analysis.Errors
     };
 
-    private static List<string> CollectErrors(SelloutWorkbookAnalysisDto analysis) =>
-        analysis.Errors
-            .Concat(analysis.RowErrors.Select(error =>
-                // The rejected text is the whole diagnosis for a bad cell - without it "not a valid
-                // DateTime" leaves the user opening the workbook to find out what the cell actually held.
-                string.IsNullOrWhiteSpace(error.RejectedValue)
-                    ? $"Row {error.SourceRowNumber}, {error.Field}: {error.Reason}"
-                    : $"Row {error.SourceRowNumber}, {error.Field}: {error.Reason} (cell value: \"{error.RejectedValue}\")"))
+    /// <summary>
+    /// One readable line per bad cell, as the preview lists them. The rejected text is the whole diagnosis
+    /// for a bad cell - without it "not a valid DateTime" leaves the user opening the workbook to find out
+    /// what the cell actually held.
+    /// </summary>
+    private static List<string> DescribeRowErrors(IEnumerable<SelloutStagingErrorDto> rowErrors) =>
+        rowErrors.Select(error => string.IsNullOrWhiteSpace(error.RejectedValue)
+                ? $"Baris {error.SourceRowNumber}, {error.Field}: {error.Reason}"
+                : $"Baris {error.SourceRowNumber}, {error.Field}: {error.Reason} (isi sel: \"{error.RejectedValue}\")")
             .ToList();
 
     private static ServiceResponse<SelloutUploadGroupDto> GroupNotFound() => new()
     {
-        Errors = ["Upload result was not found."], StatusCode = StatusCodes.Status404NotFound
+        Errors = ["Hasil upload tidak ditemukan."], StatusCode = StatusCodes.Status404NotFound
     };
 
     private static SelloutUploadGroupDto MapGroup(SelloutUploadGroup group,
@@ -489,7 +495,7 @@ public sealed class SelloutUploadService(
         ValidRows = group.ValidRows,
         InvalidRows = group.InvalidRows,
         Message = group.ErrorSummary ?? (group.Status is SelloutUploadGroupStatus.Completed or SelloutUploadGroupStatus.CompletedWithWarnings
-            ? "Upload completed." : string.Empty),
+            ? "Upload selesai." : string.Empty),
         UploadedBy = group.UploadedBy,
         UploadedDate = group.UploadedDate,
         CompletedDate = group.CompletedDate,
@@ -544,9 +550,9 @@ public sealed class SelloutUploadService(
 
     private static string DescribeBatchCompletion(SelloutUploadBatch batch) => batch.Status switch
     {
-        SelloutUploadBatchStatus.Completed => "Upload completed.",
+        SelloutUploadBatchStatus.Completed => "Upload selesai.",
         SelloutUploadBatchStatus.CompletedWithWarnings =>
-            $"Upload completed with {batch.InvalidRows:N0} invalid row(s) excluded.",
+            $"Upload selesai; {batch.InvalidRows:N0} baris tidak valid tidak disimpan.",
         _ => string.Empty
     };
 

@@ -70,6 +70,18 @@ builder.Services.AddScoped<IUploadNotificationDispatcher, HangfireUploadNotifica
 // SMTP settings are stored encrypted, so the password is not readable from the database alone.
 builder.Services.AddScoped<IEmailSecretProtector, DataProtectionEmailSecretProtector>();
 
+// The keys that decrypt it live, by default, in the app-pool user's profile - or only in memory when IIS
+// does not load that profile, in which case every restart made the saved SMTP password unreadable.
+// DataProtection:KeysPath pins them to a folder the app pool can write. Setting it for the first time
+// starts a new key ring, so the SMTP password has to be entered once more afterwards.
+var dataProtectionKeysPath = builder.Configuration.GetValue<string>("DataProtection:KeysPath");
+if (!string.IsNullOrWhiteSpace(dataProtectionKeysPath))
+{
+    Microsoft.AspNetCore.DataProtection.DataProtectionBuilderExtensions.PersistKeysToFileSystem(
+        Microsoft.Extensions.DependencyInjection.DataProtectionServiceCollectionExtensions.AddDataProtection(builder.Services),
+        new DirectoryInfo(dataProtectionKeysPath));
+}
+
 builder.Services.AddScoped(serviceProvider =>
 {
     var httpContextAccessor = serviceProvider.GetRequiredService<IHttpContextAccessor>();
@@ -90,6 +102,8 @@ var app = builder.Build();
 // First-run bootstrap: seed an admin user (with a role holding every permission)
 // when the user table is empty. Credentials come from the "AdminSeed" config section
 // so they can be overridden via appsettings/environment/user-secrets.
+await MigrateDatabaseAsync(app);
+await EnsureDistributorRoleAsync(app);
 await SeedFirstAdminAsync(app);
 
 // Configure the HTTP request pipeline.
@@ -133,14 +147,59 @@ app.MapHangfireDashboard("/hangfire", new DashboardOptions
 
 // Register daily reminder recurring job
 var dailyJobHour = app.Configuration.GetValue<int>("Hangfire:DailyJobHour", 8);
+// Hangfire evaluates cron in UTC unless told otherwise, so DailyJobHour=8 used to fire at 15:00 WIB.
+// The job decides "today" from the server's local clock, so the schedule follows the same clock;
+// Hangfire:TimeZone (a Windows or IANA id) overrides it for a server not set to the distributors' zone.
+var reminderTimeZoneId = app.Configuration.GetValue<string>("Hangfire:TimeZone");
+var reminderTimeZone = string.IsNullOrWhiteSpace(reminderTimeZoneId)
+    ? TimeZoneInfo.Local
+    : TimeZoneInfo.FindSystemTimeZoneById(reminderTimeZoneId);
 Hangfire.RecurringJob.AddOrUpdate<ReminderJob>(
     "daily-reminder",
     job => job.ExecuteAsync(),
-    $"0 {dailyJobHour} * * *");
+    $"0 {dailyJobHour} * * *",
+    new Hangfire.RecurringJobOptions { TimeZone = reminderTimeZone });
 
 app.Run();
 
 return;
+
+// Applies pending migrations unless Database:MigrateOnStartup is false. This used to run inside the admin
+// seed, so turning the seed off (AdminSeed:Enabled=false) silently turned migrations off as well.
+static async Task MigrateDatabaseAsync(WebApplication webApp)
+{
+    if (!webApp.Configuration.GetValue("Database:MigrateOnStartup", true)) return;
+
+    using var scope = webApp.Services.CreateScope();
+    await scope.ServiceProvider.GetRequiredService<GiselXDbContext>().Database.MigrateAsync();
+}
+
+// The code shows distributor item identities to the role named exactly "Distributor"
+// (RoleAssignmentPolicy.DistributorRole), so that role must exist to be assigned. Created once with
+// the permissions a distributor needs; afterwards it is left to the Role Permissions screen.
+static async Task EnsureDistributorRoleAsync(WebApplication webApp)
+{
+    using var scope = webApp.Services.CreateScope();
+    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<AppIdentityRole>>();
+    if (await roleManager.RoleExistsAsync(RoleAssignmentPolicy.DistributorRole)) return;
+
+    var role = new AppIdentityRole
+    {
+        Name = RoleAssignmentPolicy.DistributorRole,
+        Description = "Distributor: uploads and views its own Sellout, Stock and Service Level data"
+    };
+    if (!(await roleManager.CreateAsync(role)).Succeeded) return;
+
+    foreach (var permission in new[]
+             {
+                 PermissionConstants.SalesTransactions.Index, PermissionConstants.SalesTransactions.Upload,
+                 PermissionConstants.SalesTransactions.Download,
+                 PermissionConstants.Stocks.Index, PermissionConstants.Stocks.Upload, PermissionConstants.Stocks.Download,
+                 PermissionConstants.ServiceLevels.Index, PermissionConstants.ServiceLevels.Upload,
+                 PermissionConstants.ServiceLevels.Download
+             })
+        await roleManager.AddClaimAsync(role, new System.Security.Claims.Claim("permission", permission));
+}
 
 // Seeds a default company, an Administrator role holding every permission, and a
 // confirmed admin user assigned to that role — but only when no users exist yet.
@@ -153,7 +212,6 @@ static async Task SeedFirstAdminAsync(WebApplication webApp)
     var services = scope.ServiceProvider;
 
     var db = services.GetRequiredService<GiselXDbContext>();
-    await db.Database.MigrateAsync();
 
     var userManager = services.GetRequiredService<UserManager<AppIdentityUser>>();
     var roleManager = services.GetRequiredService<RoleManager<AppIdentityRole>>();

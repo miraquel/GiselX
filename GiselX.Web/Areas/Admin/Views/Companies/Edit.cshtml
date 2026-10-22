@@ -23,8 +23,8 @@
                class="btn btn-outline-secondary">Add Stock Mapping</a>
             <a asp-controller="ItemMappings" asp-action="Index" asp-route-companyId="@Model.Id"
                class="btn btn-outline-primary">Manage Item Mappings</a>
-            <a asp-controller="StockAreas" asp-action="Index" asp-route-companyId="@Model.Id"
-               class="btn btn-outline-primary">Stock areas</a>
+            @* Stock areas are hidden: a distributor with several locations is registered as one company per
+               location instead. The StockAreas screens still exist and can be linked here again. *@
         </div>
         @if (ViewBag.StatusMessage != null)
         {
@@ -157,7 +157,7 @@
             <div class="row mb-4">
                 <label asp-for="ReminderLeadDays" class="col-sm-2 col-form-label"></label>
                 <div class="col-sm-4">
-                    <input asp-for="ReminderLeadDays" class="form-control" type="number" min="0" max="30" />
+                    <input asp-for="ReminderLeadDays" class="form-control" type="number" min="0" max="28" />
                     <span asp-validation-for="ReminderLeadDays" class="text-danger"></span>
                     <small class="text-muted">Days before deadline to send the early warning email.</small>
                 </div>

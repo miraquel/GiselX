@@ -13,9 +13,10 @@ public sealed class StockUploadPreflightDto
     public int TotalRows { get; set; }
     public int ValidRows { get; set; }
     public int InvalidRows { get; set; }
-    public decimal TotalSaldoAwal { get; set; }
-    public decimal TotalSaldoMasukPo { get; set; }
-    public decimal TotalSaldoAkhir { get; set; }
+    /// <summary>Cartons across the valid rows; zero when the template maps no carton column.</summary>
+    public decimal TotalQtyCarton { get; set; }
+    /// <summary>Pieces across the valid rows; zero when the template maps no piece column.</summary>
+    public decimal TotalQtyPcs { get; set; }
 
     /// <summary>
     /// One entry per mapped worksheet the workbook contributes to this snapshot.
@@ -32,6 +33,12 @@ public sealed class StockUploadPreflightDto
 
     /// <summary>Areas published for this date that this upload does not contain, so leaves alone.</summary>
     public IReadOnlyList<string> UntouchedAreaNames { get; set; } = [];
+
+    /// <summary>Active areas with nothing for this date, neither in this upload nor published earlier.</summary>
+    public IReadOnlyList<string> MissingAreaNames { get; set; } = [];
+
+    /// <summary>Mapped worksheets whose template has no Condition column, so every row counts as Good.</summary>
+    public IReadOnlyList<string> WorksheetsWithoutCondition { get; set; } = [];
 
     public IReadOnlyList<int> IgnoredSummaryRowNumbers { get; set; } = [];
     public IReadOnlyList<StockStagingErrorDto> RowErrors { get; set; } = [];

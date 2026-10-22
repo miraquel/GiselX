@@ -33,7 +33,7 @@ public sealed class StockWorkbookAnalysisService(
         var allAreas = await areaRepository.ListAsync(companyId, false, cancellationToken);
         var activeAreas = allAreas.Where(area => area.IsActive).ToList();
         var companyName = (await companyRepository.GetCompanyByIdAsync(companyId, cancellationToken))?.Name
-            ?? "this distributor";
+            ?? "distributor ini";
         var matcher = new StockAreaMatcher(activeAreas, companyName);
 
         if (allAreas.Count > 0)
@@ -43,7 +43,8 @@ public sealed class StockWorkbookAnalysisService(
                 .Select(match => match.Mapping)
                 .DistinctBy(mapping => mapping.Id)
                 .Select(mapping =>
-                    $"Template '{mapping.Name}' does not map an Area column, but {companyName} has Stock areas registered.")
+                    $"Template '{mapping.Name}' belum memetakan kolom Area, padahal {companyName} punya Stock area terdaftar. "
+                    + UploadMessages.ContactGmk)
                 .ToList();
             if (refusals.Count > 0)
                 return new StockWorkbookAnalysisDto
@@ -63,7 +64,10 @@ public sealed class StockWorkbookAnalysisService(
             cancellationToken.ThrowIfCancellationRequested();
             var parsed = parser.Parse(content, match.Mapping, match.WorksheetName);
             foreach (var error in parsed.Errors) error.WorksheetName = match.WorksheetName;
-            var mapsArea = match.Mapping.Columns.Any(column => column.CanonicalField == StockCanonicalField.Area);
+            // A company without any area has nothing to resolve the column against - the area master is
+            // not offered on the Companies screen - so the cell text is kept but no row fails over it.
+            var mapsArea = allAreas.Count > 0
+                && match.Mapping.Columns.Any(column => column.CanonicalField == StockCanonicalField.Area);
             var mapsCondition = match.Mapping.Columns.Any(column => column.CanonicalField == StockCanonicalField.Condition);
             foreach (var row in parsed.Rows)
             {
@@ -83,6 +87,7 @@ public sealed class StockWorkbookAnalysisService(
                 WorksheetName = match.WorksheetName,
                 MappingId = match.Mapping.Id,
                 MappingName = match.Mapping.Name,
+                MapsCondition = mapsCondition,
                 TotalRows = parsed.Rows.Count,
                 ValidRows = parsed.Rows.Count(row => row.IsValid),
                 InvalidRows = parsed.Rows.Count(row => !row.IsValid),
@@ -100,7 +105,7 @@ public sealed class StockWorkbookAnalysisService(
             RowErrors = errors,
             // Only a workbook whose every mapped worksheet is empty is unusable; one empty sheet beside a
             // populated one is reported through its zero-row entry in Sheets.
-            Errors = rows.Count == 0 ? ["The workbook contains no data rows."] : []
+            Errors = rows.Count == 0 ? [UploadMessages.NoDataRows] : []
         };
     }
 
