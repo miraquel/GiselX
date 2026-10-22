@@ -30,7 +30,7 @@
         }
         @if (TempData["ErrorMessage"] != null)
         {
-            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <div class="alert alert-danger alert-dismissible fade show" role="alert" style="white-space: pre-line;">
                 @TempData["ErrorMessage"]
                 <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
             </div>
@@ -114,7 +114,7 @@
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <script>
         // get AntiForgeryToken using jquery
-        const token = $('input[name="_+-_RequestVerificationToken"]').val();
+        const token = $('input[name="__RequestVerificationToken"]').first().val();
 
         $(document).ready(function() {
             const yearSelect = $('#yearSelect');

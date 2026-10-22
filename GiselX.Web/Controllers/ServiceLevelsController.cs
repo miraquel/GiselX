@@ -160,7 +160,8 @@ public class ServiceLevelsController : Controller
                 .Skip(1)
                 .Select(row => new ServiceLevelDto
                 {
-                    SoId = row.Cell(1).TryGetValue(out string soId) ? soId : string.Empty,
+                    SourceRowNumber = row.RowNumber(),
+                    SoId =row.Cell(1).TryGetValue(out string soId) ? soId : string.Empty,
                     SoCreateDate = row.Cell(2).TryGetValue(out DateTime soCreateDate) ? soCreateDate : SqlDateTime.MinValue.Value,
                     LeadTimeDlv = row.Cell(3).TryGetValue(out int leadTimeDlv) ? leadTimeDlv : 0,
                     LeadTimeRct = row.Cell(4).TryGetValue(out int leadTimeRct) ? leadTimeRct : 0,

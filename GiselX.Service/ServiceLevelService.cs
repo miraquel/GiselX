@@ -30,85 +30,45 @@ public class ServiceLevelService : IServiceLevelService
 
     public async Task<ServiceResponse> UploadAsync(IEnumerable<ServiceLevelDto> serviceLevels, int companyId, CancellationToken cancellationToken)
     {
-        var transDistDtos = serviceLevels as ServiceLevelDto[] ?? serviceLevels.ToArray();
-        
-        var errors = new Dictionary<int, List<string>>();
-         
-        if (serviceLevels == null || transDistDtos.Length == 0)
+        var submitted = serviceLevels as ServiceLevelDto[] ?? serviceLevels.ToArray();
+        if (submitted.Length == 0)
+            return Refused("File tidak berisi baris data.");
+
+        // A row with neither id is not a service-level line - a total or a note under the data - and is
+        // skipped, but counted and reported rather than dropped without a word. A row with one id and not
+        // the other is a real line with a gap, and is refused like any other bad cell.
+        var skipped = submitted.Count(row => string.IsNullOrWhiteSpace(row.SoId) && string.IsNullOrWhiteSpace(row.ItemId));
+        var transDistDtos = submitted
+            .Where(row => !string.IsNullOrWhiteSpace(row.SoId) || !string.IsNullOrWhiteSpace(row.ItemId))
+            .ToArray();
+        if (transDistDtos.Length == 0)
+            return Refused("File tidak berisi baris data.");
+
+        // Counted before the filter so the completion mail reports how many rows the file held.
+        var submittedRows = submitted.Length;
+
+        // Every problem of every row, numbered by the workbook's own row so the user can find it. The
+        // reader leaves an unreadable or blank date at SqlDateTime.MinValue (1753-01-01); the old check
+        // compared against DateTime.MinValue (year 1) and so never caught one.
+        var problems = new List<string>();
+        foreach (var row in transDistDtos)
         {
-            throw new ArgumentException("No transaction distributions to upload.", nameof(serviceLevels));
-        }
-        
-        // Counted before the filter below drops rows with no SoId/ItemId, so the completion mail can
-        // report how many rows the file held rather than only how many survived.
-        var submittedRows = transDistDtos.Length;
-
-        transDistDtos = transDistDtos.Where(t => !string.IsNullOrWhiteSpace(t.SoId) && !string.IsNullOrWhiteSpace(t.ItemId)).ToArray();
-        
-        // Validate each transaction distribution
-        foreach (var transDistDto in transDistDtos.Select((value, index) => new { Value = value, Index = index }))
-        {
-            var rowErrors = new List<string>();
-            
-            if (string.IsNullOrWhiteSpace(transDistDto.Value.SoId))
-            {
-                rowErrors.Add("SoId is required.");
-            }
-
-            if (string.IsNullOrWhiteSpace(transDistDto.Value.ItemId))
-            {
-                rowErrors.Add("ItemId is required.");
-            }
-            
-            if (string.IsNullOrWhiteSpace(transDistDto.Value.SoId) || string.IsNullOrWhiteSpace(transDistDto.Value.ItemId))
-            {
-                // Skip further validation if SoId or ItemId is missing
-                errors.Add(transDistDto.Index + 1, rowErrors);
-                continue;
-            }
-
-            if (transDistDto.Value.SoCreateDate == DateTime.MinValue)
-            {
-                rowErrors.Add($"SoCreateDate is required for SoId {transDistDto.Value.SoId}.");
-            }
-
-            if (transDistDto.Value.DlvDateRequest == DateTime.MinValue)
-            {
-                rowErrors.Add($"DlvDateRequest is required for SoId {transDistDto.Value.SoId}.");
-            }
-
-            if (transDistDto.Value.RctDateRequest == DateTime.MinValue)
-            {
-                rowErrors.Add($"RctDateRequest is required for SoId {transDistDto.Value.SoId}.");
-            }
-
-            // if (transDistDto.Value.SoQty <= 0)
-            // {
-            //     rowErrors.Add($"SoQty must be greater than zero for SoId {transDistDto.Value.SoId}.");
-            // }
-
-            if (rowErrors.Count != 0)
-            {
-                errors.Add(transDistDto.Index + 1, rowErrors);
-            }
+            var rowProblems = new List<string>();
+            if (string.IsNullOrWhiteSpace(row.SoId)) rowProblems.Add("SO ID kosong.");
+            if (string.IsNullOrWhiteSpace(row.ItemId)) rowProblems.Add("Item ID kosong.");
+            if (IsMissing(row.SoCreateDate)) rowProblems.Add("SO Create Date kosong atau bukan tanggal.");
+            if (IsMissing(row.DlvDateRequest)) rowProblems.Add("Delivery Date Request kosong atau bukan tanggal.");
+            if (IsMissing(row.RctDateRequest)) rowProblems.Add("Receipt Date Request kosong atau bukan tanggal.");
+            problems.AddRange(rowProblems.Select(problem => $"Baris {row.SourceRowNumber}: {problem}"));
         }
 
-        var allErrorMessages = string.Empty;
-        foreach (var error in errors)
-        {
-            var errorString = string.Join("; ", error.Value);
-            if (!string.IsNullOrWhiteSpace(errorString))
-            {
-                allErrorMessages += $"Row {error.Key}: {errorString}\n";
-            }
-        }
-        
-        if (!string.IsNullOrWhiteSpace(allErrorMessages))
+        if (problems.Count > 0)
         {
             return new ServiceResponse
             {
-                Errors = errors.SelectMany(e => e.Value).ToList(),
-                Message = $"Validation failed for {errors.Count} rows.\n{allErrorMessages}",
+                Errors = problems,
+                Message = $"File ditolak, tidak ada data yang disimpan. Perbaiki {problems.Count} masalah berikut lalu upload ulang:\n"
+                          + string.Join("\n", problems),
                 StatusCode = StatusCodes.Status400BadRequest
             };
         }
@@ -144,9 +104,18 @@ public class ServiceLevelService : IServiceLevelService
 
         return new ServiceResponse
         {
-            Message = $"{transDistDtos.Length} transaction distributions uploaded successfully."
+            Message = skipped == 0
+                ? $"{transDistDtos.Length} baris Service Level berhasil diupload."
+                : $"{transDistDtos.Length} baris Service Level berhasil diupload; {skipped} baris tanpa SO ID dan Item ID dilewati."
         };
     }
+
+    private static bool IsMissing(DateTime value) => value <= System.Data.SqlTypes.SqlDateTime.MinValue.Value;
+
+    private static ServiceResponse Refused(string message) => new()
+    {
+        Errors = [message], Message = message, StatusCode = StatusCodes.Status400BadRequest
+    };
 
     public async Task<ServiceResponse<PagedListDto<ServiceLevelDto>>> SelectAsync(PagedListRequestDto pagedListRequest, CancellationToken cancellationToken)
     {
