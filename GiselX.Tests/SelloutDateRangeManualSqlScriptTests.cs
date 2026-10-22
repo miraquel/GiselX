@@ -61,6 +61,27 @@ public sealed class SelloutDateRangeManualSqlScriptTests
         Assert.DoesNotContain("DROP TABLE", sql, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void Script_installs_each_procedure_exactly_as_its_readable_source()
+    {
+        // The script carries a third copy of each procedure inside sp_executesql with quotes doubled. If
+        // it drifts from StoredProcedures/*.sql, a production database gets a different proc than a
+        // migrated one.
+        var sql = ReadScript(out _);
+        var bodies = Regex.Matches(sql, @"sp_executesql N'(CREATE OR ALTER PROCEDURE \[dbo\]\.\[(\w+)\][\s\S]*?END)';")
+            .Select(match => (Name: match.Groups[2].Value, Body: match.Groups[1].Value.Replace("''", "'")))
+            .ToList();
+
+        Assert.Equal(["GiselSales_Select", "GiselSales_SelectByCustPeriod"], bodies.Select(b => b.Name).Order());
+        foreach (var (name, body) in bodies)
+        {
+            var source = File.ReadAllText(FindFromSolutionRoot("GiselX.Web", "StoredProcedures", $"{name}.sql"));
+            Assert.Equal(Normalize(source), Normalize(body));
+        }
+    }
+
+    private static string Normalize(string sql) => Regex.Replace(sql, @"\s+", " ").Trim();
+
     private static string ReadScript(out string migrationId)
     {
         var path = Assert.Single(Directory.GetFiles(
