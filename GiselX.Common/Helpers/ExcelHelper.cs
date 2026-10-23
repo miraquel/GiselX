@@ -4,6 +4,11 @@ namespace GiselX.Common.Helpers;
 
 public static class ExcelHelper
 {
+    /// <summary>Data rows read to size the export's columns; the header row is always included.</summary>
+    private const int WidthSampleRows = 200;
+    private const int MinColumnWidth = 8;
+    private const int MaxColumnWidth = 60;
+
     public static IEnumerable<T> ParseExcel<T>(Stream stream, Func<IXLRow, T> mapRow, bool skipHeader = true)
     {
         var results = new List<T>();
@@ -45,9 +50,20 @@ public static class ExcelHelper
             mapRow(xlRow, row.Item);
         }
 
-        // Auto-adjust column widths
-        worksheet.Columns().AdjustToContents();
-            
+        // Size columns from the text length of the header and the first rows. ClosedXML's AdjustToContents
+        // measures every cell with font metrics, which made a 2,650-row Sellout download take seconds on the
+        // server and grew with every row added.
+        var columnCount = worksheet.LastColumnUsed()?.ColumnNumber() ?? 0;
+        var lastSampledRow = Math.Min(dataArray.Length + 1, WidthSampleRows + 1);
+        for (var column = 1; column <= columnCount; column++)
+        {
+            var longest = 0;
+            for (var rowNumber = 1; rowNumber <= lastSampledRow; rowNumber++)
+                longest = Math.Max(longest, worksheet.Cell(rowNumber, column).GetFormattedString().Length);
+            // +3 leaves room for the table's filter button in the header.
+            worksheet.Column(column).Width = Math.Clamp(longest + 3, MinColumnWidth, MaxColumnWidth);
+        }
+
         // Style header row with bold and background color, follow the range of columns used
         // var headerRow = worksheet.Range(1, 1, 1, worksheet.ColumnsUsed().Count());
         // headerRow.Style.Font.Bold = true;
