@@ -147,7 +147,7 @@ public sealed class DistributorTemplateMappingService : IDistributorTemplateMapp
         return new ServiceResponse { Message = "Distributor template mapping deleted successfully." };
     }
 
-    private static List<string> Validate(SaveDistributorTemplateMappingDto dto,
+    internal static List<string> Validate(SaveDistributorTemplateMappingDto dto,
         IReadOnlyList<DistributorTemplateMapping> existingMappings)
     {
         var errors = new List<string>();
