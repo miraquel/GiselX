@@ -179,7 +179,7 @@ public class CompanyRepository : ICompanyRepository
 
     public async Task<IReadOnlyList<Company>> GetAllAsync(CancellationToken cancellationToken)
     {
-        const string query = "SELECT Id, Name FROM Company ORDER BY Name;";
+        const string query = "SELECT Id, Name, Location FROM Company ORDER BY Name;";
         var command = new CommandDefinition(query, transaction: _dbTransaction, cancellationToken: cancellationToken);
         var companies = await _dbConnection.QueryAsync<Company>(command);
         return companies.ToList();

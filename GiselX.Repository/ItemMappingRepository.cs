@@ -205,6 +205,70 @@ public sealed class ItemMappingRepository(IDbConnection dbConnection, IDbTransac
         return values.ToList();
     }
 
+    public async Task<IReadOnlyList<UnmappedItemCompanySummary>> GetUnmappedSummaryByCompanyAsync(
+        CancellationToken cancellationToken)
+    {
+        // The same definition as GetUnmappedDistributorItemsAsync, counted per company instead of listed per item,
+        // so the overview always agrees with each company's Unmapped tab. Companies with item mapping switched off
+        // are excluded inside each branch: every one of their staging rows has a NULL ItemMappingId.
+        const string sql = """
+            WITH Discovered AS (
+                SELECT batch.CompanyId AS CompanyId,
+                       UPPER(LTRIM(RTRIM(staging.DistributorProductId))) AS NormalizedItemId,
+                       batch.UploadedDate AS UploadedDate
+                FROM StockStaging staging
+                INNER JOIN StockUploadBatch batch ON batch.Id = staging.StockUploadBatchId
+                INNER JOIN Company company ON company.Id = batch.CompanyId AND company.ItemMappingEnabled = 1
+                WHERE staging.ItemMappingId IS NULL
+                  AND NULLIF(LTRIM(RTRIM(staging.DistributorProductId)), '') IS NOT NULL
+                UNION ALL
+                SELECT batch.CompanyId,
+                       UPPER(LTRIM(RTRIM(staging.DistributorProductId))),
+                       batch.UploadedDate
+                FROM SelloutStaging staging
+                INNER JOIN SelloutUploadBatch batch ON batch.Id = staging.SelloutUploadBatchId
+                INNER JOIN Company company ON company.Id = batch.CompanyId AND company.ItemMappingEnabled = 1
+                WHERE staging.ItemMappingId IS NULL
+                  AND NULLIF(LTRIM(RTRIM(staging.DistributorProductId)), '') IS NOT NULL
+            )
+            SELECT company.Id AS CompanyId,
+                   company.Name AS CompanyName,
+                   company.Location AS CompanyLocation,
+                   COUNT(DISTINCT discovered.NormalizedItemId) AS UnmappedItemCount,
+                   COUNT(*) AS OccurrenceCount,
+                   MAX(discovered.UploadedDate) AS LastSeenDate
+            FROM Discovered discovered
+            INNER JOIN Company company ON company.Id = discovered.CompanyId
+            WHERE NOT EXISTS (
+                SELECT 1
+                FROM ItemMapping mapping
+                WHERE mapping.CompanyId = discovered.CompanyId
+                  AND UPPER(LTRIM(RTRIM(mapping.DistributorItemId))) = discovered.NormalizedItemId)
+            GROUP BY company.Id, company.Name, company.Location
+            ORDER BY LastSeenDate DESC, company.Name;
+            """;
+        var values = await dbConnection.QueryAsync<UnmappedItemCompanySummary>(new CommandDefinition(sql,
+            transaction: dbTransaction, cancellationToken: cancellationToken));
+        return values.ToList();
+    }
+
+    public async Task<IReadOnlyList<GmkItemSuggestion>> GetGmkItemSuggestionsAsync(CancellationToken cancellationToken)
+    {
+        // Deliberately across companies: the same GMK catalogue is mapped onto every distributor's codes.
+        const string sql = """
+            SELECT LTRIM(RTRIM(GmkItemId)) AS GmkItemId,
+                   MAX(LTRIM(RTRIM(GmkItemName))) AS GmkItemName
+            FROM ItemMapping
+            WHERE IsActive = 1
+              AND NULLIF(LTRIM(RTRIM(GmkItemId)), '') IS NOT NULL
+            GROUP BY LTRIM(RTRIM(GmkItemId))
+            ORDER BY GmkItemId;
+            """;
+        var values = await dbConnection.QueryAsync<GmkItemSuggestion>(new CommandDefinition(sql,
+            transaction: dbTransaction, cancellationToken: cancellationToken));
+        return values.ToList();
+    }
+
     private async Task<IReadOnlyList<ItemMapping>> LoadAsync(int companyId, bool activeOnly,
         CancellationToken cancellationToken)
     {

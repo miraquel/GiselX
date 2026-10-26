@@ -24,6 +24,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ReminderJob>();
         services.AddScoped<IDistributorTemplateMappingService, DistributorTemplateMappingService>();
         services.AddScoped<IStockTemplateMappingService, StockTemplateMappingService>();
+        services.AddScoped<IMappingCopyService, MappingCopyService>();
         services.AddScoped<ISelloutWorkbookInspector, XlsxSelloutWorkbookInspector>();
         services.AddScoped<IStockWorkbookInspector, XlsxStockWorkbookInspector>();
         services.AddScoped<StockWorkbookParser>();

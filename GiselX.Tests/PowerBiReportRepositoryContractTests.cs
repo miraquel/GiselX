@@ -329,7 +329,7 @@ public sealed class PowerBiReportRepositoryContractTests
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => repository.GetAllAsync(cancellation.Token));
 
-        Assert.Equal("SELECT Id, Name FROM Company ORDER BY Name;", connection.LastCommandText);
+        Assert.Equal("SELECT Id, Name, Location FROM Company ORDER BY Name;", connection.LastCommandText);
         AssertCommandScope(connection, transaction, cancellation.Token);
     }
 

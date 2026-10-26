@@ -74,6 +74,66 @@ public sealed class UnmappedDistributorItemQueryTests
         Assert.Contains("GROUP BY ranked.NormalizedItemId", sql);
     }
 
+    [Fact]
+    public async Task Gmk_suggestion_query_reads_only_active_mappings_across_companies()
+    {
+        var (repository, connection, transaction) = CreateRepository();
+
+        await Assert.ThrowsAsync<NotSupportedException>(() =>
+            repository.GetGmkItemSuggestionsAsync(CancellationToken.None));
+
+        var sql = connection.LastCommandText;
+        Assert.Contains("FROM ItemMapping", sql);
+        Assert.Contains("WHERE IsActive = 1", sql);
+        Assert.Contains("GROUP BY LTRIM(RTRIM(GmkItemId))", sql);
+        Assert.DoesNotContain("@CompanyId", sql);
+        Assert.Same(transaction, connection.LastTransaction);
+    }
+
+    [Fact]
+    public async Task Unmapped_summary_query_only_covers_companies_with_item_mapping_enabled()
+    {
+        var (repository, connection, transaction) = CreateRepository();
+
+        await Assert.ThrowsAsync<NotSupportedException>(() =>
+            repository.GetUnmappedSummaryByCompanyAsync(CancellationToken.None));
+
+        var sql = connection.LastCommandText;
+        Assert.Contains("company.ItemMappingEnabled = 1", sql);
+        Assert.DoesNotContain("@CompanyId", sql);
+        Assert.Same(transaction, connection.LastTransaction);
+    }
+
+    [Fact]
+    public async Task Unmapped_summary_query_matches_existing_mappings_within_the_same_company()
+    {
+        var (repository, connection, _) = CreateRepository();
+
+        await Assert.ThrowsAsync<NotSupportedException>(() =>
+            repository.GetUnmappedSummaryByCompanyAsync(CancellationToken.None));
+
+        var sql = connection.LastCommandText;
+        Assert.Contains("WHERE NOT EXISTS", sql);
+        Assert.Contains("mapping.CompanyId = discovered.CompanyId", sql);
+        Assert.Contains("UPPER(LTRIM(RTRIM(mapping.DistributorItemId))) = discovered.NormalizedItemId", sql);
+    }
+
+    [Fact]
+    public async Task Unmapped_summary_query_reads_both_staging_sources_with_the_unmapped_filter()
+    {
+        var (repository, connection, _) = CreateRepository();
+
+        await Assert.ThrowsAsync<NotSupportedException>(() =>
+            repository.GetUnmappedSummaryByCompanyAsync(CancellationToken.None));
+
+        var sql = connection.LastCommandText;
+        Assert.Contains("FROM StockStaging staging", sql);
+        Assert.Contains("FROM SelloutStaging staging", sql);
+        Assert.Equal(2, CountOccurrences(sql, "staging.ItemMappingId IS NULL"));
+        Assert.Equal(2, CountOccurrences(sql, "NULLIF(LTRIM(RTRIM(staging.DistributorProductId)), '') IS NOT NULL"));
+        Assert.Contains("COUNT(DISTINCT discovered.NormalizedItemId) AS UnmappedItemCount", sql);
+    }
+
     private static int CountOccurrences(string value, string term)
     {
         var count = 0;

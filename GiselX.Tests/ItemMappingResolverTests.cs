@@ -169,5 +169,9 @@ public sealed class ItemMappingResolverTests
         public Task UpsertAsync(IReadOnlyList<ItemMapping> values, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<IReadOnlyList<UnmappedDistributorItem>> GetUnmappedDistributorItemsAsync(int companyId, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
+        public Task<IReadOnlyList<GmkItemSuggestion>> GetGmkItemSuggestionsAsync(CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<GmkItemSuggestion>>([]);
+        public Task<IReadOnlyList<UnmappedItemCompanySummary>> GetUnmappedSummaryByCompanyAsync(CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<UnmappedItemCompanySummary>>([]);
     }
 }

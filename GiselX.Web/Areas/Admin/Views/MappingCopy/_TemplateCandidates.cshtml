@@ -1,0 +1,59 @@
+@using GiselX.Service.Dto
+@model Tuple<string, IReadOnlyList<TemplateCopyCandidateDto>>
+@{
+    var fieldName = Model.Item1;
+    var candidates = Model.Item2;
+}
+@if (candidates.Count == 0)
+{
+    <p class="text-muted">The source company has no mappings of this kind.</p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table align-middle">
+            <thead>
+            <tr><th></th><th>Name</th><th>Worksheet</th><th>Rows</th><th>Columns</th><th>Status</th><th>Outcome</th></tr>
+            </thead>
+            <tbody>
+            @foreach (var candidate in candidates)
+            {
+                var copyable = candidate.Outcome == TemplateCopyOutcome.WillCopy;
+                var id = $"{fieldName}-{candidate.SourceId}";
+                <tr>
+                    <td>
+                        <input class="form-check-input" type="checkbox" id="@id" name="@fieldName" value="@candidate.SourceId"
+                               checked="@(copyable && candidate.IsActive)" disabled="@(!copyable)" />
+                    </td>
+                    <td><label for="@id">@candidate.Name</label></td>
+                    <td>@candidate.WorksheetName</td>
+                    <td>@candidate.HeaderRowNumber / @candidate.FirstDataRowNumber</td>
+                    <td>@candidate.ColumnCount</td>
+                    <td>@(candidate.IsActive ? "Active" : "Inactive")</td>
+                    <td>
+                        @switch (candidate.Outcome)
+                        {
+                            case TemplateCopyOutcome.WillCopy:
+                                <span class="badge bg-success">Will copy</span>
+                                break;
+                            case TemplateCopyOutcome.SkippedNameExists:
+                                <span class="badge bg-secondary">Skipped – name exists</span>
+                                break;
+                            case TemplateCopyOutcome.SkippedFormatExists:
+                                <span class="badge bg-secondary">Skipped – format exists</span>
+                                break;
+                            default:
+                                <span class="badge bg-danger">Cannot copy</span>
+                                break;
+                        }
+                        @foreach (var reason in candidate.Reasons)
+                        {
+                            <div class="small text-muted">@reason</div>
+                        }
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+}

@@ -201,6 +201,10 @@ public sealed class ItemMappingImportServiceTests
         }
         public Task<IReadOnlyList<UnmappedDistributorItem>> GetUnmappedDistributorItemsAsync(int companyId, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<UnmappedDistributorItem>>([]);
+        public Task<IReadOnlyList<GmkItemSuggestion>> GetGmkItemSuggestionsAsync(CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<GmkItemSuggestion>>([]);
+        public Task<IReadOnlyList<UnmappedItemCompanySummary>> GetUnmappedSummaryByCompanyAsync(CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<UnmappedItemCompanySummary>>([]);
     }
 
     private sealed class FakeTransaction : IDbTransaction

@@ -1,0 +1,42 @@
+@model IReadOnlyList<GiselX.Service.Dto.UnmappedItemCompanySummaryDto>
+@{
+    ViewData["Title"] = "Unmapped Items";
+    Layout = "_ContentNavbarLayout";
+}
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-1">Unmapped Items</h5>
+        <small class="text-muted">Companies whose uploads contain distributor items without an item mapping. Their rows are left out of the published data until the items are mapped and the file is uploaded again.</small>
+    </div>
+    <div class="card-body">
+        @if (Model.Count == 0)
+        {
+            <p class="text-muted mb-0">Every company with item mapping enabled is fully mapped.</p>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table align-middle">
+                    <thead>
+                    <tr><th>Company</th><th>Location</th><th>Unmapped items</th><th>Rows</th><th>Last seen</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var summary in Model)
+                    {
+                        <tr>
+                            <td>@summary.CompanyName</td>
+                            <td>@summary.CompanyLocation</td>
+                            <td><span class="badge bg-danger">@summary.UnmappedItemCount</span></td>
+                            <td>@summary.OccurrenceCount</td>
+                            <td class="text-nowrap">@summary.LastSeenDate.ToString("yyyy-MM-dd HH:mm")</td>
+                            <td class="text-nowrap">
+                                <a asp-controller="ItemMappings" asp-action="Index" asp-route-companyId="@summary.CompanyId" asp-route-tab="unmapped" class="btn btn-sm btn-primary">Map items</a>
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>

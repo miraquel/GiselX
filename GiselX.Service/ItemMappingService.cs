@@ -128,6 +128,90 @@ public sealed class ItemMappingService(IItemMappingRepository repository, ICompa
         return new ServiceResponse<int> { Data = id, Message = "Item mapping saved successfully." };
     }
 
+    public async Task<ServiceResponse<BulkItemMappingResultDto>> SaveBulkAsync(int companyId,
+        IReadOnlyList<SaveItemMappingDto> rows, string username, CancellationToken token)
+    {
+        var result = new BulkItemMappingResultDto();
+        // Each accepted row joins the list the next one is validated against, so two rows for one distributor id
+        // cannot both be saved.
+        var known = (await repository.GetByCompanyAsync(companyId, token)).ToList();
+        var now = DateTime.UtcNow;
+        foreach (var row in rows.Where(row => !string.IsNullOrWhiteSpace(row.GmkItemId) ||
+                     !string.IsNullOrWhiteSpace(row.GmkItemName)))
+        {
+            row.Id = null;
+            row.CompanyId = companyId;
+            row.IsActive = true;
+            var errors = Validate(row, known);
+            var mapping = new ItemMapping
+            {
+                CompanyId = companyId,
+                GmkItemId = row.GmkItemId?.Trim() ?? string.Empty,
+                GmkItemName = row.GmkItemName?.Trim() ?? string.Empty,
+                DistributorItemId = row.DistributorItemId?.Trim() ?? string.Empty,
+                DistributorItemName = row.DistributorItemName?.Trim() ?? string.Empty,
+                IsActive = true,
+                CreatedBy = username,
+                CreatedDate = now
+            };
+            if (errors.Count == 0)
+            {
+                try
+                {
+                    mapping.Id = await repository.InsertAsync(mapping, token);
+                    known.Add(mapping);
+                    result.SavedCount++;
+                    continue;
+                }
+                catch (ItemMappingDuplicateException)
+                {
+                    errors.Add("A mapping with this Distributor Item ID already exists for the company.");
+                }
+            }
+
+            result.RowErrors.Add(new BulkItemMappingRowErrorDto
+            {
+                DistributorItemId = row.DistributorItemId?.Trim() ?? string.Empty,
+                Errors = errors
+            });
+        }
+
+        if (result.SavedCount == 0)
+            return new ServiceResponse<BulkItemMappingResultDto> { Data = result, Message = "No item mappings were saved." };
+
+        dbTransaction.Commit();
+        return new ServiceResponse<BulkItemMappingResultDto>
+        {
+            Data = result,
+            Message = $"{result.SavedCount} item mapping(s) saved. Uploads that contained these items were published " +
+                "without those rows; ask the distributor to upload them again."
+        };
+    }
+
+    public async Task<IReadOnlyList<GmkItemSuggestionDto>> ListGmkItemSuggestionsAsync(CancellationToken token) =>
+        (await repository.GetGmkItemSuggestionsAsync(token))
+        .Select(item => new GmkItemSuggestionDto { GmkItemId = item.GmkItemId, GmkItemName = item.GmkItemName })
+        .ToList();
+
+    public async Task<ServiceResponse<IReadOnlyList<UnmappedItemCompanySummaryDto>>> ListUnmappedSummaryAsync(
+        CancellationToken token)
+    {
+        var summaries = await repository.GetUnmappedSummaryByCompanyAsync(token);
+        return new ServiceResponse<IReadOnlyList<UnmappedItemCompanySummaryDto>>
+        {
+            Data = summaries.Select(summary => new UnmappedItemCompanySummaryDto
+            {
+                CompanyId = summary.CompanyId,
+                CompanyName = summary.CompanyName,
+                CompanyLocation = summary.CompanyLocation,
+                UnmappedItemCount = summary.UnmappedItemCount,
+                OccurrenceCount = summary.OccurrenceCount,
+                LastSeenDate = summary.LastSeenDate
+            }).ToList(),
+            Message = "Unmapped item summary retrieved successfully."
+        };
+    }
+
     public async Task<ServiceResponse> SetActiveAsync(int id, int companyId, bool active, string username,
         CancellationToken token)
     {

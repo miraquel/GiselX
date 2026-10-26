@@ -47,10 +47,7 @@ public sealed class StockTemplateMappingService(
         if (dto.Columns.All(column => column.CanonicalField != StockCanonicalField.Area))
         {
             var areas = await areaRepository.ListAsync(dto.CompanyId, false, cancellationToken);
-            if (areas.Count > 0)
-                errors.Add("This company has Stock areas registered (" +
-                    string.Join(", ", areas.Select(area => area.Name)) +
-                    "), so the template must map an Area column; uploads through a template without one are refused.");
+            if (AreaRequirementError(dto.Columns, areas) is { } areaError) errors.Add(areaError);
         }
 
         if (errors.Count > 0)
@@ -140,7 +137,16 @@ public sealed class StockTemplateMappingService(
         return new ServiceResponse { Message = "Stock template mapping deleted successfully." };
     }
 
-    private static List<string> Validate(SaveStockTemplateMappingDto dto,
+    /// <summary>The refusal for a template without an Area column on a company that has Stock areas, or null.</summary>
+    internal static string? AreaRequirementError(IEnumerable<StockTemplateColumnDto> columns,
+        IReadOnlyList<StockArea> areas)
+    {
+        if (areas.Count == 0 || columns.Any(column => column.CanonicalField == StockCanonicalField.Area)) return null;
+        return "This company has Stock areas registered (" + string.Join(", ", areas.Select(area => area.Name)) +
+            "), so the template must map an Area column; uploads through a template without one are refused.";
+    }
+
+    internal static List<string> Validate(SaveStockTemplateMappingDto dto,
         IReadOnlyList<StockTemplateMapping> existingMappings)
     {
         var errors = new List<string>();
