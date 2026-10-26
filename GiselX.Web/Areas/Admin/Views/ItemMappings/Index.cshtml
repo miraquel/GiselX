@@ -186,6 +186,7 @@
                                         @item.DistributorItemId
                                         @if (canManage)
                                         {
+                                            <input type="hidden" name="rows.Index" value="@index" />
                                             <input type="hidden" name="rows[@index].DistributorItemId" value="@item.DistributorItemId" />
                                         }
                                     </td>
@@ -252,6 +253,15 @@
                 const target = input.closest('tr')?.querySelector('.gmk-item-name');
                 if (name && target) target.value = name;
             }));
+            // Post only the rows that were filled in; rows.Index lets the server bind the gaps this leaves.
+            document.getElementById('unmappedForm')?.addEventListener('submit', event => {
+                event.currentTarget.querySelectorAll('tbody tr').forEach(row => {
+                    const id = row.querySelector('.gmk-item-id');
+                    const name = row.querySelector('.gmk-item-name');
+                    if (!id || !name || id.value.trim() || name.value.trim()) return;
+                    row.querySelectorAll('input').forEach(field => field.disabled = true);
+                });
+            });
         })();
     </script>
     <script>

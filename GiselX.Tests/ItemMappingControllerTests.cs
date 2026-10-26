@@ -337,6 +337,48 @@ public sealed class ItemMappingControllerTests
     }
 
     [Fact]
+    public async Task SaveUnmapped_merges_row_errors_whose_ids_normalise_to_the_same_key()
+    {
+        // SQL trims spaces only, C# trims all whitespace: "P1\t" and "P1" are two rows on the tab but one key here.
+        var service = new CapturingItemMappingService
+        {
+            BulkResponse = new ServiceResponse<BulkItemMappingResultDto>
+            {
+                Data = new BulkItemMappingResultDto
+                {
+                    RowErrors =
+                    [
+                        new BulkItemMappingRowErrorDto { DistributorItemId = "P1", Errors = ["GMK Item Name is required."] },
+                        new BulkItemMappingRowErrorDto { DistributorItemId = "P1\t", Errors = ["GMK Item ID is required."] }
+                    ]
+                }
+            }
+        };
+        var controller = CreateController(service);
+
+        var result = await controller.SaveUnmapped(7,
+        [
+            new UnmappedItemMappingInput { DistributorItemId = "P1", GmkItemId = "G1" },
+            new UnmappedItemMappingInput { DistributorItemId = "P1\t", GmkItemName = "Gula" }
+        ], CancellationToken.None);
+
+        var model = Assert.IsType<ItemMappingListViewModel>(Assert.IsType<ViewResult>(result).Model);
+        Assert.Equal(["GMK Item Name is required.", "GMK Item ID is required."], model.UnmappedInputs["P1"].Errors);
+    }
+
+    [Fact]
+    public void SaveUnmapped_accepts_forms_far_larger_than_the_default_value_limit()
+    {
+        // Every unmapped row posts four fields; the default limit of 1024 values broke the form at ~256 rows.
+        var action = typeof(ItemMappingsController).GetMethod(nameof(ItemMappingsController.SaveUnmapped))!;
+
+        var limits = Assert.Single(action.GetCustomAttributes(typeof(RequestFormLimitsAttribute), false)
+            .Cast<RequestFormLimitsAttribute>());
+
+        Assert.True(limits.ValueCountLimit >= 20_000);
+    }
+
+    [Fact]
     public async Task SaveUnmapped_redirects_to_the_unmapped_tab_when_every_row_saves()
     {
         var service = new CapturingItemMappingService();

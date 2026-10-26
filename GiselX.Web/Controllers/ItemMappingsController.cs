@@ -25,7 +25,10 @@ public sealed class ItemMappingsController(IItemMappingService mappingService, I
         return View(model);
     }
 
+    // Each unmapped row carries four fields. The page posts only the rows that were filled in, but without
+    // JavaScript every row is sent, and the default limit of 1024 form values would refuse ~256 rows outright.
     [HttpPost, ValidateAntiForgeryToken]
+    [RequestFormLimits(ValueCountLimit = 20_000)]
     [Authorize(PermissionConstants.ItemMappings.Manage)]
     public async Task<IActionResult> SaveUnmapped(int companyId, List<UnmappedItemMappingInput>? rows,
         CancellationToken cancellationToken)
@@ -47,8 +50,9 @@ public sealed class ItemMappingsController(IItemMappingService mappingService, I
         }
 
         // Saved rows have left the unmapped list; the failed ones are shown again with what was typed.
-        var errors = result.RowErrors.ToDictionary(error => UnmappedItemMappingInput.Key(error.DistributorItemId),
-            error => error.Errors);
+        // Keys trim more whitespace than SQL does, so two listed ids can share one key; merge rather than throw.
+        var errors = result.RowErrors.GroupBy(error => UnmappedItemMappingInput.Key(error.DistributorItemId))
+            .ToDictionary(group => group.Key, group => group.SelectMany(error => error.Errors).ToList());
         var inputs = new Dictionary<string, UnmappedItemMappingInput>();
         foreach (var row in rows)
         {
