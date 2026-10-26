@@ -19,6 +19,12 @@ public sealed class MappingCopyService(
     private const string NameExistsReason = "A mapping with this name already exists for the company.";
     private const string FormatExistsReason = "This company already has an active template for this format.";
 
+    public async Task<CopySourceCompanyDto?> GetCompanyAsync(int companyId, CancellationToken cancellationToken)
+    {
+        var company = await companyRepository.GetCompanyByIdAsync(companyId, cancellationToken);
+        return company is null ? null : new CopySourceCompanyDto { Id = company.Id, DisplayName = DisplayName(company) };
+    }
+
     public async Task<IReadOnlyList<CopySourceCompanyDto>> ListSourceCompaniesAsync(int targetCompanyId,
         CancellationToken cancellationToken)
     {

@@ -277,6 +277,15 @@ public sealed class MappingCopyServiceTests
         Assert.Contains(options, option => option.Id == 3 && option.DisplayName == "PT XYZ");
     }
 
+    [Fact]
+    public async Task GetCompanyAsync_returns_the_display_name_or_null_when_missing()
+    {
+        var fixture = new Fixture();
+
+        Assert.Equal("PT ABC – Medan", (await fixture.Service.GetCompanyAsync(Target, CancellationToken.None))!.DisplayName);
+        Assert.Null(await fixture.Service.GetCompanyAsync(99, CancellationToken.None));
+    }
+
     private static MappingCopyRequestDto Request(List<int>? sellout = null, List<int>? stock = null,
         bool items = false) => new()
     {

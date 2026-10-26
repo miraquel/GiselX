@@ -23,6 +23,8 @@
                class="btn btn-outline-secondary">Add Stock Mapping</a>
             <a asp-controller="ItemMappings" asp-action="Index" asp-route-companyId="@Model.Id"
                class="btn btn-outline-primary">Manage Item Mappings</a>
+            <a asp-controller="MappingCopy" asp-action="Index" asp-route-companyId="@Model.Id"
+               class="btn btn-outline-secondary">Copy Mappings from Another Company</a>
             @* Stock areas are hidden: a distributor with several locations is registered as one company per
                location instead. The StockAreas screens still exist and can be linked here again. *@
         </div>

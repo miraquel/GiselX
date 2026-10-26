@@ -9,6 +9,9 @@ namespace GiselX.Service.Interface;
 /// </summary>
 public interface IMappingCopyService
 {
+    /// <summary>The company as the copy screens name it ("Name – Location"), or null when it does not exist.</summary>
+    Task<CopySourceCompanyDto?> GetCompanyAsync(int companyId, CancellationToken cancellationToken);
+
     Task<IReadOnlyList<CopySourceCompanyDto>> ListSourceCompaniesAsync(int targetCompanyId,
         CancellationToken cancellationToken);
 
