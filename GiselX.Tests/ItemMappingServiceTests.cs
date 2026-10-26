@@ -338,6 +338,91 @@ public class ItemMappingServiceTests
         Assert.Equal(string.Empty, Assert.Single(response.Data!.Items).DistributorItemName);
     }
 
+    [Fact]
+    public async Task SaveBulkAsync_ignores_rows_with_no_gmk_values()
+    {
+        var (service, repository, transaction) = CreateService();
+
+        var response = await service.SaveBulkAsync(7, [BulkRow("P1", "", " ")], "admin", CancellationToken.None);
+
+        Assert.True(response.IsSuccess);
+        Assert.Equal(0, response.Data!.SavedCount);
+        Assert.Empty(response.Data.RowErrors);
+        Assert.Empty(repository.Inserted);
+        Assert.False(transaction.CommitCalled);
+    }
+
+    [Fact]
+    public async Task SaveBulkAsync_saves_valid_rows_and_reports_invalid_ones_then_commits_once()
+    {
+        var (service, repository, transaction) = CreateService();
+
+        var response = await service.SaveBulkAsync(7,
+            [BulkRow("P1", " G1 ", " Gula "), BulkRow("P2", "G2", "")], "admin", CancellationToken.None);
+
+        Assert.True(response.IsSuccess);
+        Assert.Equal(1, response.Data!.SavedCount);
+        var saved = Assert.Single(repository.Inserted);
+        Assert.Equal(7, saved.CompanyId);
+        Assert.Equal("G1", saved.GmkItemId);
+        Assert.Equal("Gula", saved.GmkItemName);
+        Assert.True(saved.IsActive);
+        Assert.Equal("admin", saved.CreatedBy);
+        var rowError = Assert.Single(response.Data.RowErrors);
+        Assert.Equal("P2", rowError.DistributorItemId);
+        Assert.Contains("GMK Item Name is required.", rowError.Errors);
+        Assert.True(transaction.CommitCalled);
+        Assert.Contains("ask the distributor to upload them again", response.Message);
+    }
+
+    [Fact]
+    public async Task SaveBulkAsync_rejects_a_second_row_for_the_same_distributor_id_ignoring_case_and_padding()
+    {
+        var (service, repository, _) = CreateService();
+
+        var response = await service.SaveBulkAsync(7,
+            [BulkRow("p1", "G1", "Gula"), BulkRow(" P1 ", "G2", "Garam")], "admin", CancellationToken.None);
+
+        Assert.Single(repository.Inserted);
+        Assert.Contains("A mapping with this Distributor Item ID already exists for the company.",
+            Assert.Single(response.Data!.RowErrors).Errors);
+    }
+
+    [Fact]
+    public async Task SaveBulkAsync_reports_a_duplicate_raised_by_the_database_as_a_row_error()
+    {
+        var (service, repository, transaction) = CreateService();
+        repository.InsertException = new ItemMappingDuplicateException(new InvalidOperationException());
+
+        var response = await service.SaveBulkAsync(7, [BulkRow("P1", "G1", "Gula")], "admin", CancellationToken.None);
+
+        Assert.Equal(0, response.Data!.SavedCount);
+        Assert.Single(response.Data.RowErrors);
+        Assert.False(transaction.CommitCalled);
+    }
+
+    [Fact]
+    public async Task SaveBulkAsync_with_only_invalid_rows_does_not_commit()
+    {
+        var (service, repository, transaction) = CreateService();
+
+        var response = await service.SaveBulkAsync(7, [BulkRow("P1", "G1", "")], "admin", CancellationToken.None);
+
+        Assert.Equal(0, response.Data!.SavedCount);
+        Assert.Single(response.Data.RowErrors);
+        Assert.Empty(repository.Inserted);
+        Assert.False(transaction.CommitCalled);
+    }
+
+    private static SaveItemMappingDto BulkRow(string distributorItemId, string gmkItemId, string gmkItemName) => new()
+    {
+        CompanyId = 7,
+        DistributorItemId = distributorItemId,
+        DistributorItemName = "Barang " + distributorItemId.Trim(),
+        GmkItemId = gmkItemId,
+        GmkItemName = gmkItemName
+    };
+
     private static (ItemMappingService Service, FakeItemMappingRepository Repository) CreateUnmappedService(
         bool itemMappingEnabled)
     {
@@ -429,6 +514,8 @@ public class ItemMappingServiceTests
         public Task UpsertAsync(IReadOnlyList<ItemMapping> values, CancellationToken cancellationToken) => Task.CompletedTask;
         public Task<IReadOnlyList<UnmappedDistributorItem>> GetUnmappedDistributorItemsAsync(int companyId, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<UnmappedDistributorItem>>(UnmappedItems);
+        public Task<IReadOnlyList<GmkItemSuggestion>> GetGmkItemSuggestionsAsync(CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<GmkItemSuggestion>>([]);
         public List<UnmappedDistributorItem> UnmappedItems { get; } = [];
     }
 

@@ -18,21 +18,51 @@ public sealed class ItemMappingsController(IItemMappingService mappingService, I
     [HttpGet]
     [Authorize(PermissionConstants.ItemMappings.Index)]
     public async Task<IActionResult> Index(int companyId, string? search, string? sortBy, string? sortDirection,
+        CancellationToken cancellationToken, string? tab = null)
+    {
+        var model = await BuildListAsync(companyId, search, sortBy, sortDirection, cancellationToken);
+        model.ActiveTab = tab;
+        return View(model);
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(PermissionConstants.ItemMappings.Manage)]
+    public async Task<IActionResult> SaveUnmapped(int companyId, List<UnmappedItemMappingInput>? rows,
         CancellationToken cancellationToken)
     {
-        var response = await mappingService.ListAsync(companyId, cancellationToken);
-        var unmapped = await mappingService.ListUnmappedAsync(companyId, cancellationToken);
-        var mappings = FilterAndSort(response.Data ?? [], search, sortBy, sortDirection);
-        return View(new ItemMappingListViewModel
+        rows ??= [];
+        var response = await mappingService.SaveBulkAsync(companyId, rows.Select(row => new SaveItemMappingDto
         {
             CompanyId = companyId,
-            Search = search,
-            SortBy = sortBy,
-            SortDirection = sortDirection,
-            Mappings = mappings,
-            UnmappedItems = Filter(unmapped.Data?.Items ?? [], search),
-            ItemMappingEnabled = unmapped.Data?.ItemMappingEnabled == true
-        });
+            DistributorItemId = row.DistributorItemId,
+            DistributorItemName = row.DistributorItemName ?? string.Empty,
+            GmkItemId = row.GmkItemId ?? string.Empty,
+            GmkItemName = row.GmkItemName ?? string.Empty
+        }).ToList(), Username, cancellationToken);
+        var result = response.Data ?? new BulkItemMappingResultDto();
+        if (result.RowErrors.Count == 0)
+        {
+            TempData["StatusMessage"] = response.Message;
+            return RedirectToAction(nameof(Index), new { companyId, tab = "unmapped" });
+        }
+
+        // Saved rows have left the unmapped list; the failed ones are shown again with what was typed.
+        var errors = result.RowErrors.ToDictionary(error => UnmappedItemMappingInput.Key(error.DistributorItemId),
+            error => error.Errors);
+        var inputs = new Dictionary<string, UnmappedItemMappingInput>();
+        foreach (var row in rows)
+        {
+            var key = UnmappedItemMappingInput.Key(row.DistributorItemId);
+            if (inputs.ContainsKey(key)) continue;
+            row.Errors = errors.GetValueOrDefault(key) ?? [];
+            inputs[key] = row;
+        }
+
+        var model = await BuildListAsync(companyId, null, null, null, cancellationToken);
+        model.ActiveTab = "unmapped";
+        model.UnmappedInputs = inputs;
+        model.StatusMessage = result.SavedCount > 0 ? response.Message : null;
+        return View(nameof(Index), model);
     }
 
     [HttpGet]
@@ -155,6 +185,25 @@ public sealed class ItemMappingsController(IItemMappingService mappingService, I
     }
 
     private string Username => User.Identity?.Name ?? "unknown";
+
+    private async Task<ItemMappingListViewModel> BuildListAsync(int companyId, string? search, string? sortBy,
+        string? sortDirection, CancellationToken cancellationToken)
+    {
+        var response = await mappingService.ListAsync(companyId, cancellationToken);
+        var unmapped = await mappingService.ListUnmappedAsync(companyId, cancellationToken);
+        var itemMappingEnabled = unmapped.Data?.ItemMappingEnabled == true;
+        return new ItemMappingListViewModel
+        {
+            CompanyId = companyId,
+            Search = search,
+            SortBy = sortBy,
+            SortDirection = sortDirection,
+            Mappings = FilterAndSort(response.Data ?? [], search, sortBy, sortDirection),
+            UnmappedItems = Filter(unmapped.Data?.Items ?? [], search),
+            ItemMappingEnabled = itemMappingEnabled,
+            GmkItems = itemMappingEnabled ? await mappingService.ListGmkItemSuggestionsAsync(cancellationToken) : []
+        };
+    }
 
     private IActionResult RedirectToList(int companyId, ServiceResponse response)
     {

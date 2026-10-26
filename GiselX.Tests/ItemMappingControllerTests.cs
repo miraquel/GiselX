@@ -301,6 +301,74 @@ public sealed class ItemMappingControllerTests
         Assert.Equal("GMK Item ID", received.Worksheet("Item Mappings").Cell(1, 1).GetString());
     }
 
+    [Fact]
+    public async Task SaveUnmapped_rerenders_unmapped_tab_with_typed_values_when_a_row_fails()
+    {
+        var service = new CapturingItemMappingService
+        {
+            BulkResponse = new ServiceResponse<BulkItemMappingResultDto>
+            {
+                Data = new BulkItemMappingResultDto
+                {
+                    SavedCount = 1,
+                    RowErrors = [new BulkItemMappingRowErrorDto { DistributorItemId = "P2", Errors = ["GMK Item Name is required."] }]
+                },
+                Message = "1 item mapping(s) saved."
+            }
+        };
+        var controller = CreateController(service);
+
+        var result = await controller.SaveUnmapped(7,
+        [
+            new UnmappedItemMappingInput { DistributorItemId = "P1", DistributorItemName = "Gula", GmkItemId = "G1", GmkItemName = "Gula" },
+            new UnmappedItemMappingInput { DistributorItemId = "p2 ", DistributorItemName = "Garam", GmkItemId = "G2" }
+        ], CancellationToken.None);
+
+        var view = Assert.IsType<ViewResult>(result);
+        Assert.Equal("Index", view.ViewName);
+        var model = Assert.IsType<ItemMappingListViewModel>(view.Model);
+        Assert.Equal("unmapped", model.ActiveTab);
+        var kept = model.UnmappedInputs["P2"];
+        Assert.Equal("G2", kept.GmkItemId);
+        Assert.Equal(["GMK Item Name is required."], kept.Errors);
+        Assert.Equal("1 item mapping(s) saved.", model.StatusMessage);
+        Assert.Equal(2, service.BulkSaved!.Count);
+        Assert.All(service.BulkSaved, row => Assert.Equal(7, row.CompanyId));
+    }
+
+    [Fact]
+    public async Task SaveUnmapped_redirects_to_the_unmapped_tab_when_every_row_saves()
+    {
+        var service = new CapturingItemMappingService();
+        var controller = CreateController(service);
+
+        var result = await controller.SaveUnmapped(7,
+            [new UnmappedItemMappingInput { DistributorItemId = "P1", DistributorItemName = "Gula", GmkItemId = "G1", GmkItemName = "Gula" }],
+            CancellationToken.None);
+
+        var redirect = Assert.IsType<RedirectToActionResult>(result);
+        Assert.Equal("Index", redirect.ActionName);
+        Assert.Equal("unmapped", redirect.RouteValues!["tab"]);
+        Assert.Equal("Saved.", controller.TempData["StatusMessage"]);
+    }
+
+    [Fact]
+    public async Task Index_passes_the_requested_tab_and_gmk_suggestions_to_the_view()
+    {
+        var service = new CapturingItemMappingService
+        {
+            Suggestions = [new GmkItemSuggestionDto { GmkItemId = "G1", GmkItemName = "Gula" }],
+            Unmapped = new UnmappedDistributorItemListDto { ItemMappingEnabled = true }
+        };
+        var controller = CreateController(service);
+
+        var result = await controller.Index(7, null, null, null, CancellationToken.None, "unmapped");
+
+        var model = Assert.IsType<ItemMappingListViewModel>(Assert.IsType<ViewResult>(result).Model);
+        Assert.Equal("unmapped", model.ActiveTab);
+        Assert.Single(model.GmkItems);
+    }
+
     private static ItemMappingsController CreateController(CapturingItemMappingService service,
         CapturingImportService? importService = null)
     {
@@ -366,6 +434,21 @@ public sealed class ItemMappingControllerTests
                 StatusCode = mapping is null ? StatusCodes.Status404NotFound : StatusCodes.Status200OK
             });
         }
+
+        public ServiceResponse<BulkItemMappingResultDto> BulkResponse { get; init; } =
+            new() { Data = new BulkItemMappingResultDto { SavedCount = 1 }, Message = "Saved." };
+        public IReadOnlyList<SaveItemMappingDto>? BulkSaved { get; private set; }
+        public IReadOnlyList<GmkItemSuggestionDto> Suggestions { get; init; } = [];
+
+        public Task<ServiceResponse<BulkItemMappingResultDto>> SaveBulkAsync(int companyId,
+            IReadOnlyList<SaveItemMappingDto> rows, string username, CancellationToken token)
+        {
+            BulkSaved = rows;
+            return Task.FromResult(BulkResponse);
+        }
+
+        public Task<IReadOnlyList<GmkItemSuggestionDto>> ListGmkItemSuggestionsAsync(CancellationToken token) =>
+            Task.FromResult(Suggestions);
 
         public Task<ServiceResponse<int>> SaveAsync(SaveItemMappingDto dto, string username, CancellationToken token)
         {

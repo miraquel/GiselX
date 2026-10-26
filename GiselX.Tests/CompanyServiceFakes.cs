@@ -43,6 +43,8 @@ internal static class CompanyServiceFakes
         public Task UpsertAsync(IReadOnlyList<ItemMapping> values, CancellationToken cancellationToken) => Task.CompletedTask;
         public Task<IReadOnlyList<UnmappedDistributorItem>> GetUnmappedDistributorItemsAsync(int companyId,
             CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<UnmappedDistributorItem>>([]);
+        public Task<IReadOnlyList<GmkItemSuggestion>> GetGmkItemSuggestionsAsync(CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<GmkItemSuggestion>>([]);
     }
 
     internal sealed class RecordingTransaction : IDbTransaction

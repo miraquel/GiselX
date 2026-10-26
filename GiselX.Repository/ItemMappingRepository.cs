@@ -205,6 +205,23 @@ public sealed class ItemMappingRepository(IDbConnection dbConnection, IDbTransac
         return values.ToList();
     }
 
+    public async Task<IReadOnlyList<GmkItemSuggestion>> GetGmkItemSuggestionsAsync(CancellationToken cancellationToken)
+    {
+        // Deliberately across companies: the same GMK catalogue is mapped onto every distributor's codes.
+        const string sql = """
+            SELECT LTRIM(RTRIM(GmkItemId)) AS GmkItemId,
+                   MAX(LTRIM(RTRIM(GmkItemName))) AS GmkItemName
+            FROM ItemMapping
+            WHERE IsActive = 1
+              AND NULLIF(LTRIM(RTRIM(GmkItemId)), '') IS NOT NULL
+            GROUP BY LTRIM(RTRIM(GmkItemId))
+            ORDER BY GmkItemId;
+            """;
+        var values = await dbConnection.QueryAsync<GmkItemSuggestion>(new CommandDefinition(sql,
+            transaction: dbTransaction, cancellationToken: cancellationToken));
+        return values.ToList();
+    }
+
     private async Task<IReadOnlyList<ItemMapping>> LoadAsync(int companyId, bool activeOnly,
         CancellationToken cancellationToken)
     {
