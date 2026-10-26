@@ -455,6 +455,8 @@ public sealed class MappingCopyServiceTests
             CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<IReadOnlyList<GmkItemSuggestion>> GetGmkItemSuggestionsAsync(CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<GmkItemSuggestion>>([]);
+        public Task<IReadOnlyList<UnmappedItemCompanySummary>> GetUnmappedSummaryByCompanyAsync(CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<UnmappedItemCompanySummary>>([]);
     }
 
     private sealed class FakeAreaRepository(Dictionary<int, IReadOnlyList<StockArea>> areas) : IStockAreaRepository

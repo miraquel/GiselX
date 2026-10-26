@@ -193,6 +193,25 @@ public sealed class ItemMappingService(IItemMappingRepository repository, ICompa
         .Select(item => new GmkItemSuggestionDto { GmkItemId = item.GmkItemId, GmkItemName = item.GmkItemName })
         .ToList();
 
+    public async Task<ServiceResponse<IReadOnlyList<UnmappedItemCompanySummaryDto>>> ListUnmappedSummaryAsync(
+        CancellationToken token)
+    {
+        var summaries = await repository.GetUnmappedSummaryByCompanyAsync(token);
+        return new ServiceResponse<IReadOnlyList<UnmappedItemCompanySummaryDto>>
+        {
+            Data = summaries.Select(summary => new UnmappedItemCompanySummaryDto
+            {
+                CompanyId = summary.CompanyId,
+                CompanyName = summary.CompanyName,
+                CompanyLocation = summary.CompanyLocation,
+                UnmappedItemCount = summary.UnmappedItemCount,
+                OccurrenceCount = summary.OccurrenceCount,
+                LastSeenDate = summary.LastSeenDate
+            }).ToList(),
+            Message = "Unmapped item summary retrieved successfully."
+        };
+    }
+
     public async Task<ServiceResponse> SetActiveAsync(int id, int companyId, bool active, string username,
         CancellationToken token)
     {

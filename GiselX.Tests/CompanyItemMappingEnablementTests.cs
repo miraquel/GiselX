@@ -259,6 +259,8 @@ public class CompanyItemMappingEnablementTests
             Task.FromResult<IReadOnlyList<UnmappedDistributorItem>>(UnmappedItems);
         public Task<IReadOnlyList<GmkItemSuggestion>> GetGmkItemSuggestionsAsync(CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<GmkItemSuggestion>>([]);
+        public Task<IReadOnlyList<UnmappedItemCompanySummary>> GetUnmappedSummaryByCompanyAsync(CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<UnmappedItemCompanySummary>>([]);
         public List<UnmappedDistributorItem> UnmappedItems { get; } = [];
     }
 

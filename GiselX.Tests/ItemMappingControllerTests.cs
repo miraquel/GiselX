@@ -449,6 +449,8 @@ public sealed class ItemMappingControllerTests
 
         public Task<IReadOnlyList<GmkItemSuggestionDto>> ListGmkItemSuggestionsAsync(CancellationToken token) =>
             Task.FromResult(Suggestions);
+        public Task<ServiceResponse<IReadOnlyList<UnmappedItemCompanySummaryDto>>> ListUnmappedSummaryAsync(CancellationToken token) =>
+            Task.FromResult(new ServiceResponse<IReadOnlyList<UnmappedItemCompanySummaryDto>> { Data = [] });
 
         public Task<ServiceResponse<int>> SaveAsync(SaveItemMappingDto dto, string username, CancellationToken token)
         {
