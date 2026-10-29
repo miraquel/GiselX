@@ -28,6 +28,18 @@ public sealed class ServiceLevelUploadValidationTests
     }
 
     [Fact]
+    public async Task A_blank_receipt_date_request_is_accepted()
+    {
+        var (service, repository, transaction) = Service();
+
+        var response = await service.UploadAsync([Row(2, rctDateRequest: SqlDateTime.MinValue.Value)], 7, default);
+
+        Assert.True(response.IsSuccess);
+        Assert.Single(repository.Uploaded);
+        Assert.True(transaction.CommitCalled);
+    }
+
+    [Fact]
     public async Task A_row_with_an_so_id_but_no_item_id_is_refused()
     {
         var (service, repository, _) = Service();
@@ -65,14 +77,14 @@ public sealed class ServiceLevelUploadValidationTests
     }
 
     private static ServiceLevelDto Row(int sourceRow, string soId = "SO-1", string itemId = "IT-1",
-        DateTime? soCreateDate = null) => new()
+        DateTime? soCreateDate = null, DateTime? rctDateRequest = null) => new()
     {
         SourceRowNumber = sourceRow,
         SoId = soId,
         ItemId = itemId,
         SoCreateDate = soCreateDate ?? new DateTime(2026, 10, 1),
         DlvDateRequest = new DateTime(2026, 10, 3),
-        RctDateRequest = new DateTime(2026, 10, 4)
+        RctDateRequest = rctDateRequest ?? new DateTime(2026, 10, 4)
     };
 
     private static (ServiceLevelService, FakeRepository, CompanyServiceFakes.RecordingTransaction) Service()

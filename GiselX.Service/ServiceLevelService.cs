@@ -49,7 +49,9 @@ public class ServiceLevelService : IServiceLevelService
 
         // Every problem of every row, numbered by the workbook's own row so the user can find it. The
         // reader leaves an unreadable or blank date at SqlDateTime.MinValue (1753-01-01); the old check
-        // compared against DateTime.MinValue (year 1) and so never caught one.
+        // compared against DateTime.MinValue (year 1) and so never caught one. Receipt Date Request is not
+        // checked: some distributors do not track it and leave the column blank, so it stays at 1753-01-01,
+        // which the grid and the export both show as empty.
         var problems = new List<string>();
         foreach (var row in transDistDtos)
         {
@@ -58,7 +60,6 @@ public class ServiceLevelService : IServiceLevelService
             if (string.IsNullOrWhiteSpace(row.ItemId)) rowProblems.Add("Item ID kosong.");
             if (IsMissing(row.SoCreateDate)) rowProblems.Add("SO Create Date kosong atau bukan tanggal.");
             if (IsMissing(row.DlvDateRequest)) rowProblems.Add("Delivery Date Request kosong atau bukan tanggal.");
-            if (IsMissing(row.RctDateRequest)) rowProblems.Add("Receipt Date Request kosong atau bukan tanggal.");
             problems.AddRange(rowProblems.Select(problem => $"Baris {row.SourceRowNumber}: {problem}"));
         }
 
