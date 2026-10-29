@@ -116,6 +116,11 @@
         // get AntiForgeryToken using jquery
         const token = $('input[name="__RequestVerificationToken"]').first().val();
 
+        // A blank date cell is stored as 1753-01-01 (SqlDateTime.MinValue); show it as empty, as the export does.
+        function formatDate(data) {
+            return data && moment(data).year() > 1753 ? moment(data).format('DD MMM YYYY') : '';
+        }
+
         $(document).ready(function() {
             const yearSelect = $('#yearSelect');
             const monthSelect = $('#monthSelect');
@@ -313,7 +318,7 @@
                             data: 'soCreateDate',
                             width: '120px',
                             render: function(data, type, row) {
-                                return data ? moment(data).format('DD MMM YYYY') : '';
+                                return formatDate(data);
                             }
                         },
                         { data: 'leadTimeDlv', width: '80px' },
@@ -339,14 +344,14 @@
                             data: 'dlvDateRequest',
                             width: '120px',
                             render: function(data, type, row) {
-                                return data ? moment(data).format('DD MMM YYYY') : '';
+                                return formatDate(data);
                             }
                         },
                         {
                             data: 'rctDateRequest',
                             width: '120px',
                             render: function(data, type, row) {
-                                return data ? moment(data).format('DD MMM YYYY') : '';
+                                return formatDate(data);
                             }
                         },
                         {
@@ -360,14 +365,14 @@
                             data: 'doDate',
                             width: '120px',
                             render: function(data, type, row) {
-                                return data ? moment(data).format('DD MMM YYYY') : '';
+                                return formatDate(data);
                             }
                         },
                         {
                             data: 'receiptDate',
                             width: '120px',
                             render: function(data, type, row) {
-                                return data ? moment(data).format('DD MMM YYYY') : '';
+                                return formatDate(data);
                             }
                         }
                     ],
