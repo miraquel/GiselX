@@ -47,29 +47,37 @@ public class ServiceLevelService : IServiceLevelService
         // Counted before the filter so the completion mail reports how many rows the file held.
         var submittedRows = submitted.Length;
 
-        // Every problem of every row, numbered by the workbook's own row so the user can find it. The
-        // reader leaves an unreadable or blank date at SqlDateTime.MinValue (1753-01-01); the old check
-        // compared against DateTime.MinValue (year 1) and so never caught one. Receipt Date Request is not
-        // checked: some distributors do not track it and leave the column blank, so it stays at 1753-01-01,
-        // which the grid and the export both show as empty.
-        var problems = new List<string>();
-        foreach (var row in transDistDtos)
-        {
-            var rowProblems = new List<string>();
-            if (string.IsNullOrWhiteSpace(row.SoId)) rowProblems.Add("SO ID kosong.");
-            if (string.IsNullOrWhiteSpace(row.ItemId)) rowProblems.Add("Item ID kosong.");
-            if (IsMissing(row.SoCreateDate)) rowProblems.Add("SO Create Date kosong atau bukan tanggal.");
-            if (IsMissing(row.DlvDateRequest)) rowProblems.Add("Delivery Date Request kosong atau bukan tanggal.");
-            problems.AddRange(rowProblems.Select(problem => $"Baris {row.SourceRowNumber}: {problem}"));
-        }
+        // One line per failing column rather than per failing row: a column left blank throughout used to
+        // produce one identical line for every row, a wall of text that hid the cause and was too large for
+        // the TempData cookie that carries it to the page. Rows are numbered by the workbook's own row so the
+        // user can find them. The reader leaves an unreadable or blank date at SqlDateTime.MinValue
+        // (1753-01-01); the old check compared against DateTime.MinValue (year 1) and so never caught one.
+        // Receipt Date Request is not checked: some distributors do not track it and leave the column blank,
+        // so it stays at 1753-01-01, which the grid and the export both show as empty.
+        var failures = RowChecks
+            .Select(check => (Check: check, Rows: transDistDtos.Where(check.Fails).Select(row => row.SourceRowNumber).ToArray()))
+            .Where(failure => failure.Rows.Length > 0)
+            .ToArray();
 
-        if (problems.Count > 0)
+        if (failures.Length > 0)
         {
+            var problems = failures
+                .Select(failure => transDistDtos.Length > 1 && failure.Rows.Length == transDistDtos.Length
+                    ? $"Kolom {failure.Check.Column} ({failure.Check.Field}) {failure.Check.Problem} di semua {failure.Rows.Length} baris data."
+                    : $"Kolom {failure.Check.Column} ({failure.Check.Field}) {failure.Check.Problem} di {failure.Rows.Length} baris: {DescribeRows(failure.Rows)}.")
+                .ToList();
+
+            var message = "File ditolak, tidak ada data yang disimpan. Perbaiki masalah berikut lalu upload ulang:\n"
+                          + string.Join("\n", problems.Select(problem => $"- {problem}"));
+            if (transDistDtos.Length > 1 && failures.Any(failure => failure.Rows.Length == transDistDtos.Length))
+                message += "\nKolom dibaca menurut posisinya (A, B, C, ...), bukan menurut nama header. Jika satu kolom "
+                           + "bermasalah di semua baris, periksa apakah kolom itu belum diisi atau urutan kolom berbeda "
+                           + "dari Template yang bisa didownload di halaman ini.";
+
             return new ServiceResponse
             {
                 Errors = problems,
-                Message = $"File ditolak, tidak ada data yang disimpan. Perbaiki {problems.Count} masalah berikut lalu upload ulang:\n"
-                          + string.Join("\n", problems),
+                Message = message,
                 StatusCode = StatusCodes.Status400BadRequest
             };
         }
@@ -112,6 +120,37 @@ public class ServiceLevelService : IServiceLevelService
     }
 
     private static bool IsMissing(DateTime value) => value <= System.Data.SqlTypes.SqlDateTime.MinValue.Value;
+
+    // The controller reads cells by position, so each check names the column letter it reads, with the
+    // header the download template gives that column.
+    private static readonly (string Column, string Field, string Problem, Func<ServiceLevelDto, bool> Fails)[] RowChecks =
+    [
+        ("A", "SO ID", "kosong", row => string.IsNullOrWhiteSpace(row.SoId)),
+        ("B", "SO Create Date", "kosong atau bukan tanggal", row => IsMissing(row.SoCreateDate)),
+        ("E", "Item ID", "kosong", row => string.IsNullOrWhiteSpace(row.ItemId)),
+        ("J", "Dlv Date Request", "kosong atau bukan tanggal", row => IsMissing(row.DlvDateRequest))
+    ];
+
+    private const int MaxRowRangesListed = 10;
+
+    // Collapses row numbers into ranges ("2-40, 45") and stops after a few, so the message stays short
+    // however many rows fail.
+    private static string DescribeRows(IEnumerable<int> rowNumbers)
+    {
+        var ranges = new List<(int First, int Last)>();
+        foreach (var row in rowNumbers.Order())
+        {
+            if (ranges.Count > 0 && ranges[^1].Last + 1 == row)
+                ranges[^1] = (ranges[^1].First, row);
+            else
+                ranges.Add((row, row));
+        }
+
+        var listed = ranges.Take(MaxRowRangesListed)
+            .Select(range => range.First == range.Last ? $"{range.First}" : $"{range.First}-{range.Last}");
+        var unlisted = ranges.Skip(MaxRowRangesListed).Sum(range => range.Last - range.First + 1);
+        return string.Join(", ", listed) + (unlisted > 0 ? $", dan {unlisted} baris lainnya" : "");
+    }
 
     private static ServiceResponse Refused(string message) => new()
     {

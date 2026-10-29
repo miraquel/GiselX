@@ -23,7 +23,7 @@ public sealed class ServiceLevelUploadValidationTests
         var response = await service.UploadAsync([Row(5, soCreateDate: SqlDateTime.MinValue.Value)], 7, default);
 
         Assert.False(response.IsSuccess);
-        Assert.Contains("Baris 5: SO Create Date kosong atau bukan tanggal.", response.Message);
+        Assert.Contains("Kolom B (SO Create Date) kosong atau bukan tanggal di 1 baris: 5.", response.Message);
         Assert.Empty(repository.Uploaded);
     }
 
@@ -47,8 +47,50 @@ public sealed class ServiceLevelUploadValidationTests
         var response = await service.UploadAsync([Row(7, itemId: "")], 7, default);
 
         Assert.False(response.IsSuccess);
-        Assert.Contains("Baris 7: Item ID kosong.", response.Message);
+        Assert.Contains("Kolom E (Item ID) kosong di 1 baris: 7.", response.Message);
         Assert.Empty(repository.Uploaded);
+    }
+
+    [Fact]
+    public async Task A_column_failing_on_every_row_is_reported_once_with_a_hint_about_column_order()
+    {
+        var (service, _, _) = Service();
+        var rows = Enumerable.Range(2, 225).Select(row => Row(row, soCreateDate: SqlDateTime.MinValue.Value)).ToArray();
+
+        var response = await service.UploadAsync(rows, 7, default);
+
+        Assert.False(response.IsSuccess);
+        Assert.Contains("Kolom B (SO Create Date) kosong atau bukan tanggal di semua 225 baris data.", response.Message);
+        Assert.Contains("urutan kolom berbeda dari Template", response.Message);
+        Assert.Single(response.Errors);
+    }
+
+    [Fact]
+    public async Task Failing_rows_are_listed_as_ranges()
+    {
+        var (service, _, _) = Service();
+        int[] failing = [2, 3, 4, 6, 9, 10];
+        var rows = Enumerable.Range(2, 10).Select(row => failing.Contains(row) ? Row(row, itemId: "") : Row(row)).ToArray();
+
+        var response = await service.UploadAsync(rows, 7, default);
+
+        Assert.Contains("Kolom E (Item ID) kosong di 6 baris: 2-4, 6, 9-10.", response.Message);
+        Assert.DoesNotContain("urutan kolom", response.Message);
+    }
+
+    [Fact]
+    public async Task The_message_stays_short_however_many_rows_fail()
+    {
+        var (service, _, _) = Service();
+        // Every other row fails, so no two failing rows form a range.
+        var rows = Enumerable.Range(2, 10_000)
+            .Select(row => row % 2 == 0 ? Row(row, itemId: "", soCreateDate: SqlDateTime.MinValue.Value) : Row(row))
+            .ToArray();
+
+        var response = await service.UploadAsync(rows, 7, default);
+
+        Assert.Contains("dan 4990 baris lainnya", response.Message);
+        Assert.True(response.Message!.Length < 1_000, $"Message was {response.Message.Length} characters.");
     }
 
     [Fact]
