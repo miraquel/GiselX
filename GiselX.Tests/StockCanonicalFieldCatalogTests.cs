@@ -61,4 +61,24 @@ public sealed class StockCanonicalFieldCatalogTests
     [InlineData(StockCanonicalField.ExpiredDate, "Date")]
     public void Catalog_exposes_a_readable_value_type_label(StockCanonicalField field, string expected) =>
         Assert.Equal(expected, StockCanonicalFieldCatalog.GetValueTypeLabel(field));
+
+    public static TheoryData<StockCanonicalField> AllFields() => new(Enum.GetValues<StockCanonicalField>());
+
+    [Theory]
+    [MemberData(nameof(AllFields))]
+    public void Every_field_has_a_mapping_screen_hint(StockCanonicalField field)
+    {
+        // A field added to the enum without a hint would show an empty tooltip on the mapping screen.
+        var hint = StockCanonicalFieldCatalog.GetHint(field);
+
+        Assert.False(string.IsNullOrWhiteSpace(hint));
+        Assert.Contains("Format: ", hint);
+    }
+
+    [Theory]
+    [InlineData(StockCanonicalField.ProductId, "Format: Teks, maks. 100 karakter")]
+    [InlineData(StockCanonicalField.QtyCarton, "Format: Angka")]
+    [InlineData(StockCanonicalField.ExpiredDate, "Format: Tanggal")]
+    public void Hint_format_line_follows_the_parser_rules(StockCanonicalField field, string expected) =>
+        Assert.Contains(expected, StockCanonicalFieldCatalog.GetHint(field).Split('\n'));
 }
