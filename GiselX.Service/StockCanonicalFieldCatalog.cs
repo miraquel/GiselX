@@ -79,4 +79,39 @@ public static class StockCanonicalFieldCatalog
         StockCanonicalField.Condition => 200,
         _ => null
     };
+
+    /// <summary>
+    /// The explanation shown when hovering the field on the mapping screen: what the column means, the
+    /// rules an upload applies to it, its format and an example. Empty only for a field nobody described,
+    /// which <c>StockCanonicalFieldCatalogTests</c> refuses.
+    /// </summary>
+    public static string GetHint(StockCanonicalField field) =>
+        Hints.TryGetValue(field, out var hint)
+            ? CanonicalFieldHint.Compose(hint.Description, GetValueType(field), GetMaxLength(field), hint.Example)
+            : string.Empty;
+
+    private const string QuantityRule = "Petakan QtyCarton, QtyPcs, atau keduanya. Sel kosong dibaca 0; tidak boleh negatif.";
+
+    private static readonly IReadOnlyDictionary<StockCanonicalField, (string Description, string? Example)> Hints =
+        new Dictionary<StockCanonicalField, (string, string?)>
+        {
+            [StockCanonicalField.ProductId] = ("Kode barang di sistem distributor. Bila Item Mapping perusahaan aktif, kode ini diterjemahkan ke barang GMK.", "BRG-0451"),
+            [StockCanonicalField.ProductName] = ("Nama barang di sistem distributor. Ikut diterjemahkan bila Item Mapping perusahaan aktif.", null),
+            [StockCanonicalField.ProductPackaging] = ("Kemasan barang.", "Sak 25 kg"),
+            [StockCanonicalField.ProductPcsInCtn] = ("Jumlah pcs dalam satu karton.", "12"),
+            [StockCanonicalField.ProductNetto] = ("Berat bersih barang.", "25"),
+            [StockCanonicalField.ProductUnit] = ("Satuan barang.", "CTN"),
+            [StockCanonicalField.SaldoAwal] = ("Saldo awal. Kolom lama: masih dibaca untuk template lama, tidak lagi ditawarkan.", null),
+            [StockCanonicalField.SaldoMasukPO] = ("Barang masuk dari PO. Kolom lama: masih dibaca untuk template lama, tidak lagi ditawarkan.", null),
+            [StockCanonicalField.SaldoAkhir] = ("Saldo akhir. Kolom lama: masih dibaca untuk template lama, tidak lagi ditawarkan. Sel kosong dibaca 0; tidak boleh negatif.", null),
+            [StockCanonicalField.BatchNumber] = ("Nomor batch produksi.", null),
+            [StockCanonicalField.ExpiredDate] = ("Tanggal kedaluwarsa barang.", null),
+            [StockCanonicalField.PriceUnit] = ("Harga per satuan. Tidak boleh negatif.", "185000"),
+            [StockCanonicalField.SmallestUnit] = ("Satuan terkecil barang.", "PCS"),
+            [StockCanonicalField.SmallestUnitQty] = ("Jumlah stok dalam satuan terkecil. Tidak boleh negatif.", "240"),
+            [StockCanonicalField.Area] = ("Nama area/gudang stok, dicocokkan dengan nama atau alias area yang terdaftar untuk perusahaan. Wajib dipetakan bila perusahaan punya area; bila tidak, kolom ini diabaikan.", "Gudang Utama"),
+            [StockCanonicalField.Condition] = ("Kondisi stok. Isi sel diterjemahkan menjadi Good atau Bad lewat isian Values meaning Good/Bad stock di bawah tabel. Sel kosong membuat baris ditolak.", "Baik; Rusak"),
+            [StockCanonicalField.QtyCarton] = ($"Jumlah stok dalam karton. {QuantityRule}", "120"),
+            [StockCanonicalField.QtyPcs] = ($"Jumlah stok dalam pcs. {QuantityRule}", "6"),
+        };
 }

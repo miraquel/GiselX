@@ -39,4 +39,25 @@ public class SelloutCanonicalFieldCatalogTests
     {
         Assert.Equal(expected, SelloutCanonicalFieldCatalog.GetMaxLength(field));
     }
+
+    public static TheoryData<SelloutCanonicalField> AllFields() => new(Enum.GetValues<SelloutCanonicalField>());
+
+    [Theory]
+    [MemberData(nameof(AllFields))]
+    public void Every_field_has_a_mapping_screen_hint(SelloutCanonicalField field)
+    {
+        // A field added to the enum without a hint would show an empty tooltip on the mapping screen.
+        var hint = SelloutCanonicalFieldCatalog.GetHint(field);
+
+        Assert.False(string.IsNullOrWhiteSpace(hint));
+        Assert.Contains("Format: ", hint);
+    }
+
+    [Theory]
+    [InlineData(SelloutCanonicalField.InvoiceUnit, "Format: Teks, maks. 50 karakter")]
+    [InlineData(SelloutCanonicalField.InvoiceQty, "Format: Angka")]
+    [InlineData(SelloutCanonicalField.InvoiceDate, "Format: Tanggal")]
+    [InlineData(SelloutCanonicalField.DiscountPct, "Contoh: 10")]
+    public void Hint_lines_follow_the_parser_rules(SelloutCanonicalField field, string expected) =>
+        Assert.Contains(expected, SelloutCanonicalFieldCatalog.GetHint(field).Split('\n'));
 }

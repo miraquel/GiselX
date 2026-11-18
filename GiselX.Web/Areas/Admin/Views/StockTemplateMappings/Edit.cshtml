@@ -17,6 +17,7 @@
                 @Model.Columns[i].CanonicalField
                 @if (Model.Columns[i].CanonicalField is { } canonicalField)
                 {
+                    <span class="mapping-field-hint text-body-secondary" tabindex="0" role="note" aria-label="Keterangan @canonicalField" data-bs-title="@StockCanonicalFieldCatalog.GetHint(canonicalField)"><i class="icon-base ri ri-information-line icon-16px"></i></span>
                     <span class="badge bg-label-info ms-1">@StockCanonicalFieldCatalog.GetValueTypeLabel(canonicalField)</span>
                     if (StockCanonicalFieldCatalog.RequiredFields.Contains(canonicalField))
                     {
@@ -69,6 +70,7 @@ const stockCanonicalFields = @Html.Raw(System.Text.Json.JsonSerializer.Serialize
         value = (int)field,
         name = field.ToString(),
         type = StockCanonicalFieldCatalog.GetValueTypeLabel(field),
+        hint = StockCanonicalFieldCatalog.GetHint(field),
         required = StockCanonicalFieldCatalog.RequiredFields.Contains(field),
         quantity = StockCanonicalFieldCatalog.QuantityFields.Contains(field)
     })));
@@ -79,6 +81,11 @@ const updateConditionValuesVisibility = () => {
  document.getElementById('conditionValues').hidden = !mapped;
 };
 const encode = value => { const span = document.createElement('span'); span.textContent = value ?? ''; return span.innerHTML; };
+const encodeAttribute = value => encode(value).replace(/"/g, '&quot;');
+const fieldHint = field => `<span class="mapping-field-hint text-body-secondary" tabindex="0" role="note" aria-label="Keterangan ${encodeAttribute(field.name)}" data-bs-title="${encodeAttribute(field.hint)}"><i class="icon-base ri ri-information-line icon-16px"></i></span>`;
+// One delegated tooltip covers the rows Inspect sample rebuilds as well as the server-rendered ones. It waits for
+// DOMContentLoaded because the layout loads bootstrap.js after the page body.
+document.addEventListener('DOMContentLoaded', () => new bootstrap.Tooltip(document.getElementById('columns'), { selector: '.mapping-field-hint', customClass: 'mapping-field-tooltip', placement: 'right' }));
 const updateStockSourceHeaderValue = select => {
  const option = select.options[select.selectedIndex];
  select.closest('td').querySelector('.source-header-value').value = option?.dataset.header ?? '';
@@ -131,10 +138,11 @@ document.getElementById('inspect').onclick = async () => {
    .map(select => [select.dataset.canonicalValue, select.value]));
  const headers = p.headers.map((header, index) => ({number: index + 1, header}))
    .filter(item => item.header?.trim());
+ document.querySelectorAll('.mapping-field-tooltip').forEach(tip => tip.remove());
  document.querySelector('#columns tbody').innerHTML = stockCanonicalFields.map((field, index) => {
    const selected = previous.get(String(field.value)) ?? '0';
    const options = headers.map(item => `<option value="${item.number}" data-header="${encode(item.header)}" ${String(item.number) === selected ? 'selected' : ''}>${item.number} — ${encode(item.header)}</option>`).join('');
-   return `<tr><td>${encode(field.name)}<span class="badge bg-label-info ms-1">${encode(field.type)}</span>${field.required ? '<span class="badge bg-label-danger ms-1">Required</span>' : field.quantity ? '<span class="badge bg-label-warning ms-1">Map one or both</span>' : ''}<input type="hidden" name="Columns[${index}].CanonicalField" value="${field.value}"></td><td><select class="form-select source-header-select" data-canonical-value="${field.value}" name="Columns[${index}].SourceColumnNumber"><option value="0">Not mapped</option>${options}</select><input type="hidden" class="source-header-value" name="Columns[${index}].SourceHeader" value=""></td></tr>`;
+   return `<tr><td>${encode(field.name)} ${fieldHint(field)}<span class="badge bg-label-info ms-1">${encode(field.type)}</span>${field.required ? '<span class="badge bg-label-danger ms-1">Required</span>' : field.quantity ? '<span class="badge bg-label-warning ms-1">Map one or both</span>' : ''}<input type="hidden" name="Columns[${index}].CanonicalField" value="${field.value}"></td><td><select class="form-select source-header-select" data-canonical-value="${field.value}" name="Columns[${index}].SourceColumnNumber"><option value="0">Not mapped</option>${options}</select><input type="hidden" class="source-header-value" name="Columns[${index}].SourceHeader" value=""></td></tr>`;
  }).join('');
  wireStockSourceSelects();
  document.querySelectorAll('.source-header-select').forEach(updateStockSourceHeaderValue);
